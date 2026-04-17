@@ -4,4 +4,4 @@ metadata:
   name: stockit-be-config
   namespace: default
 data:
-  db-url: jdbc:mariadb://mariadb:3306/stockit
+  db-url: jdbc:mariadb://stockit-db.c302wgewkncm.ap-northeast-2.rds.amazonaws.com:3306/stockit
