@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: stockit-be
-          image: pbgodsoo/stockit-be:latest
+          image: sunyeoplee/stockit-backend:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
