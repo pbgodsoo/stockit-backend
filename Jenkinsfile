@@ -92,9 +92,9 @@ spec:
                         curl -LO "https://dl.k8s.io/release/\$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
                         chmod +x kubectl
                         mv kubectl /usr/local/bin/kubectl
-                        kubectl set image deployment/stockit-backend \
-                        stockit-backend=${IMAGE_NAME}:${IMAGE_TAG} \
-                        --namespace=stockit
+                        kubectl set image deployment/stockit-be \
+                        stockit-be=${IMAGE_NAME}:${IMAGE_TAG} \
+                        --namespace=default
                     """
                 }
             }
