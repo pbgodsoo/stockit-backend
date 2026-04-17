@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stockit-be-config
+  namespace: default
+data:
+  db-url: jdbc:mariadb://mariadb:3306/stockit

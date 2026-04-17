@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stockit-be
+  namespace: default
+  labels:
+    app: stockit-be
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stockit-be
+  template:
+    metadata:
+      labels:
+        app: stockit-be
+    spec:
+      containers:
+        - name: stockit-be
+          image: pbgodsoo/stockit-be:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: prod
+            - name: DB_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: stockit-be-config
+                  key: db-url
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: stockit-be-secret
+                  key: db-user
+            - name: DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: stockit-be-secret
+                  key: db-pass
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi

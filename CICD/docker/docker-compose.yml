@@ -1,0 +1,41 @@
+services:
+  mariadb:
+    image: mariadb:11.4
+    container_name: stockit-mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: stockit
+      MARIADB_USER: stockit
+      MARIADB_PASSWORD: change-me
+      MARIADB_ROOT_PASSWORD: change-root-me
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: CICD/docker/Dockerfile
+    image: pbgodsoo/stockit-be:latest
+    container_name: stockit-be
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:mariadb://mariadb:3306/stockit
+      DB_USER: stockit
+      DB_PASS: change-me
+    ports:
+      - "8080:8080"
+
+volumes:
+  mariadb-data:

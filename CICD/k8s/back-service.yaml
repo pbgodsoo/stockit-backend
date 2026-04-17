@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: stockit-be
+  namespace: default
+  labels:
+    app: stockit-be
+spec:
+  type: LoadBalancer
+  selector:
+    app: stockit-be
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
