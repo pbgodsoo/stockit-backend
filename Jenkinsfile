@@ -1,54 +1,85 @@
 pipeline {
     agent {
         kubernetes {
+            label "gradle-kaniko-${UUID.randomUUID().toString()}"
+            defaultContainer 'gradle'
             yaml """
 apiVersion: v1
 kind: Pod
 spec:
+  restartPolicy: Never
   containers:
-  - name: docker
-    image: docker:24-dind
-    securityContext:
-      privileged: true
-    volumeMounts:
-    - name: docker-sock
-      mountPath: /var/run/docker.sock
-  - name: jnlp
-    image: jenkins/inbound-agent:3355.v388858a_47b_33-19
-    volumeMounts:
-    - name: docker-sock
-      mountPath: /var/run/docker.sock
+    - name: gradle
+      image: gradle:8.9-jdk17
+      command: ['cat']
+      tty: true
+      volumeMounts:
+        - name: gradle-cache
+          mountPath: /home/gradle/.gradle
+        - name: workspace
+          mountPath: /workspace
+    - name: kaniko
+      image: gcr.io/kaniko-project/executor:debug
+      command: ['/busybox/sh','-c','sleep infinity']
+      tty: true
+      volumeMounts:
+        - name: docker-config
+          mountPath: /kaniko/.docker
+        - name: workspace
+          mountPath: /workspace
   volumes:
-  - name: docker-sock
-    hostPath:
-      path: /var/run/docker.sock
+    - name: gradle-cache
+      emptyDir: {}
+    - name: workspace
+      emptyDir: {}
+    - name: docker-config
+      secret:
+        secretName: dockerhub-cred
+        items:
+          - key: .dockerconfigjson
+            path: config.json
 """
         }
     }
 
     environment {
-        DOCKER_HUB_CREDENTIALS = credentials('dockerhub-credentials')
-        DOCKER_IMAGE = "sunyeoplee/stockit-backend"
-        IMAGE_TAG = "${BUILD_NUMBER}"
+        IMAGE_NAME = 'sunyeoplee/stockit-backend'
+        IMAGE_TAG  = "${env.BUILD_NUMBER}"
     }
 
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
+                container('gradle') {
+                    checkout scm
+                }
             }
         }
 
-        stage('Docker Build & Push') {
+        stage('Gradle Build') {
             steps {
-                container('docker') {
+                container('gradle') {
+                    sh '''
+                        chmod +x ./gradlew || true
+                        ./gradlew --no-daemon clean bootJar
+                    '''
+                }
+            }
+        }
+
+        stage('Kaniko Build & Push') {
+            steps {
+                container('kaniko') {
                     sh """
-                        docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} -f CICD/docker/Dockerfile .
-                        docker build -t ${DOCKER_IMAGE}:latest -f CICD/docker/Dockerfile .
-                        echo ${DOCKER_HUB_CREDENTIALS_PSW} | docker login -u ${DOCKER_HUB_CREDENTIALS_USR} --password-stdin
-                        docker push ${DOCKER_IMAGE}:${IMAGE_TAG}
-                        docker push ${DOCKER_IMAGE}:latest
-                        docker logout
+                        /kaniko/executor \
+                          --context=${WORKSPACE} \
+                          --dockerfile=${WORKSPACE}/CICD/docker/Dockerfile \
+                          --destination=${IMAGE_NAME}:${IMAGE_TAG} \
+                          --destination=${IMAGE_NAME}:latest \
+                          --single-snapshot \
+                          --use-new-run \
+                          --cache=true \
+                          --snapshotMode=redo
                     """
                 }
             }
@@ -56,11 +87,13 @@ spec:
 
         stage('Deploy to k8s') {
             steps {
-                sh """
-                    kubectl set image deployment/stockit-backend \
-                    stockit-backend=${DOCKER_IMAGE}:${IMAGE_TAG} \
-                    --namespace=stockit
-                """
+                container('gradle') {
+                    sh """
+                        kubectl set image deployment/stockit-backend \
+                        stockit-backend=${IMAGE_NAME}:${IMAGE_TAG} \
+                        --namespace=stockit
+                    """
+                }
             }
         }
     }
@@ -70,7 +103,7 @@ spec:
             echo 'Pipeline 실패!'
         }
         success {
-            echo 'Pipeline 성공!'
+            echo "Pushed: ${IMAGE_NAME}:${IMAGE_TAG}"
         }
     }
 }
