@@ -1,5 +1,4 @@
 pipeline {
-<<<<<<< HEAD
     agent {
         kubernetes {
             yaml """
@@ -26,9 +25,6 @@ spec:
 """
         }
     }
-=======
-    agent any
->>>>>>> 4f230a02d16802d7f07dd972f6196b35b35f2d69
 
     environment {
         DOCKER_HUB_CREDENTIALS = credentials('dockerhub-credentials')
@@ -45,7 +41,6 @@ spec:
 
         stage('Docker Build & Push') {
             steps {
-<<<<<<< HEAD
                 container('docker') {
                     sh """
                         docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} -f CICD/docker/Dockerfile .
@@ -56,16 +51,6 @@ spec:
                         docker logout
                     """
                 }
-=======
-                sh """
-                    docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} -f CICD/docker/Dockerfile .
-                    docker build -t ${DOCKER_IMAGE}:latest -f CICD/docker/Dockerfile .
-                    echo ${DOCKER_HUB_CREDENTIALS_PSW} | docker login -u ${DOCKER_HUB_CREDENTIALS_USR} --password-stdin
-                    docker push ${DOCKER_IMAGE}:${IMAGE_TAG}
-                    docker push ${DOCKER_IMAGE}:latest
-                    docker logout
-                """
->>>>>>> 4f230a02d16802d7f07dd972f6196b35b35f2d69
             }
         }
 
