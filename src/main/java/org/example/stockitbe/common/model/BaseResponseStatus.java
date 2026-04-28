@@ -36,6 +36,12 @@ public enum BaseResponseStatus {
     PAYMENT_BILLING_INVALID_OWNER(false, 4104, "결제 수단의 소유자가 아닙니다."),
     PAYMENT_BILLING_REQUIRED(false, 4105, "최소 1개의 결제 수단이 필요합니다."),
     PAYMENT_DEFAULT_BILLING_REQUIRED(false, 4106, "기본 결제 수단이 존재하지 않습니다."),
+
+    // 4200번대~ 공급처별 제품 (CEN-027~031, 033)
+    VENDOR_NOT_FOUND(false, 4200, "거래처를 찾을 수 없습니다."),
+    VENDOR_PRODUCT_NOT_FOUND(false, 4201, "공급처별 제품 계약을 찾을 수 없습니다."),
+    DUPLICATE_VENDOR_PRODUCT_CODE(false, 4202, "이미 등록된 거래처-제품 코드 조합입니다."),
+
     // 5000번대 실패
     FAIL(false, 5000, "요청 실패");
 
