@@ -2,6 +2,7 @@ package org.example.stockitbe.hq.vendor.model;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.example.stockitbe.common.model.BaseEntity;
@@ -36,4 +37,15 @@ public class Vendor extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)
     private VendorStatus status;
+
+    @Builder
+    private Vendor(String code, String name, String contactName, String contactPhone,
+                    String contactEmail, VendorStatus status) {
+        this.code = code;
+        this.name = name;
+        this.contactName = contactName;
+        this.contactPhone = contactPhone;
+        this.contactEmail = contactEmail;
+        this.status = status;
+    }
 }
