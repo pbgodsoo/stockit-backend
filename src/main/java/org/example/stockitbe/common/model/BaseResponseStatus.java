@@ -48,6 +48,15 @@ public enum BaseResponseStatus {
     CATEGORY_PARENT_NOT_ROOT(false, 4207, "상위 카테고리는 대분류만 지정할 수 있습니다."),
     CATEGORY_ROOT_PARENT_DISALLOWED(false, 4208, "대분류는 상위 카테고리를 가질 수 없습니다."),
     CATEGORY_DELETE_HAS_CHILDREN(false, 4209, "하위 카테고리가 존재하여 삭제할 수 없습니다."),
+    STORE_NOT_FOUND(false, 4210, "매장을 찾을 수 없습니다."),
+    WAREHOUSE_NOT_FOUND(false, 4211, "창고를 찾을 수 없습니다."),
+    DUPLICATE_STORE_NAME(false, 4212, "이미 등록된 매장명입니다."),
+    DUPLICATE_WAREHOUSE_NAME(false, 4213, "이미 등록된 창고명입니다."),
+    PRODUCT_MASTER_NOT_FOUND(false, 4214, "제품 마스터를 찾을 수 없습니다."),
+    PRODUCT_SKU_NOT_FOUND(false, 4215, "SKU를 찾을 수 없습니다."),
+    DUPLICATE_PRODUCT_MASTER_NAME(false, 4216, "이미 등록된 제품명입니다."),
+    DUPLICATE_PRODUCT_SKU_OPTION(false, 4217, "이미 등록된 SKU 옵션입니다."),
+    INVALID_SKU_PRICE(false, 4218, "SKU 가격은 0 이상이어야 합니다."),
 
     // 4300번대~ 본사 발주 (CEN-035~040)
     PURCHASE_ORDER_NOT_FOUND(false, 4300, "본사 발주를 찾을 수 없습니다."),
