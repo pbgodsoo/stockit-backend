@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.model.BaseResponse;
 import org.example.stockitbe.hq.vendor.model.VendorProductDto;
+import org.example.stockitbe.hq.vendor.model.VendorProductStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,8 +17,13 @@ public class VendorProductController {
     private final VendorProductService service;
 
     @GetMapping
-    public BaseResponse<List<VendorProductDto.ListRes>> list(@RequestParam String vendorCode) {
-        return BaseResponse.success(service.findByVendor(vendorCode));
+    public BaseResponse<List<VendorProductDto.ListRes>> list(
+            @RequestParam(required = false) String vendorCode,
+            @RequestParam(required = false) VendorProductStatus status) {
+        if (vendorCode != null && !vendorCode.isBlank()) {
+            return BaseResponse.success(service.findByVendor(vendorCode));
+        }
+        return BaseResponse.success(service.findAll(status));
     }
 
     @GetMapping("/{code}")

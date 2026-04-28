@@ -11,6 +11,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +29,36 @@ public class VendorProductService {
                 .findAllByVendorIdAndStatusNotOrderByIdDesc(vendor.getId(), VendorProductStatus.DELETED);
         return list.stream()
                 .map(vp -> VendorProductDto.ListRes.from(vp, vendor))
+                .toList();
+    }
+
+    /**
+     * 전체 거래처의 제품 일괄 조회 (CEN-035 발주 작성 페이지 카탈로그용).
+     * statusFilter == null → DELETED 만 제외한 전체.
+     * statusFilter != null → 정확히 그 status 만 (DELETED 도 호출자가 의도하면 그대로 통과).
+     */
+    @Transactional(readOnly = true)
+    public List<VendorProductDto.ListRes> findAll(VendorProductStatus statusFilter) {
+        List<VendorProduct> list = (statusFilter == null)
+                ? vendorProductRepository.findAllByStatusNotOrderByIdDesc(VendorProductStatus.DELETED)
+                : vendorProductRepository.findAllByStatusOrderByIdDesc(statusFilter);
+        if (list.isEmpty()) {
+            return List.of();
+        }
+
+        // N+1 방지 — vendorIds 일괄 lookup
+        Set<Long> vendorIds = list.stream().map(VendorProduct::getVendorId).collect(Collectors.toSet());
+        Map<Long, Vendor> vendorMap = vendorRepository.findAllById(vendorIds).stream()
+                .collect(Collectors.toMap(Vendor::getId, v -> v));
+
+        return list.stream()
+                .map(vp -> {
+                    Vendor vendor = vendorMap.get(vp.getVendorId());
+                    if (vendor == null) {
+                        throw BaseException.from(BaseResponseStatus.VENDOR_NOT_FOUND);
+                    }
+                    return VendorProductDto.ListRes.from(vp, vendor);
+                })
                 .toList();
     }
 
