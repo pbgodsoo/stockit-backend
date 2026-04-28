@@ -29,6 +29,11 @@ public class PurchaseOrder extends BaseEntity {
     @Column(name = "vendor_id", nullable = false)
     private Long vendorId;
 
+    // vendor.name 시점 복사 — 발주 시점의 거래처명 스냅샷 (warehouseName/memberName 패턴과 동일).
+    // statusHistory.changedByName 에 거래처 책임 전환(APPROVED/SHIPPING) 주체로 박힘.
+    @Column(name = "vendor_name", nullable = false, length = 128)
+    private String vendorName;
+
     // 창고 BE 미구현 — logical reference (id String + name 시점 복사)
     @Column(name = "warehouse_id", length = 32)
     private String warehouseId;
@@ -54,10 +59,12 @@ public class PurchaseOrder extends BaseEntity {
     private String cancelReason;
 
     @Builder
-    private PurchaseOrder(String code, Long vendorId, String warehouseId, String warehouseName,
+    private PurchaseOrder(String code, Long vendorId, String vendorName,
+                          String warehouseId, String warehouseName,
                           String memberId, String memberName, Long totalAmount) {
         this.code = code;
         this.vendorId = vendorId;
+        this.vendorName = vendorName;
         this.warehouseId = warehouseId;
         this.warehouseName = warehouseName;
         this.memberId = memberId;

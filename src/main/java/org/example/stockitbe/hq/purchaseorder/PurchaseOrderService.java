@@ -32,8 +32,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PurchaseOrderService {
 
-    private static final String CHANGED_BY_PLACEHOLDER = "본사 관리자";
-    private static final String SYSTEM_BATCH_ACTOR = "시스템(SYS-001)";
+    private static final String HQ_MANAGER_ACTOR = "본사 관리자";
+    private static final String WAREHOUSE_MANAGER_ACTOR = "창고 관리자";
     private static final DateTimeFormatter CODE_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     private final PurchaseOrderRepository purchaseOrderRepository;
@@ -228,10 +228,19 @@ public class PurchaseOrderService {
         return String.format("%s%03d", prefix, seq);
     }
 
+    /**
+     * 진행 이력 한 행 추가. changedByName 은 도메인 책임자 기준 분기:
+     *   - APPROVED / SHIPPING : 거래처가 책임 주체 — 발주 시점 거래처명 스냅샷(po.vendorName)
+     *     (실제 트리거는 SYS-001 배치지만 자동화는 구현 디테일이라 도메인 이력에 노출하지 않음, ADR-013/019)
+     *   - COMPLETED            : 입고 확정은 창고 관리자 책임
+     *   - PENDING(생성) / REJECTED(취소) : 본사 관리자
+     * 인증 도입(ADR-011) 후 본사·창고 관리자명은 실제 사용자명으로 교체.
+     */
     private void appendHistory(PurchaseOrder po, String note) {
         String changedByName = switch (po.getStatus()) {
-            case APPROVED, SHIPPING -> SYSTEM_BATCH_ACTOR;
-            default -> CHANGED_BY_PLACEHOLDER;
+            case APPROVED, SHIPPING -> po.getVendorName();
+            case COMPLETED -> WAREHOUSE_MANAGER_ACTOR;
+            default -> HQ_MANAGER_ACTOR;
         };
         PurchaseOrderStatusHistory entry = PurchaseOrderStatusHistory.builder()
                 .purchaseOrderId(po.getId())
