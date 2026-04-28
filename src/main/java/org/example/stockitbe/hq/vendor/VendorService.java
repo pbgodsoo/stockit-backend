@@ -1,10 +1,10 @@
-package org.example.stockitbe.vendor;
+package org.example.stockitbe.hq.vendor;
 
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.model.BaseResponseStatus;
-import org.example.stockitbe.vendor.model.Vendor;
-import org.example.stockitbe.vendor.model.VendorDto;
+import org.example.stockitbe.hq.vendor.model.Vendor;
+import org.example.stockitbe.hq.vendor.model.VendorDto;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

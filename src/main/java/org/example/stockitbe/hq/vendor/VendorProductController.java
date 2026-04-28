@@ -1,9 +1,9 @@
-package org.example.stockitbe.vendor;
+package org.example.stockitbe.hq.vendor;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.model.BaseResponse;
-import org.example.stockitbe.vendor.model.VendorProductDto;
+import org.example.stockitbe.hq.vendor.model.VendorProductDto;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;

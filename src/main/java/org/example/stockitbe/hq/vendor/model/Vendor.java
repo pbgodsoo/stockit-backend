@@ -1,4 +1,4 @@
-package org.example.stockitbe.vendor.model;
+package org.example.stockitbe.hq.vendor.model;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;

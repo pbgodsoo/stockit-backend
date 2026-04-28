@@ -1,8 +1,8 @@
-package org.example.stockitbe.vendor;
+package org.example.stockitbe.hq.vendor;
 
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.model.BaseResponse;
-import org.example.stockitbe.vendor.model.VendorDto;
+import org.example.stockitbe.hq.vendor.model.VendorDto;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;

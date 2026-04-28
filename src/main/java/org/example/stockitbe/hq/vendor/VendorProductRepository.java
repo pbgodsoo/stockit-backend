@@ -1,7 +1,7 @@
-package org.example.stockitbe.vendor;
+package org.example.stockitbe.hq.vendor;
 
-import org.example.stockitbe.vendor.model.VendorProduct;
-import org.example.stockitbe.vendor.model.VendorProductStatus;
+import org.example.stockitbe.hq.vendor.model.VendorProduct;
+import org.example.stockitbe.hq.vendor.model.VendorProductStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
