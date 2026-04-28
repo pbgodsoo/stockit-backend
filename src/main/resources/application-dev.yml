@@ -20,3 +20,9 @@ logging:
   level:
     org.hibernate.SQL: debug
     org.hibernate.orm.jdbc.bind: trace
+
+# SYS-001 본사 발주 자동 전환 배치
+purchase-order:
+  batch:
+    delay-ms: 300000      # 스케줄러 fixedDelay (5분)
+    wait-minutes: 1       # dev 에선 짧게 (시연·테스트 편의)

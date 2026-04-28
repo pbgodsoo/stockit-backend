@@ -33,6 +33,7 @@ import java.util.stream.Collectors;
 public class PurchaseOrderService {
 
     private static final String CHANGED_BY_PLACEHOLDER = "본사 관리자";
+    private static final String SYSTEM_BATCH_ACTOR = "시스템(SYS-001)";
     private static final DateTimeFormatter CODE_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     private final PurchaseOrderRepository purchaseOrderRepository;
@@ -228,10 +229,14 @@ public class PurchaseOrderService {
     }
 
     private void appendHistory(PurchaseOrder po, String note) {
+        String changedByName = switch (po.getStatus()) {
+            case APPROVED, SHIPPING -> SYSTEM_BATCH_ACTOR;
+            default -> CHANGED_BY_PLACEHOLDER;
+        };
         PurchaseOrderStatusHistory entry = PurchaseOrderStatusHistory.builder()
                 .purchaseOrderId(po.getId())
                 .status(po.getStatus())
-                .changedByName(CHANGED_BY_PLACEHOLDER)
+                .changedByName(changedByName)
                 .note(note)
                 .build();
         historyRepository.save(entry);
