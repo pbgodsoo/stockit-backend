@@ -42,6 +42,13 @@ public enum BaseResponseStatus {
     VENDOR_PRODUCT_NOT_FOUND(false, 4201, "공급처별 제품 계약을 찾을 수 없습니다."),
     DUPLICATE_VENDOR_PRODUCT_CODE(false, 4202, "이미 등록된 거래처-제품 코드 조합입니다."),
 
+    // 4300번대~ 본사 발주 (CEN-035~040)
+    PURCHASE_ORDER_NOT_FOUND(false, 4300, "본사 발주를 찾을 수 없습니다."),
+    PURCHASE_ORDER_INVALID_STATUS_TRANSITION(false, 4301, "허용되지 않는 발주 상태 전환입니다."),
+    PURCHASE_ORDER_EMPTY_ITEMS(false, 4302, "발주 품목이 비어 있습니다."),
+    PURCHASE_ORDER_VENDOR_PRODUCT_MISMATCH(false, 4303, "발주 거래처와 품목의 거래처가 일치하지 않습니다."),
+    PURCHASE_ORDER_CANCEL_REASON_REQUIRED(false, 4304, "발주 취소 사유는 필수입니다."),
+
     // 5000번대 실패
     FAIL(false, 5000, "요청 실패");
 
