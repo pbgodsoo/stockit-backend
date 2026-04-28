@@ -41,6 +41,13 @@ public enum BaseResponseStatus {
     VENDOR_NOT_FOUND(false, 4200, "거래처를 찾을 수 없습니다."),
     VENDOR_PRODUCT_NOT_FOUND(false, 4201, "공급처별 제품 계약을 찾을 수 없습니다."),
     DUPLICATE_VENDOR_PRODUCT_CODE(false, 4202, "이미 등록된 거래처-제품 코드 조합입니다."),
+    CATEGORY_NOT_FOUND(false, 4203, "카테고리를 찾을 수 없습니다."),
+    DUPLICATE_CATEGORY_NAME(false, 4204, "동일한 범위에 같은 카테고리명이 이미 존재합니다."),
+    CATEGORY_PARENT_REQUIRED(false, 4205, "소분류 등록 시 상위 카테고리가 필요합니다."),
+    CATEGORY_PARENT_NOT_FOUND(false, 4206, "상위 카테고리를 찾을 수 없습니다."),
+    CATEGORY_PARENT_NOT_ROOT(false, 4207, "상위 카테고리는 대분류만 지정할 수 있습니다."),
+    CATEGORY_ROOT_PARENT_DISALLOWED(false, 4208, "대분류는 상위 카테고리를 가질 수 없습니다."),
+    CATEGORY_DELETE_HAS_CHILDREN(false, 4209, "하위 카테고리가 존재하여 삭제할 수 없습니다."),
 
     // 4300번대~ 본사 발주 (CEN-035~040)
     PURCHASE_ORDER_NOT_FOUND(false, 4300, "본사 발주를 찾을 수 없습니다."),
