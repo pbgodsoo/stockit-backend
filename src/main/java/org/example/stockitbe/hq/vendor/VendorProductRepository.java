@@ -13,6 +13,10 @@ public interface VendorProductRepository extends JpaRepository<VendorProduct, Lo
 
     List<VendorProduct> findAllByVendorIdAndStatusNotOrderByIdDesc(Long vendorId, VendorProductStatus excluded);
 
+    List<VendorProduct> findAllByStatusOrderByIdDesc(VendorProductStatus status);
+
+    List<VendorProduct> findAllByStatusNotOrderByIdDesc(VendorProductStatus excluded);
+
     boolean existsByVendorIdAndProductCodeAndStatusNot(Long vendorId, String productCode, VendorProductStatus excluded);
 
     long countByVendorId(Long vendorId);
