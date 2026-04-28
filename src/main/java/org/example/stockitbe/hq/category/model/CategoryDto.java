@@ -36,6 +36,17 @@ public class CategoryDto {
     }
 
     @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class UpdateReq {
+        @NotBlank
+        private String name;
+        @NotNull
+        private CategoryStatus status;
+    }
+
+    @Getter
     @AllArgsConstructor
     @Builder
     public static class TreeRes {

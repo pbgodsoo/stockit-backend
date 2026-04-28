@@ -10,6 +10,8 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
 
     Optional<Category> findByCode(String code);
 
+    List<Category> findAllByOrderByIdAsc();
+
     List<Category> findAllByParentIdIsNullOrderBySortOrderAscIdAsc();
 
     List<Category> findAllByParentIdOrderBySortOrderAscIdAsc(Long parentId);
@@ -17,6 +19,12 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
     boolean existsByParentIdIsNullAndNameIgnoreCase(String name);
 
     boolean existsByParentIdAndNameIgnoreCase(Long parentId, String name);
+
+    boolean existsByParentIdIsNullAndNameIgnoreCaseAndIdNot(String name, Long id);
+
+    boolean existsByParentIdAndNameIgnoreCaseAndIdNot(Long parentId, String name, Long id);
+
+    boolean existsByParentId(Long parentId);
 
     long countByParentIdIsNull();
 

@@ -47,6 +47,7 @@ public enum BaseResponseStatus {
     CATEGORY_PARENT_NOT_FOUND(false, 4206, "상위 카테고리를 찾을 수 없습니다."),
     CATEGORY_PARENT_NOT_ROOT(false, 4207, "상위 카테고리는 대분류만 지정할 수 있습니다."),
     CATEGORY_ROOT_PARENT_DISALLOWED(false, 4208, "대분류는 상위 카테고리를 가질 수 없습니다."),
+    CATEGORY_DELETE_HAS_CHILDREN(false, 4209, "하위 카테고리가 존재하여 삭제할 수 없습니다."),
 
     // 5000번대 실패
     FAIL(false, 5000, "요청 실패");

@@ -29,4 +29,16 @@ public class CategoryController {
     public BaseResponse<CategoryDto.DetailRes> create(@Valid @RequestBody CategoryDto.CreateReq req) {
         return BaseResponse.success(service.create(req));
     }
+
+    @PatchMapping("/{code}")
+    public BaseResponse<CategoryDto.DetailRes> update(@PathVariable String code,
+                                                      @Valid @RequestBody CategoryDto.UpdateReq req) {
+        return BaseResponse.success(service.update(code, req));
+    }
+
+    @DeleteMapping("/{code}")
+    public BaseResponse<Void> delete(@PathVariable String code) {
+        service.delete(code);
+        return BaseResponse.success(null);
+    }
 }

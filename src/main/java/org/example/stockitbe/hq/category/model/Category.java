@@ -49,4 +49,13 @@ public class Category extends BaseEntity {
         this.status = status == null ? CategoryStatus.ACTIVE : status;
         this.sortOrder = sortOrder == null ? 0 : sortOrder;
     }
+
+    public void updateInfo(String name, CategoryStatus status) {
+        if (name != null && !name.isBlank()) {
+            this.name = name.trim();
+        }
+        if (status != null) {
+            this.status = status;
+        }
+    }
 }
