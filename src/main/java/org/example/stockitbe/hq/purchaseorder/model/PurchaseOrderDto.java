@@ -105,10 +105,12 @@ public class PurchaseOrderDto {
         private PurchaseOrderStatus status;
         private Long totalAmount;
         private Integer itemCount;
+        // 발주의 모든 품목명 (입력 순서). FE 가 첫 품목명 + "외 N건" 표시 + 품목명 검색 매칭에 활용.
+        private List<String> productNames;
         private Date createdAt;
         private Date updatedAt;
 
-        public static ListRes from(PurchaseOrder po, Vendor vendor, int itemCount) {
+        public static ListRes from(PurchaseOrder po, Vendor vendor, int itemCount, List<String> productNames) {
             return ListRes.builder()
                     .code(po.getCode())
                     .vendorCode(vendor.getCode())
@@ -119,6 +121,7 @@ public class PurchaseOrderDto {
                     .status(po.getStatus())
                     .totalAmount(po.getTotalAmount())
                     .itemCount(itemCount)
+                    .productNames(productNames)
                     .createdAt(po.getCreatedAt())
                     .updatedAt(po.getUpdatedAt())
                     .build();

@@ -63,8 +63,14 @@ public class PurchaseOrderService {
                 .collect(Collectors.toMap(Vendor::getId, v -> v));
 
         Set<Long> orderIds = orders.stream().map(PurchaseOrder::getId).collect(Collectors.toSet());
-        Map<Long, Long> itemCountMap = itemRepository.findAllByPurchaseOrderIdIn(orderIds).stream()
+        // batch 1회 조회 결과를 itemCountMap + productNamesMap 두 가지로 활용 (쿼리 0추가)
+        List<PurchaseOrderItem> allItems = itemRepository.findAllByPurchaseOrderIdIn(orderIds);
+        Map<Long, Long> itemCountMap = allItems.stream()
                 .collect(Collectors.groupingBy(PurchaseOrderItem::getPurchaseOrderId, Collectors.counting()));
+        Map<Long, List<String>> productNamesMap = allItems.stream()
+                .collect(Collectors.groupingBy(
+                        PurchaseOrderItem::getPurchaseOrderId,
+                        Collectors.mapping(PurchaseOrderItem::getProductName, Collectors.toList())));
 
         return orders.stream()
                 .map(po -> {
@@ -73,7 +79,8 @@ public class PurchaseOrderService {
                         throw BaseException.from(BaseResponseStatus.VENDOR_NOT_FOUND);
                     }
                     int count = itemCountMap.getOrDefault(po.getId(), 0L).intValue();
-                    return PurchaseOrderDto.ListRes.from(po, vendor, count);
+                    List<String> names = productNamesMap.getOrDefault(po.getId(), List.of());
+                    return PurchaseOrderDto.ListRes.from(po, vendor, count, names);
                 })
                 .toList();
     }
