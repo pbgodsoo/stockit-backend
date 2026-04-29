@@ -4,6 +4,11 @@ import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.model.BaseResponseStatus;
+import org.example.stockitbe.hq.infrastructure.WarehouseRepository;
+import org.example.stockitbe.hq.infrastructure.model.Warehouse;
+import org.example.stockitbe.hq.product.ProductSkuRepository;
+import org.example.stockitbe.hq.product.model.ProductSku;
+import org.example.stockitbe.hq.product.model.ProductStatus;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrder;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderDto;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderItem;
@@ -41,6 +46,8 @@ public class PurchaseOrderService {
     private final PurchaseOrderStatusHistoryRepository historyRepository;
     private final VendorRepository vendorRepository;
     private final VendorProductRepository vendorProductRepository;
+    private final WarehouseRepository warehouseRepository;
+    private final ProductSkuRepository productSkuRepository;
 
     @Transactional(readOnly = true)
     public List<PurchaseOrderDto.ListRes> findAll(String vendorCode, PurchaseOrderStatus status,
@@ -57,10 +64,14 @@ public class PurchaseOrderService {
             return List.of();
         }
 
-        // vendor / itemCount 매핑
+        // vendor / warehouse / itemCount 매핑
         Set<Long> vendorIds = orders.stream().map(PurchaseOrder::getVendorId).collect(Collectors.toSet());
         Map<Long, Vendor> vendorMap = vendorRepository.findAllById(vendorIds).stream()
                 .collect(Collectors.toMap(Vendor::getId, v -> v));
+
+        Set<Long> warehouseIds = orders.stream().map(PurchaseOrder::getWarehouseId).collect(Collectors.toSet());
+        Map<Long, String> warehouseCodeById = warehouseRepository.findAllById(warehouseIds).stream()
+                .collect(Collectors.toMap(Warehouse::getId, Warehouse::getCode));
 
         Set<Long> orderIds = orders.stream().map(PurchaseOrder::getId).collect(Collectors.toSet());
         // batch 1회 조회 결과를 itemCountMap + productNamesMap 두 가지로 활용 (쿼리 0추가)
@@ -80,7 +91,8 @@ public class PurchaseOrderService {
                     }
                     int count = itemCountMap.getOrDefault(po.getId(), 0L).intValue();
                     List<String> names = productNamesMap.getOrDefault(po.getId(), List.of());
-                    return PurchaseOrderDto.ListRes.from(po, vendor, count, names);
+                    String warehouseCode = warehouseCodeById.getOrDefault(po.getWarehouseId(), "");
+                    return PurchaseOrderDto.ListRes.from(po, vendor, warehouseCode, count, names);
                 })
                 .toList();
     }
@@ -98,6 +110,7 @@ public class PurchaseOrderService {
         }
 
         Vendor vendor = lookupVendor(req.getVendorCode());
+        Warehouse warehouse = lookupWarehouse(req.getWarehouseCode());
 
         // items 의 vendorProduct 모두 조회 + vendor 일치 검증
         List<VendorProduct> vendorProducts = req.getItems().stream()
@@ -110,19 +123,29 @@ public class PurchaseOrderService {
                 })
                 .toList();
 
+        // items 의 SKU 모두 조회 + vp.productCode 일치 검증
+        List<ProductSku> skus = req.getItems().stream()
+                .map(itemReq -> lookupSku(itemReq.getSkuCode()))
+                .toList();
+        for (int i = 0; i < req.getItems().size(); i++) {
+            if (!skus.get(i).getProductCode().equals(vendorProducts.get(i).getProductCode())) {
+                throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_SKU_PRODUCT_MISMATCH);
+            }
+        }
+
         long totalAmount = 0L;
         for (int i = 0; i < req.getItems().size(); i++) {
-            totalAmount += vendorProducts.get(i).getUnitPrice() * req.getItems().get(i).getQuantity();
+            totalAmount += skus.get(i).getUnitPrice() * req.getItems().get(i).getQuantity();
         }
 
         String code = generateCode();
-        PurchaseOrder entity = req.toEntity(vendor, code, totalAmount);
+        PurchaseOrder entity = req.toEntity(vendor, warehouse, code, totalAmount);
         PurchaseOrder saved = purchaseOrderRepository.save(entity);
 
         // items 저장 (purchaseOrderId 채움)
         List<PurchaseOrderItem> items = new ArrayList<>();
         for (int i = 0; i < req.getItems().size(); i++) {
-            PurchaseOrderItem item = req.getItems().get(i).toEntity(saved.getId(), vendorProducts.get(i));
+            PurchaseOrderItem item = req.getItems().get(i).toEntity(saved.getId(), vendorProducts.get(i), skus.get(i));
             items.add(item);
         }
         itemRepository.saveAll(items);
@@ -143,6 +166,8 @@ public class PurchaseOrderService {
             throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_INVALID_STATUS_TRANSITION);
         }
 
+        Warehouse warehouse = lookupWarehouse(req.getWarehouseCode());
+
         // items 의 vendorProduct 검증 (vendor 일치)
         List<VendorProduct> vendorProducts = req.getItems().stream()
                 .map(itemReq -> {
@@ -154,6 +179,16 @@ public class PurchaseOrderService {
                 })
                 .toList();
 
+        // items 의 SKU 검증 (vp.productCode 일치)
+        List<ProductSku> skus = req.getItems().stream()
+                .map(itemReq -> lookupSku(itemReq.getSkuCode()))
+                .toList();
+        for (int i = 0; i < req.getItems().size(); i++) {
+            if (!skus.get(i).getProductCode().equals(vendorProducts.get(i).getProductCode())) {
+                throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_SKU_PRODUCT_MISMATCH);
+            }
+        }
+
         // 기존 items 삭제
         itemRepository.deleteAllByPurchaseOrderId(po.getId());
         itemRepository.flush();
@@ -161,12 +196,12 @@ public class PurchaseOrderService {
         // 신규 items 빌드/save
         List<PurchaseOrderItem> newItems = new ArrayList<>();
         for (int i = 0; i < req.getItems().size(); i++) {
-            newItems.add(req.getItems().get(i).toEntity(po.getId(), vendorProducts.get(i)));
+            newItems.add(req.getItems().get(i).toEntity(po.getId(), vendorProducts.get(i), skus.get(i)));
         }
         itemRepository.saveAll(newItems);
 
-        // 창고/회원 logical reference 업데이트 + totalAmount 재계산
-        po.updateLogistics(req.getWarehouseId(), req.getWarehouseName());
+        // 창고 스냅샷 갱신 (서버 lookup 결과) + totalAmount 재계산
+        po.updateLogistics(warehouse.getId(), warehouse.getName());
         po.recalculateTotalAmount(newItems);
 
         return buildDetailRes(po);
@@ -232,6 +267,23 @@ public class PurchaseOrderService {
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.VENDOR_PRODUCT_NOT_FOUND));
     }
 
+    private Warehouse lookupWarehouse(String code) {
+        if (code == null || code.isBlank()) {
+            throw BaseException.from(BaseResponseStatus.WAREHOUSE_NOT_FOUND);
+        }
+        return warehouseRepository.findByCode(code)
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.WAREHOUSE_NOT_FOUND));
+    }
+
+    private ProductSku lookupSku(String skuCode) {
+        ProductSku sku = productSkuRepository.findBySkuCode(skuCode)
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_SKU_NOT_FOUND));
+        if (sku.getStatus() != ProductStatus.ACTIVE) {
+            throw BaseException.from(BaseResponseStatus.PRODUCT_SKU_NOT_FOUND);
+        }
+        return sku;
+    }
+
     /**
      * 코드 자동 생성 — PO-{YYYYMMDD}-{NNN}.
      * NNN 은 같은 날 prefix count + 1 (3자리 zero-pad).
@@ -245,15 +297,16 @@ public class PurchaseOrderService {
 
     /**
      * 진행 이력 한 행 추가. changedByName 은 도메인 책임자 기준 분기:
-     *   - APPROVED / SHIPPING / DELIVERED : 거래처가 책임 주체 — 발주 시점 거래처명 스냅샷(po.vendorName)
+     *   - APPROVED / SHIPPING / DELIVERED : "담당자명 (회사명)" 형식 — 발주 시점 거래처 스냅샷
      *     (실제 트리거는 SYS-001 배치지만 자동화는 구현 디테일이라 도메인 이력에 노출하지 않음, ADR-013/019)
+     *     실무 ERP 표준 — 법적 주체(회사) + 실무 처리자(담당자) 둘 다 노출.
      *   - COMPLETED            : 입고 확정은 창고 관리자 책임
      *   - PENDING(생성) / REJECTED(취소) : 본사 관리자
      * 인증 도입(ADR-011) 후 본사·창고 관리자명은 실제 사용자명으로 교체.
      */
     private void appendHistory(PurchaseOrder po, String note) {
         String changedByName = switch (po.getStatus()) {
-            case APPROVED, SHIPPING, DELIVERED -> po.getVendorName();
+            case APPROVED, SHIPPING, DELIVERED -> po.getVendorContactName() + " (" + po.getVendorName() + ")";
             case COMPLETED -> WAREHOUSE_MANAGER_ACTOR;
             default -> HQ_MANAGER_ACTOR;
         };
@@ -270,6 +323,11 @@ public class PurchaseOrderService {
         Vendor vendor = vendorRepository.findById(po.getVendorId())
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.VENDOR_NOT_FOUND));
 
+        // warehouse code lookup (응답용 — id → code 변환)
+        String warehouseCode = warehouseRepository.findById(po.getWarehouseId())
+                .map(Warehouse::getCode)
+                .orElse("");
+
         List<PurchaseOrderItem> items = itemRepository.findAllByPurchaseOrderId(po.getId());
         List<PurchaseOrderStatusHistory> history = historyRepository.findAllByPurchaseOrderIdOrderByChangedAtAsc(po.getId());
 
@@ -281,7 +339,7 @@ public class PurchaseOrderService {
                     .forEach(vp -> codeMap.put(vp.getId(), vp.getCode()));
         }
 
-        return PurchaseOrderDto.DetailRes.from(po, vendor, items, history, codeMap);
+        return PurchaseOrderDto.DetailRes.from(po, vendor, warehouseCode, items, history, codeMap);
     }
 
     private Specification<PurchaseOrder> buildSpec(Long vendorId, PurchaseOrderStatus status,

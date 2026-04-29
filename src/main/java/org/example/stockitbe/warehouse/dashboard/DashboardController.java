@@ -27,7 +27,7 @@ public class DashboardController {
 
     @GetMapping("/inbound-progress")
     public BaseResponse<DashboardDto.InboundProgressRes> getInboundProgress(
-            @RequestParam(required = false) String warehouseId,
+            @RequestParam(required = false) Long warehouseId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return BaseResponse.success(service.getInboundProgress(warehouseId, from, to));
