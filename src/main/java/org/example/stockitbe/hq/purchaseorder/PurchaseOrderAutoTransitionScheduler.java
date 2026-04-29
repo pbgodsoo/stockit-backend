@@ -21,6 +21,7 @@ public class PurchaseOrderAutoTransitionScheduler {
     public void run() {
         log.info("[SYS-001] 배치 시작");
         PurchaseOrderBatchService.BatchResult result = batchService.run(false);
-        log.info("[SYS-001] 배치 완료 — approved={}, shipping={}", result.approved(), result.shipping());
+        log.info("[SYS-001] 배치 완료 — approved={}, shipping={}, delivered={}",
+                result.approved(), result.shipping(), result.delivered());
     }
 }

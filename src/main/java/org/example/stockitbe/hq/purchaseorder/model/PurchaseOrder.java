@@ -87,8 +87,22 @@ public class PurchaseOrder extends BaseEntity {
         this.status = PurchaseOrderStatus.SHIPPING;
     }
 
-    public void markCompleted() {
+    /**
+     * 배송 완료 — SHIPPING → DELIVERED. SYS-001 배치 자동 (30분 경과) 또는 force 트리거.
+     * 거래처 책임 단계 (운송 도착) — ADR-013 / ADR-019 일관.
+     */
+    public void markDelivered() {
         if (this.status != PurchaseOrderStatus.SHIPPING) {
+            throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_INVALID_STATUS_TRANSITION);
+        }
+        this.status = PurchaseOrderStatus.DELIVERED;
+    }
+
+    /**
+     * 입고 확정 — DELIVERED → COMPLETED. 창고 [입고 확정] 액션 (검수 미구현, ADR-015).
+     */
+    public void markCompleted() {
+        if (this.status != PurchaseOrderStatus.DELIVERED) {
             throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_INVALID_STATUS_TRANSITION);
         }
         this.status = PurchaseOrderStatus.COMPLETED;
