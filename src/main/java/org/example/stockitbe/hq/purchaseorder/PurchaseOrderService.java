@@ -189,6 +189,14 @@ public class PurchaseOrderService {
     }
 
     @Transactional
+    public PurchaseOrderDto.DetailRes deliver(String code) {
+        PurchaseOrder po = lookupPurchaseOrder(code);
+        po.markDelivered();
+        appendHistory(po, null);
+        return buildDetailRes(po);
+    }
+
+    @Transactional
     public PurchaseOrderDto.DetailRes complete(String code) {
         PurchaseOrder po = lookupPurchaseOrder(code);
         po.markCompleted();
@@ -237,7 +245,7 @@ public class PurchaseOrderService {
 
     /**
      * 진행 이력 한 행 추가. changedByName 은 도메인 책임자 기준 분기:
-     *   - APPROVED / SHIPPING : 거래처가 책임 주체 — 발주 시점 거래처명 스냅샷(po.vendorName)
+     *   - APPROVED / SHIPPING / DELIVERED : 거래처가 책임 주체 — 발주 시점 거래처명 스냅샷(po.vendorName)
      *     (실제 트리거는 SYS-001 배치지만 자동화는 구현 디테일이라 도메인 이력에 노출하지 않음, ADR-013/019)
      *   - COMPLETED            : 입고 확정은 창고 관리자 책임
      *   - PENDING(생성) / REJECTED(취소) : 본사 관리자
@@ -245,7 +253,7 @@ public class PurchaseOrderService {
      */
     private void appendHistory(PurchaseOrder po, String note) {
         String changedByName = switch (po.getStatus()) {
-            case APPROVED, SHIPPING -> po.getVendorName();
+            case APPROVED, SHIPPING, DELIVERED -> po.getVendorName();
             case COMPLETED -> WAREHOUSE_MANAGER_ACTOR;
             default -> HQ_MANAGER_ACTOR;
         };
