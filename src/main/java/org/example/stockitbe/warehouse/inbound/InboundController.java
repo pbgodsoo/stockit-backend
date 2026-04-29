@@ -32,7 +32,7 @@ public class InboundController {
     @GetMapping
     public BaseResponse<List<PurchaseOrderDto.ListRes>> list(
             @RequestParam(required = false) PurchaseOrderStatus status,
-            @RequestParam(required = false) String warehouseId,
+            @RequestParam(required = false) Long warehouseId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return BaseResponse.success(service.findAll(status, warehouseId, from, to));

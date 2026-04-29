@@ -38,7 +38,7 @@ public class DashboardService {
     private final PurchaseOrderStatusHistoryRepository historyRepository;
 
     @Transactional(readOnly = true)
-    public DashboardDto.InboundProgressRes getInboundProgress(String warehouseId,
+    public DashboardDto.InboundProgressRes getInboundProgress(Long warehouseId,
                                                                 LocalDate from, LocalDate to) {
         Specification<PurchaseOrder> spec = buildSpec(warehouseId, from, to);
         List<PurchaseOrder> orders = purchaseOrderRepository.findAll(spec);
@@ -126,10 +126,10 @@ public class DashboardService {
         return Math.round(avg * 10.0) / 10.0;
     }
 
-    private Specification<PurchaseOrder> buildSpec(String warehouseId, LocalDate from, LocalDate to) {
+    private Specification<PurchaseOrder> buildSpec(Long warehouseId, LocalDate from, LocalDate to) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
-            if (warehouseId != null && !warehouseId.isBlank()) {
+            if (warehouseId != null) {
                 predicates.add(cb.equal(root.get("warehouseId"), warehouseId));
             }
             if (from != null) {

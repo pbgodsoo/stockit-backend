@@ -29,15 +29,14 @@ public class InboundService {
      */
     @Transactional(readOnly = true)
     public List<PurchaseOrderDto.ListRes> findAll(PurchaseOrderStatus status,
-                                                    String warehouseId,
+                                                    Long warehouseId,
                                                     LocalDate from, LocalDate to) {
         // PurchaseOrderService.findAll 의 시그니처: (vendorCode, status, from, to).
         // vendorCode 는 창고 관심사 아니므로 null. status 가 비-입고 상태면 isInboundStatus 필터로 빈 결과 보장.
         List<PurchaseOrderDto.ListRes> all = purchaseOrderService.findAll(null, status, from, to);
         return all.stream()
                 .filter(po -> isInboundStatus(po.getStatus()))
-                .filter(po -> warehouseId == null || warehouseId.isBlank()
-                        || warehouseId.equals(po.getWarehouseId()))
+                .filter(po -> warehouseId == null || warehouseId.equals(po.getWarehouseId()))
                 .toList();
     }
 

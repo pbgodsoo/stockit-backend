@@ -30,15 +30,20 @@ public class PurchaseOrder extends BaseEntity {
     private Long vendorId;
 
     // vendor.name 시점 복사 — 발주 시점의 거래처명 스냅샷 (warehouseName/memberName 패턴과 동일).
-    // statusHistory.changedByName 에 거래처 책임 전환(APPROVED/SHIPPING) 주체로 박힘.
     @Column(name = "vendor_name", nullable = false, length = 128)
     private String vendorName;
 
-    // 창고 BE 미구현 — logical reference (id String + name 시점 복사)
-    @Column(name = "warehouse_id", length = 32)
-    private String warehouseId;
+    // vendor.contactName 시점 복사 — 거래처 담당자명. statusHistory.changedByName 에
+    // APPROVED/SHIPPING/DELIVERED 단계 주체로 박힘 (회사명보다 사람 이름이 자연).
+    @Column(name = "vendor_contact_name", nullable = false, length = 64)
+    private String vendorContactName;
 
-    @Column(name = "warehouse_name", length = 128)
+    // warehouse FK — Long ID 참조 + name 시점 복사 스냅샷 (vendor 패턴 일관, 결합 차단 4패턴 #1).
+    // @ManyToOne 박지 않음 — N+1/lazy 함정 회피, 패키지 결합 차단. DB FK 제약은 별 마이그레이션 SQL.
+    @Column(name = "warehouse_id", nullable = false)
+    private Long warehouseId;
+
+    @Column(name = "warehouse_name", nullable = false, length = 128)
     private String warehouseName;
 
     // 회원 BE 미구현, 인증 미정 — logical reference
@@ -59,12 +64,13 @@ public class PurchaseOrder extends BaseEntity {
     private String cancelReason;
 
     @Builder
-    private PurchaseOrder(String code, Long vendorId, String vendorName,
-                          String warehouseId, String warehouseName,
+    private PurchaseOrder(String code, Long vendorId, String vendorName, String vendorContactName,
+                          Long warehouseId, String warehouseName,
                           String memberId, String memberName, Long totalAmount) {
         this.code = code;
         this.vendorId = vendorId;
         this.vendorName = vendorName;
+        this.vendorContactName = vendorContactName;
         this.warehouseId = warehouseId;
         this.warehouseName = warehouseName;
         this.memberId = memberId;
@@ -128,7 +134,7 @@ public class PurchaseOrder extends BaseEntity {
         this.totalAmount = sum;
     }
 
-    public void updateLogistics(String warehouseId, String warehouseName) {
+    public void updateLogistics(Long warehouseId, String warehouseName) {
         if (this.status != PurchaseOrderStatus.PENDING) {
             throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_INVALID_STATUS_TRANSITION);
         }

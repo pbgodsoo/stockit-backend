@@ -65,6 +65,7 @@ public enum BaseResponseStatus {
     PURCHASE_ORDER_EMPTY_ITEMS(false, 4302, "발주 품목이 비어 있습니다."),
     PURCHASE_ORDER_VENDOR_PRODUCT_MISMATCH(false, 4303, "발주 거래처와 품목의 거래처가 일치하지 않습니다."),
     PURCHASE_ORDER_CANCEL_REASON_REQUIRED(false, 4304, "발주 취소 사유는 필수입니다."),
+    PURCHASE_ORDER_SKU_PRODUCT_MISMATCH(false, 4305, "발주 품목의 SKU가 거래처 계약 제품의 옵션이 아닙니다."),
 
     // 5000번대 실패
     FAIL(false, 5000, "요청 실패");
