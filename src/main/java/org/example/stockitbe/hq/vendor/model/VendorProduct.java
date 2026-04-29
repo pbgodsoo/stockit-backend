@@ -71,12 +71,12 @@ public class VendorProduct extends BaseEntity {
     }
 
     /**
-     * 계약 정보 수정 (단가·MOQ·납기·계약기간·제품명).
+     * 계약 정보 수정 (단가·MOQ·납기·계약기간).
+     * productName 은 ProductMaster 가 진실 원천이라 VendorProduct 측에서 변경 액션 폐기 — 컬럼은 시점 복사로 발주 이력 보호용 유지.
      * status 변경은 changeStatus() 통해서만.
      */
-    public void updateContract(String productName, Long unitPrice, Integer moq, Integer leadTimeDays,
+    public void updateContract(Long unitPrice, Integer moq, Integer leadTimeDays,
                                 LocalDate contractStart, LocalDate contractEnd) {
-        if (productName != null) this.productName = productName;
         if (unitPrice != null) this.unitPrice = unitPrice;
         if (moq != null) this.moq = moq;
         if (leadTimeDays != null) this.leadTimeDays = leadTimeDays;

@@ -57,6 +57,7 @@ public enum BaseResponseStatus {
     DUPLICATE_PRODUCT_MASTER_NAME(false, 4216, "이미 등록된 제품명입니다."),
     DUPLICATE_PRODUCT_SKU_OPTION(false, 4217, "이미 등록된 SKU 옵션입니다."),
     INVALID_SKU_PRICE(false, 4218, "SKU 가격은 0 이상이어야 합니다."),
+    VENDOR_PRODUCT_VENDOR_MISMATCH(false, 4219, "이 제품의 메인 거래처가 아닙니다."),
 
     // 4300번대~ 본사 발주 (CEN-035~040)
     PURCHASE_ORDER_NOT_FOUND(false, 4300, "본사 발주를 찾을 수 없습니다."),
