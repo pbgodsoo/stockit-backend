@@ -18,6 +18,16 @@ repositories {
     mavenCentral()
 }
 
+ext {
+    springAiVersion = '1.0.0'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.ai:spring-ai-bom:${springAiVersion}"
+    }
+}
+
 dependencies {
     // --- 스타터팩 ---
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -32,6 +42,9 @@ dependencies {
 
     // --- Swagger 관련 ---
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.4'
+
+    // --- Spring AI (ADR-021 AI 거래처 추천) ---
+    implementation 'org.springframework.ai:spring-ai-starter-model-openai'
 
     // --- 테스트 관련 ---
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
