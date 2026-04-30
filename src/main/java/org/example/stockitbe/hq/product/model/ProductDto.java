@@ -19,6 +19,8 @@ public class ProductDto {
         @NotBlank private String categoryCode;
         @NotNull @Min(0) private Long basePrice;
         @NotNull @Min(0) private Integer leadTimeDays;
+        @NotNull @Min(0) private Integer warehouseSafetyStock;
+        @NotNull @Min(0) private Integer storeSafetyStock;
         @NotBlank private String mainVendorCode;
         @NotNull private ProductStatus status;
 
@@ -29,6 +31,8 @@ public class ProductDto {
                     .categoryCode(categoryCode.trim())
                     .basePrice(basePrice)
                     .leadTimeDays(leadTimeDays)
+                    .warehouseSafetyStock(warehouseSafetyStock)
+                    .storeSafetyStock(storeSafetyStock)
                     .mainVendorCode(mainVendorCode.trim())
                     .status(status)
                     .build();
@@ -93,6 +97,8 @@ public class ProductDto {
         private String categoryCode;
         private Long basePrice;
         private Integer leadTimeDays;
+        private Integer warehouseSafetyStock;
+        private Integer storeSafetyStock;
         private String mainVendorCode;
         private ProductStatus status;
         private long skuCount;
@@ -105,6 +111,8 @@ public class ProductDto {
                     .categoryCode(m.getCategoryCode())
                     .basePrice(m.getBasePrice())
                     .leadTimeDays(m.getLeadTimeDays())
+                    .warehouseSafetyStock(m.getWarehouseSafetyStock())
+                    .storeSafetyStock(m.getStoreSafetyStock())
                     .mainVendorCode(m.getMainVendorCode())
                     .status(m.getStatus())
                     .skuCount(skuCount)

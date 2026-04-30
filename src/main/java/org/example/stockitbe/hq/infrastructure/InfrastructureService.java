@@ -35,6 +35,13 @@ public class InfrastructureService {
     }
 
     @Transactional(readOnly = true)
+    public InfrastructureDto.StoreRes findStoreByCode(String code) {
+        Store store = storeRepository.findByCode(code)
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.STORE_NOT_FOUND));
+        return InfrastructureDto.StoreRes.from(store);
+    }
+
+    @Transactional(readOnly = true)
     public List<InfrastructureDto.WarehouseRes> findWarehouses(String keyword, String region, InfraStatus status) {
         String safeKeyword = keyword == null ? "" : keyword.trim();
         String safeRegion = region == null ? "" : region.trim();
@@ -49,6 +56,13 @@ public class InfrastructureService {
             warehouses = warehouseRepository.findByNameContainingIgnoreCaseOrderByIdDesc(safeKeyword);
         }
         return warehouses.stream().map(w -> InfrastructureDto.WarehouseRes.from(w, storeRepository.countByWarehouseCode(w.getCode()))).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public InfrastructureDto.WarehouseRes findWarehouseByCode(String code) {
+        Warehouse warehouse = warehouseRepository.findByCode(code)
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.WAREHOUSE_NOT_FOUND));
+        return InfrastructureDto.WarehouseRes.from(warehouse, storeRepository.countByWarehouseCode(warehouse.getCode()));
     }
 
     @Transactional

@@ -33,6 +33,12 @@ public class ProductMaster extends BaseEntity {
     @Column(name = "lead_time_days", nullable = false)
     private Integer leadTimeDays;
 
+    @Column(name = "warehouse_safety_stock", nullable = false)
+    private Integer warehouseSafetyStock;
+
+    @Column(name = "store_safety_stock", nullable = false)
+    private Integer storeSafetyStock;
+
     @Column(name = "main_vendor_code", nullable = false, length = 32)
     private String mainVendorCode;
 
@@ -42,21 +48,26 @@ public class ProductMaster extends BaseEntity {
 
     @Builder
     private ProductMaster(String code, String name, String categoryCode, Long basePrice, Integer leadTimeDays,
-                          String mainVendorCode, ProductStatus status) {
+                          Integer warehouseSafetyStock, Integer storeSafetyStock, String mainVendorCode, ProductStatus status) {
         this.code = code;
         this.name = name;
         this.categoryCode = categoryCode;
         this.basePrice = basePrice;
         this.leadTimeDays = leadTimeDays;
+        this.warehouseSafetyStock = warehouseSafetyStock == null ? 0 : warehouseSafetyStock;
+        this.storeSafetyStock = storeSafetyStock == null ? 0 : storeSafetyStock;
         this.mainVendorCode = mainVendorCode;
         this.status = status == null ? ProductStatus.ACTIVE : status;
     }
 
-    public void update(String name, String categoryCode, Long basePrice, Integer leadTimeDays, String mainVendorCode, ProductStatus status) {
+    public void update(String name, String categoryCode, Long basePrice, Integer leadTimeDays, Integer warehouseSafetyStock,
+                       Integer storeSafetyStock, String mainVendorCode, ProductStatus status) {
         this.name = name;
         this.categoryCode = categoryCode;
         this.basePrice = basePrice;
         this.leadTimeDays = leadTimeDays;
+        this.warehouseSafetyStock = warehouseSafetyStock == null ? 0 : warehouseSafetyStock;
+        this.storeSafetyStock = storeSafetyStock == null ? 0 : storeSafetyStock;
         this.mainVendorCode = mainVendorCode;
         this.status = status;
     }
