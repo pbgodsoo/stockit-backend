@@ -16,6 +16,14 @@ spring:
       hibernate:
         format_sql: true
 
+  # ADR-021 AI 거래처 추천 — 임베딩 모델만 (chat 모델 설정은 다음 phase 에서 추가)
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      embedding:
+        options:
+          model: text-embedding-3-small
+
 logging:
   level:
     org.hibernate.SQL: debug
