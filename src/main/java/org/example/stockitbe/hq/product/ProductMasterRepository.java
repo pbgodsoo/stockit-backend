@@ -3,6 +3,7 @@ package org.example.stockitbe.hq.product;
 import org.example.stockitbe.hq.product.model.ProductMaster;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -12,4 +13,5 @@ public interface ProductMasterRepository extends JpaRepository<ProductMaster, Lo
     boolean existsByNameIgnoreCaseAndCodeNot(String name, String code);
     List<ProductMaster> findByNameContainingIgnoreCaseAndCategoryCodeContainingIgnoreCaseOrderByIdDesc(String keyword, String categoryCode);
     List<ProductMaster> findAllByOrderByIdDesc();
+    List<ProductMaster> findAllByCodeIn(Collection<String> codes);
 }
