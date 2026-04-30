@@ -23,6 +23,11 @@ public class InfrastructureController {
         return BaseResponse.success(service.findStores(keyword, region, status));
     }
 
+    @GetMapping("/stores/{code}")
+    public BaseResponse<InfrastructureDto.StoreRes> getStore(@PathVariable String code) {
+        return BaseResponse.success(service.findStoreByCode(code));
+    }
+
     @PostMapping("/stores")
     public BaseResponse<InfrastructureDto.StoreRes> createStore(@Valid @RequestBody InfrastructureDto.StoreUpsertReq req) {
         return BaseResponse.success(service.createStore(req));
@@ -39,6 +44,11 @@ public class InfrastructureController {
                                                                              @RequestParam(required = false) String region,
                                                                              @RequestParam(required = false) InfraStatus status) {
         return BaseResponse.success(service.findWarehouses(keyword, region, status));
+    }
+
+    @GetMapping("/warehouses/{code}")
+    public BaseResponse<InfrastructureDto.WarehouseRes> getWarehouse(@PathVariable String code) {
+        return BaseResponse.success(service.findWarehouseByCode(code));
     }
 
     @PostMapping("/warehouses")

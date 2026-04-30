@@ -7,6 +7,9 @@ import org.example.stockitbe.hq.category.CategoryRepository;
 import org.example.stockitbe.hq.product.model.ProductDto;
 import org.example.stockitbe.hq.product.model.ProductMaster;
 import org.example.stockitbe.hq.product.model.ProductSku;
+import org.example.stockitbe.hq.vendor.VendorRepository;
+import org.example.stockitbe.hq.vendor.model.Vendor;
+import org.example.stockitbe.hq.vendor.model.VendorStatus;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +25,7 @@ public class ProductMasterService {
     private final ProductMasterRepository productMasterRepository;
     private final ProductSkuRepository productSkuRepository;
     private final CategoryRepository categoryRepository;
+    private final VendorRepository vendorRepository;
 
     @Transactional(readOnly = true)
     public List<ProductDto.ProductMasterRes> findProducts(String keyword, String categoryCode) {
@@ -53,7 +57,16 @@ public class ProductMasterService {
         ProductMaster product = productMasterRepository.findByCode(code)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_MASTER_NOT_FOUND));
         validateUpdate(req, code);
-        product.update(req.getName().trim(), req.getCategoryCode().trim(), req.getBasePrice(), req.getLeadTimeDays(), req.getMainVendorCode().trim(), req.getStatus());
+        product.update(
+                req.getName().trim(),
+                req.getCategoryCode().trim(),
+                req.getBasePrice(),
+                req.getLeadTimeDays(),
+                req.getWarehouseSafetyStock(),
+                req.getStoreSafetyStock(),
+                req.getMainVendorCode().trim(),
+                req.getStatus()
+        );
         return ProductDto.ProductMasterRes.from(product, productSkuRepository.countByProductCode(product.getCode()));
     }
 
@@ -183,6 +196,7 @@ public class ProductMasterService {
         if (!categoryRepository.findByCode(req.getCategoryCode().trim()).isPresent()) {
             throw BaseException.from(BaseResponseStatus.CATEGORY_NOT_FOUND);
         }
+        validateMainVendor(req.getMainVendorCode());
         if (productMasterRepository.existsByNameIgnoreCase(req.getName().trim())) {
             throw BaseException.from(BaseResponseStatus.DUPLICATE_PRODUCT_MASTER_NAME);
         }
@@ -192,8 +206,17 @@ public class ProductMasterService {
         if (!categoryRepository.findByCode(req.getCategoryCode().trim()).isPresent()) {
             throw BaseException.from(BaseResponseStatus.CATEGORY_NOT_FOUND);
         }
+        validateMainVendor(req.getMainVendorCode());
         if (productMasterRepository.existsByNameIgnoreCaseAndCodeNot(req.getName().trim(), code)) {
             throw BaseException.from(BaseResponseStatus.DUPLICATE_PRODUCT_MASTER_NAME);
+        }
+    }
+
+    private void validateMainVendor(String mainVendorCode) {
+        Vendor vendor = vendorRepository.findByCode(mainVendorCode.trim())
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.VENDOR_NOT_FOUND));
+        if (vendor.getStatus() != VendorStatus.ACTIVE) {
+            throw BaseException.from(BaseResponseStatus.VENDOR_INACTIVE);
         }
     }
 
