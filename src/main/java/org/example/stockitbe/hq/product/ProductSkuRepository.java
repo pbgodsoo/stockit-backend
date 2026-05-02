@@ -12,7 +12,7 @@ public interface ProductSkuRepository extends JpaRepository<ProductSku, Long> {
     List<ProductSku> findByProductCodeOrderByIdDesc(String productCode);
     long countByProductCode(String productCode);
     List<ProductSku> findAllByOrderByIdDesc();
-    boolean existsByProductCodeAndOptionNameAndOptionValue(String productCode, String optionName, String optionValue);
+    boolean existsByProductCodeAndColorAndSize(String productCode, String color, String size);
     long deleteByProductCode(String productCode);
     List<ProductSku> findAllByProductCodeInOrderByIdAsc(Collection<String> productCodes);
 }

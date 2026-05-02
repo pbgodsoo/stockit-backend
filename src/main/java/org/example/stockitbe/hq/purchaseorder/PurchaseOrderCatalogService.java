@@ -101,8 +101,9 @@ public class PurchaseOrderCatalogService {
             List<PurchaseOrderCatalogDto.SkuRes> skuResList = skus.stream()
                     .map(s -> PurchaseOrderCatalogDto.SkuRes.builder()
                             .skuCode(s.getSkuCode())
-                            .optionName(s.getOptionName())
-                            .optionValue(s.getOptionValue())
+                            .color(s.getColor())
+                            .size(s.getSize())
+                            .displayOption(s.getColor() + "/" + s.getSize())
                             .unitPrice(s.getUnitPrice())
                             .build())
                     .toList();
@@ -122,18 +123,15 @@ public class PurchaseOrderCatalogService {
                     .build());
         }
 
-        // 6) optionFacets 빌드 — axis name 별 unique 값 셋. 슬래시 합성 axis 는 분해
+        // 6) optionFacets 빌드 — color/size 분리
         Map<String, Set<String>> facetMap = new LinkedHashMap<>();
         for (PurchaseOrderCatalogDto.MasterRes m : masters) {
             for (PurchaseOrderCatalogDto.SkuRes s : m.getSkus()) {
-                String[] names = (s.getOptionName() == null ? "" : s.getOptionName()).split("/");
-                String[] values = (s.getOptionValue() == null ? "" : s.getOptionValue()).split("/");
-                int len = Math.min(names.length, values.length);
-                for (int i = 0; i < len; i++) {
-                    String axis = names[i].trim();
-                    String value = values[i].trim();
-                    if (axis.isEmpty() || value.isEmpty()) continue;
-                    facetMap.computeIfAbsent(axis, k -> new TreeSet<>()).add(value);
+                if (s.getColor() != null && !s.getColor().isBlank()) {
+                    facetMap.computeIfAbsent("색상", k -> new TreeSet<>()).add(s.getColor().trim());
+                }
+                if (s.getSize() != null && !s.getSize().isBlank()) {
+                    facetMap.computeIfAbsent("사이즈", k -> new TreeSet<>()).add(s.getSize().trim());
                 }
             }
         }

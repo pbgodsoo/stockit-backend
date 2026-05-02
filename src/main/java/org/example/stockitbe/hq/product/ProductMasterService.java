@@ -21,6 +21,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -127,7 +128,7 @@ public class ProductMasterService {
     public ProductDto.ProductSkuRes createSku(String productCode, ProductDto.ProductSkuUpsertReq req) {
         productMasterRepository.findByCode(productCode)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_MASTER_NOT_FOUND));
-        validateSkuDuplicate(productCode, req.getOptionName().trim(), req.getOptionValue().trim(), null);
+        validateSkuDuplicate(productCode, req.getColor().trim(), req.getSize().trim(), null);
         ProductSku saved = saveSkuWithGeneratedCode(productCode, req);
         return ProductDto.ProductSkuRes.from(saved);
     }
@@ -136,10 +137,10 @@ public class ProductMasterService {
     public ProductDto.ProductSkuRes updateSku(String skuCode, ProductDto.ProductSkuUpsertReq req) {
         ProductSku sku = productSkuRepository.findBySkuCode(skuCode)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_SKU_NOT_FOUND));
-        String optionName = req.getOptionName().trim();
-        String optionValue = req.getOptionValue().trim();
-        validateSkuDuplicate(sku.getProductCode(), optionName, optionValue, skuCode);
-        sku.update(optionName, optionValue, req.getUnitPrice(), req.getStatus());
+        String color = req.getColor().trim();
+        String size = req.getSize().trim();
+        validateSkuDuplicate(sku.getProductCode(), color, size, skuCode);
+        sku.update(color, size, req.getUnitPrice(), req.getStatus());
         return ProductDto.ProductSkuRes.from(sku);
     }
 
@@ -155,32 +156,35 @@ public class ProductMasterService {
         productMasterRepository.findByCode(productCode)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_MASTER_NOT_FOUND));
 
-        String optionName = req.getOptionName().trim();
-        Set<String> uniqueValues = new LinkedHashSet<>();
-        for (String raw : req.getOptionValues()) {
-            if (raw == null) continue;
-            String trimmed = raw.trim();
-            if (!trimmed.isEmpty()) uniqueValues.add(trimmed);
-        }
+        Set<String> colorSet = req.getColors().stream()
+                .filter(v -> v != null && !v.trim().isEmpty())
+                .map(String::trim)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Set<String> sizeSet = req.getSizes().stream()
+                .filter(v -> v != null && !v.trim().isEmpty())
+                .map(String::trim)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        int requestedCount = uniqueValues.size();
+        int requestedCount = colorSet.size() * sizeSet.size();
         int createdCount = 0;
         int skippedCount = 0;
 
-        for (String optionValue : uniqueValues) {
-            boolean duplicated = productSkuRepository.existsByProductCodeAndOptionNameAndOptionValue(productCode, optionName, optionValue);
-            if (duplicated) {
-                skippedCount++;
-                continue;
+        for (String color : colorSet) {
+            for (String size : sizeSet) {
+                boolean duplicated = productSkuRepository.existsByProductCodeAndColorAndSize(productCode, color, size);
+                if (duplicated) {
+                    skippedCount++;
+                    continue;
+                }
+                ProductDto.ProductSkuUpsertReq createReq = ProductDto.ProductSkuUpsertReq.builder()
+                        .color(color)
+                        .size(size)
+                        .unitPrice(req.getUnitPrice())
+                        .status(req.getStatus())
+                        .build();
+                saveSkuWithGeneratedCode(productCode, createReq);
+                createdCount++;
             }
-            ProductDto.ProductSkuUpsertReq createReq = ProductDto.ProductSkuUpsertReq.builder()
-                    .optionName(optionName)
-                    .optionValue(optionValue)
-                    .unitPrice(req.getUnitPrice())
-                    .status(req.getStatus())
-                    .build();
-            saveSkuWithGeneratedCode(productCode, createReq);
-            createdCount++;
         }
 
         return ProductDto.ProductSkuBulkCreateRes.builder()
@@ -202,7 +206,7 @@ public class ProductMasterService {
 
         List<ProductSku> targetSkus = productSkuRepository.findByProductCodeOrderByIdDesc(productCode);
         for (ProductSku sku : targetSkus) {
-            sku.update(sku.getOptionName(), sku.getOptionValue(), req.getUnitPrice(), sku.getStatus());
+            sku.update(sku.getColor(), sku.getSize(), req.getUnitPrice(), sku.getStatus());
         }
 
         return ProductDto.ProductSkuPriceBulkUpdateRes.builder()
@@ -219,7 +223,7 @@ public class ProductMasterService {
 
         List<ProductSku> targetSkus = productSkuRepository.findByProductCodeOrderByIdDesc(productCode);
         for (ProductSku sku : targetSkus) {
-            sku.update(sku.getOptionName(), sku.getOptionValue(), sku.getUnitPrice(), req.getStatus());
+            sku.update(sku.getColor(), sku.getSize(), sku.getUnitPrice(), req.getStatus());
         }
 
         return ProductDto.ProductSkuStatusBulkUpdateRes.builder()
@@ -329,11 +333,11 @@ public class ProductMasterService {
         throw BaseException.from(BaseResponseStatus.FAIL);
     }
 
-    private void validateSkuDuplicate(String productCode, String optionName, String optionValue, String selfSkuCode) {
+    private void validateSkuDuplicate(String productCode, String color, String size, String selfSkuCode) {
         List<ProductSku> sameProductSkus = productSkuRepository.findByProductCodeOrderByIdDesc(productCode);
         boolean duplicated = sameProductSkus.stream()
-                .anyMatch(s -> s.getOptionName().equalsIgnoreCase(optionName)
-                        && s.getOptionValue().equalsIgnoreCase(optionValue)
+                .anyMatch(s -> s.getColor().equalsIgnoreCase(color)
+                        && s.getSize().equalsIgnoreCase(size)
                         && (selfSkuCode == null || !s.getSkuCode().equals(selfSkuCode)));
         if (duplicated) {
             throw BaseException.from(BaseResponseStatus.DUPLICATE_PRODUCT_SKU_OPTION);

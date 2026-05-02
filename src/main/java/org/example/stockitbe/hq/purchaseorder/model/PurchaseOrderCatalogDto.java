@@ -44,8 +44,9 @@ public class PurchaseOrderCatalogDto {
     @Builder
     public static class SkuRes {
         private String skuCode;
-        private String optionName;           // 슬래시 합성 ("색상/사이즈")
-        private String optionValue;          // 슬래시 합성 ("화이트/L")
+        private String color;
+        private String size;
+        private String displayOption;
         private Long unitPrice;              // SKU 단가 (sku.unit_price 우선)
     }
 

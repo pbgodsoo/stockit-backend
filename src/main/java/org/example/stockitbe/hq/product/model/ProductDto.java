@@ -72,8 +72,8 @@ public class ProductDto {
     @AllArgsConstructor
     @Builder
     public static class ProductSkuUpsertReq {
-        @NotBlank private String optionName;
-        @NotBlank private String optionValue;
+        @NotBlank private String color;
+        @NotBlank private String size;
         @NotNull @Min(0) private Long unitPrice;
         @NotNull private ProductStatus status;
 
@@ -81,8 +81,8 @@ public class ProductDto {
             return ProductSku.builder()
                     .skuCode(skuCode)
                     .productCode(productCode)
-                    .optionName(optionName.trim())
-                    .optionValue(optionValue.trim())
+                    .color(color.trim())
+                    .size(size.trim())
                     .unitPrice(unitPrice)
                     .status(status)
                     .build();
@@ -94,8 +94,8 @@ public class ProductDto {
     @AllArgsConstructor
     @Builder
     public static class ProductSkuBulkCreateReq {
-        @NotBlank private String optionName;
-        @NotNull private List<String> optionValues;
+        @NotNull private List<String> colors;
+        @NotNull private List<String> sizes;
         @NotNull @Min(0) private Long unitPrice;
         @NotNull private ProductStatus status;
     }
@@ -179,8 +179,9 @@ public class ProductDto {
     public static class ProductSkuRes {
         private String skuCode;
         private String productCode;
-        private String optionName;
-        private String optionValue;
+        private String color;
+        private String size;
+        private String displayOption;
         private Long unitPrice;
         private ProductStatus status;
         private Date updatedAt;
@@ -189,8 +190,9 @@ public class ProductDto {
             return ProductSkuRes.builder()
                     .skuCode(sku.getSkuCode())
                     .productCode(sku.getProductCode())
-                    .optionName(sku.getOptionName())
-                    .optionValue(sku.getOptionValue())
+                    .color(sku.getColor())
+                    .size(sku.getSize())
+                    .displayOption(sku.getColor() + "/" + sku.getSize())
                     .unitPrice(sku.getUnitPrice())
                     .status(sku.getStatus())
                     .updatedAt(sku.getUpdatedAt())
