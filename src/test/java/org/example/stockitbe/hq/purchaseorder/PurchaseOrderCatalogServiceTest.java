@@ -86,12 +86,12 @@ class PurchaseOrderCatalogServiceTest {
                 .status(ProductStatus.ACTIVE).build();
     }
 
-    private ProductSku sku(String skuCode, String productCode, String optionName, String optionValue, long price) {
+    private ProductSku sku(String skuCode, String productCode, String color, String size, long price) {
         return ProductSku.builder()
                 .skuCode(skuCode)
                 .productCode(productCode)
-                .optionName(optionName)
-                .optionValue(optionValue)
+                .color(color)
+                .size(size)
                 .unitPrice(price)
                 .status(ProductStatus.ACTIVE)
                 .build();
@@ -105,9 +105,9 @@ class PurchaseOrderCatalogServiceTest {
         when(vendorRepository.findAllById(any())).thenReturn(List.of(vendorA, vendorB));
         when(productMasterRepository.findAllByCodeIn(any())).thenReturn(List.of(pmA, pmB));
         when(productSkuRepository.findAllByProductCodeInOrderByIdAsc(any())).thenReturn(List.of(
-                sku("SKU-A-1", "PM-A", "색상/사이즈", "화이트/L", 6800L),
-                sku("SKU-A-2", "PM-A", "색상/사이즈", "블랙/M", 7200L),
-                sku("SKU-B-1", "PM-B", "색상", "네이비", 15000L)
+                sku("SKU-A-1", "PM-A", "화이트", "L", 6800L),
+                sku("SKU-A-2", "PM-A", "블랙", "M", 7200L),
+                sku("SKU-B-1", "PM-B", "네이비", "FREE", 15000L)
         ));
 
         PurchaseOrderCatalogDto.CatalogRes res = service.getCatalog(null, null);
@@ -136,7 +136,7 @@ class PurchaseOrderCatalogServiceTest {
         when(vendorRepository.findAllById(any())).thenReturn(List.of(vendorA));
         when(productMasterRepository.findAllByCodeIn(any())).thenReturn(List.of(pmA, pmEmpty));
         when(productSkuRepository.findAllByProductCodeInOrderByIdAsc(any())).thenReturn(List.of(
-                sku("SKU-A-1", "PM-A", "사이즈", "L", 6800L)
+                sku("SKU-A-1", "PM-A", "화이트", "L", 6800L)
                 // PM-EMPTY 의 SKU 는 0건
         ));
 
@@ -155,7 +155,7 @@ class PurchaseOrderCatalogServiceTest {
         when(vendorRepository.findAllById(any())).thenReturn(List.of(vendorA));
         when(productMasterRepository.findAllByCodeIn(any())).thenReturn(List.of(pmA));
         when(productSkuRepository.findAllByProductCodeInOrderByIdAsc(any())).thenReturn(List.of(
-                sku("SKU-A-1", "PM-A", "사이즈", "L", 6800L)
+                sku("SKU-A-1", "PM-A", "화이트", "L", 6800L)
         ));
 
         PurchaseOrderCatalogDto.CatalogRes res = service.getCatalog("VND-A", null);

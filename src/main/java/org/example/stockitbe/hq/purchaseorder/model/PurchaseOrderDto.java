@@ -72,8 +72,8 @@ public class PurchaseOrderDto {
                     .productCode(vp.getProductCode())
                     .productName(vp.getProductName())
                     .skuCode(sku.getSkuCode())
-                    .optionName(sku.getOptionName())
-                    .optionValue(sku.getOptionValue())
+                    .color(sku.getColor())
+                    .size(sku.getSize())
                     .unitPrice(sku.getUnitPrice())  // sku 단가 우선 (옵션별 차등 가능)
                     .quantity(this.quantity)
                     .build();
@@ -200,8 +200,9 @@ public class PurchaseOrderDto {
         private String productCode;
         private String productName;
         private String skuCode;
-        private String optionName;
-        private String optionValue;
+        private String color;
+        private String size;
+        private String displayOption;
         private Long unitPrice;
         private Integer quantity;
         private Long subtotal;
@@ -213,8 +214,9 @@ public class PurchaseOrderDto {
                     .productCode(item.getProductCode())
                     .productName(item.getProductName())
                     .skuCode(item.getSkuCode())
-                    .optionName(item.getOptionName())
-                    .optionValue(item.getOptionValue())
+                    .color(item.getColor())
+                    .size(item.getSize())
+                    .displayOption(item.getColor() + "/" + item.getSize())
                     .unitPrice(item.getUnitPrice())
                     .quantity(item.getQuantity())
                     .subtotal(item.getSubtotal())

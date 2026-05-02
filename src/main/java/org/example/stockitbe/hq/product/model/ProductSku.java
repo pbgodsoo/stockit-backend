@@ -9,7 +9,8 @@ import org.example.stockitbe.common.model.BaseEntity;
 
 @Entity
 @Table(name = "product_sku", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_product_sku_code", columnNames = "sku_code")
+        @UniqueConstraint(name = "uk_product_sku_code", columnNames = "sku_code"),
+        @UniqueConstraint(name = "uk_product_sku_product_color_size", columnNames = {"product_code", "color", "size"})
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -24,11 +25,11 @@ public class ProductSku extends BaseEntity {
     @Column(name = "product_code", nullable = false, length = 32)
     private String productCode;
 
-    @Column(name = "option_name", nullable = false, length = 64)
-    private String optionName;
+    @Column(name = "color", nullable = false, length = 32)
+    private String color;
 
-    @Column(name = "option_value", nullable = false, length = 64)
-    private String optionValue;
+    @Column(name = "size", nullable = false, length = 16)
+    private String size;
 
     @Column(name = "unit_price", nullable = false)
     private Long unitPrice;
@@ -38,19 +39,19 @@ public class ProductSku extends BaseEntity {
     private ProductStatus status;
 
     @Builder
-    private ProductSku(String skuCode, String productCode, String optionName, String optionValue,
+    private ProductSku(String skuCode, String productCode, String color, String size,
                        Long unitPrice, ProductStatus status) {
         this.skuCode = skuCode;
         this.productCode = productCode;
-        this.optionName = optionName;
-        this.optionValue = optionValue;
+        this.color = color;
+        this.size = size;
         this.unitPrice = unitPrice;
         this.status = status == null ? ProductStatus.ACTIVE : status;
     }
 
-    public void update(String optionName, String optionValue, Long unitPrice, ProductStatus status) {
-        this.optionName = optionName;
-        this.optionValue = optionValue;
+    public void update(String color, String size, Long unitPrice, ProductStatus status) {
+        this.color = color;
+        this.size = size;
         this.unitPrice = unitPrice;
         this.status = status;
     }
