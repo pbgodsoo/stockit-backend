@@ -15,6 +15,7 @@ import java.util.Map;
 public class CircularBuyerController {
 
     private final CircularBuyerService service;
+    private final CircularBuyerRecommendService recommendService;
 
     @GetMapping
     public BaseResponse<List<CircularBuyerDto.ListRes>> list(
@@ -53,5 +54,16 @@ public class CircularBuyerController {
     public BaseResponse<Map<String, Integer>> backfillEmbeddings() {
         int processed = service.backfillEmbeddings();
         return BaseResponse.success(Map.of("processed", processed));
+    }
+
+    /**
+     * ADR-021 AI 거래처 추천 — 3층 RAG (SQL 룰 → 임베딩 코사인 → LLM 사유).
+     * 판매 등록 페이지 Step 1 → Step 2 [다음] 클릭 1회 호출 (사용자 결정 2026-04-30).
+     * LLM 호출 실패 시 200 OK + rationale fallback 텍스트 — 등록 흐름이 LLM 가용성에 묶이지 않음.
+     */
+    @PostMapping("/recommend")
+    public BaseResponse<CircularBuyerDto.RecommendRes> recommend(
+            @Valid @RequestBody CircularBuyerDto.RecommendReq req) {
+        return BaseResponse.success(recommendService.recommend(req));
     }
 }
