@@ -59,6 +59,7 @@ public enum BaseResponseStatus {
     INVALID_SKU_PRICE(false, 4218, "SKU 가격은 0 이상이어야 합니다."),
     VENDOR_PRODUCT_VENDOR_MISMATCH(false, 4219, "이 제품의 메인 거래처가 아닙니다."),
     VENDOR_INACTIVE(false, 4220, "비활성 거래처는 선택할 수 없습니다."),
+    INVALID_PRODUCT_MATERIAL_SPEC(false, 4221, "제품 소재 정보가 올바르지 않습니다."),
 
     // 4300번대~ 본사 발주 (CEN-035~040)
     PURCHASE_ORDER_NOT_FOUND(false, 4300, "본사 발주를 찾을 수 없습니다."),

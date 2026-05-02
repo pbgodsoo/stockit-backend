@@ -4,8 +4,9 @@ import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.model.BaseResponseStatus;
-import org.example.stockitbe.hq.infrastructure.WarehouseRepository;
-import org.example.stockitbe.hq.infrastructure.model.Warehouse;
+import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
+import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
+import org.example.stockitbe.hq.infrastructure.model.LocationType;
 import org.example.stockitbe.hq.product.ProductSkuRepository;
 import org.example.stockitbe.hq.product.model.ProductSku;
 import org.example.stockitbe.hq.product.model.ProductStatus;
@@ -46,7 +47,7 @@ public class PurchaseOrderService {
     private final PurchaseOrderStatusHistoryRepository historyRepository;
     private final VendorRepository vendorRepository;
     private final VendorProductRepository vendorProductRepository;
-    private final WarehouseRepository warehouseRepository;
+    private final InfrastructureRepository infrastructureRepository;
     private final ProductSkuRepository productSkuRepository;
 
     @Transactional(readOnly = true)
@@ -70,8 +71,9 @@ public class PurchaseOrderService {
                 .collect(Collectors.toMap(Vendor::getId, v -> v));
 
         Set<Long> warehouseIds = orders.stream().map(PurchaseOrder::getWarehouseId).collect(Collectors.toSet());
-        Map<Long, String> warehouseCodeById = warehouseRepository.findAllById(warehouseIds).stream()
-                .collect(Collectors.toMap(Warehouse::getId, Warehouse::getCode));
+        Map<Long, String> warehouseCodeById = infrastructureRepository.findAllById(warehouseIds).stream()
+                .filter(infra -> infra.getLocationType() == LocationType.WAREHOUSE)
+                .collect(Collectors.toMap(Infrastructure::getId, Infrastructure::getCode));
 
         Set<Long> orderIds = orders.stream().map(PurchaseOrder::getId).collect(Collectors.toSet());
         // batch 1회 조회 결과를 itemCountMap + productNamesMap 두 가지로 활용 (쿼리 0추가)
@@ -110,7 +112,7 @@ public class PurchaseOrderService {
         }
 
         Vendor vendor = lookupVendor(req.getVendorCode());
-        Warehouse warehouse = lookupWarehouse(req.getWarehouseCode());
+        Infrastructure warehouse = lookupWarehouse(req.getWarehouseCode());
 
         // items 의 vendorProduct 모두 조회 + vendor 일치 검증
         List<VendorProduct> vendorProducts = req.getItems().stream()
@@ -166,7 +168,7 @@ public class PurchaseOrderService {
             throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_INVALID_STATUS_TRANSITION);
         }
 
-        Warehouse warehouse = lookupWarehouse(req.getWarehouseCode());
+        Infrastructure warehouse = lookupWarehouse(req.getWarehouseCode());
 
         // items 의 vendorProduct 검증 (vendor 일치)
         List<VendorProduct> vendorProducts = req.getItems().stream()
@@ -267,12 +269,16 @@ public class PurchaseOrderService {
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.VENDOR_PRODUCT_NOT_FOUND));
     }
 
-    private Warehouse lookupWarehouse(String code) {
+    private Infrastructure lookupWarehouse(String code) {
         if (code == null || code.isBlank()) {
             throw BaseException.from(BaseResponseStatus.WAREHOUSE_NOT_FOUND);
         }
-        return warehouseRepository.findByCode(code)
+        Infrastructure warehouse = infrastructureRepository.findByCode(code)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.WAREHOUSE_NOT_FOUND));
+        if (warehouse.getLocationType() != LocationType.WAREHOUSE) {
+            throw BaseException.from(BaseResponseStatus.WAREHOUSE_NOT_FOUND);
+        }
+        return warehouse;
     }
 
     private ProductSku lookupSku(String skuCode) {
@@ -324,8 +330,9 @@ public class PurchaseOrderService {
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.VENDOR_NOT_FOUND));
 
         // warehouse code lookup (응답용 — id → code 변환)
-        String warehouseCode = warehouseRepository.findById(po.getWarehouseId())
-                .map(Warehouse::getCode)
+        String warehouseCode = infrastructureRepository.findById(po.getWarehouseId())
+                .filter(infra -> infra.getLocationType() == LocationType.WAREHOUSE)
+                .map(Infrastructure::getCode)
                 .orElse("");
 
         List<PurchaseOrderItem> items = itemRepository.findAllByPurchaseOrderId(po.getId());

@@ -12,116 +12,70 @@ public class InfrastructureDto {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
-    public static class StoreUpsertReq {
-        @NotBlank private String name;
-        @NotBlank private String region;
-        @NotNull private StoreType type;
-        @NotBlank private String managerName;
-        @NotBlank private String contact;
-        @NotBlank private String address;
-        @NotBlank private String warehouseCode;
-        @NotNull private InfraStatus status;
-
-        public Store toEntity(String code) {
-            return Store.builder()
-                    .code(code)
-                    .name(name.trim())
-                    .region(region.trim())
-                    .type(type)
-                    .managerName(managerName.trim())
-                    .contact(contact.trim())
-                    .address(address.trim())
-                    .warehouseCode(warehouseCode.trim())
-                    .status(status)
-                    .build();
-        }
-    }
-
-    @Getter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class WarehouseUpsertReq {
+    public static class UpsertReq {
+        @NotNull private LocationType locationType;
         @NotBlank private String name;
         @NotBlank private String region;
         @NotBlank private String managerName;
         @NotBlank private String contact;
         @NotBlank private String address;
-        @NotBlank private String capacity;
         @NotNull private InfraStatus status;
 
-        public Warehouse toEntity(String code) {
-            return Warehouse.builder()
-                    .code(code)
-                    .name(name.trim())
-                    .region(region.trim())
-                    .managerName(managerName.trim())
-                    .contact(contact.trim())
-                    .address(address.trim())
-                    .capacity(capacity.trim())
-                    .status(status)
-                    .build();
-        }
-    }
-
-    @Getter
-    @AllArgsConstructor
-    @Builder
-    public static class StoreRes {
-        private String code;
-        private String name;
-        private String region;
-        private StoreType type;
-        private String managerName;
-        private String contact;
-        private String address;
-        private String warehouseCode;
-        private InfraStatus status;
-        private Date updatedAt;
-
-        public static StoreRes from(Store store) {
-            return StoreRes.builder()
-                    .code(store.getCode())
-                    .name(store.getName())
-                    .region(store.getRegion())
-                    .type(store.getType())
-                    .managerName(store.getManagerName())
-                    .contact(store.getContact())
-                    .address(store.getAddress())
-                    .warehouseCode(store.getWarehouseCode())
-                    .status(store.getStatus())
-                    .updatedAt(store.getUpdatedAt())
-                    .build();
-        }
-    }
-
-    @Getter
-    @AllArgsConstructor
-    @Builder
-    public static class WarehouseRes {
-        private String code;
-        private String name;
-        private String region;
-        private String managerName;
-        private String contact;
-        private String address;
+        private StoreType storeType;
+        private String mappedWarehouseCode;
         private String capacity;
+
+        public Infrastructure toEntity(String code, StoreType normalizedStoreType,
+                                       String normalizedMappedWarehouseCode, String normalizedCapacity) {
+            return Infrastructure.builder()
+                    .code(code)
+                    .locationType(locationType)
+                    .name(name.trim())
+                    .region(region.trim())
+                    .managerName(managerName.trim())
+                    .contact(contact.trim())
+                    .address(address.trim())
+                    .status(status)
+                    .storeType(normalizedStoreType)
+                    .mappedWarehouseCode(normalizedMappedWarehouseCode)
+                    .capacity(normalizedCapacity)
+                    .build();
+        }
+    }
+
+    @Getter
+    @AllArgsConstructor
+    @Builder
+    public static class Res {
+        private String code;
+        private LocationType locationType;
+        private String name;
+        private String region;
+        private String managerName;
+        private String contact;
+        private String address;
         private InfraStatus status;
-        private long mappedStoreCount;
+        private StoreType storeType;
+        private String mappedWarehouseCode;
+        private String capacity;
+        private Long mappedStoreCount;
         private Date updatedAt;
 
-        public static WarehouseRes from(Warehouse warehouse, long mappedStoreCount) {
-            return WarehouseRes.builder()
-                    .code(warehouse.getCode())
-                    .name(warehouse.getName())
-                    .region(warehouse.getRegion())
-                    .managerName(warehouse.getManagerName())
-                    .contact(warehouse.getContact())
-                    .address(warehouse.getAddress())
-                    .capacity(warehouse.getCapacity())
-                    .status(warehouse.getStatus())
+        public static Res from(Infrastructure infra, Long mappedStoreCount) {
+            return Res.builder()
+                    .code(infra.getCode())
+                    .locationType(infra.getLocationType())
+                    .name(infra.getName())
+                    .region(infra.getRegion())
+                    .managerName(infra.getManagerName())
+                    .contact(infra.getContact())
+                    .address(infra.getAddress())
+                    .status(infra.getStatus())
+                    .storeType(infra.getStoreType())
+                    .mappedWarehouseCode(infra.getMappedWarehouseCode())
+                    .capacity(infra.getCapacity())
                     .mappedStoreCount(mappedStoreCount)
-                    .updatedAt(warehouse.getUpdatedAt())
+                    .updatedAt(infra.getUpdatedAt())
                     .build();
         }
     }

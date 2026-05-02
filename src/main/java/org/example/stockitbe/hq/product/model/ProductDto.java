@@ -22,6 +22,8 @@ public class ProductDto {
         @NotNull @Min(0) private Integer warehouseSafetyStock;
         @NotNull @Min(0) private Integer storeSafetyStock;
         @NotBlank private String mainVendorCode;
+        @NotNull private ProductMaterialType materialType;
+        @NotNull private List<ProductMaterialCompositionReq> materialCompositions;
         @NotNull private ProductStatus status;
 
         public ProductMaster toEntity(String code) {
@@ -34,7 +36,33 @@ public class ProductDto {
                     .warehouseSafetyStock(warehouseSafetyStock)
                     .storeSafetyStock(storeSafetyStock)
                     .mainVendorCode(mainVendorCode.trim())
+                    .materialSpec(toMaterialSpec())
                     .status(status)
+                    .build();
+        }
+
+        public ProductMaterialSpec toMaterialSpec() {
+            return ProductMaterialSpec.builder()
+                    .materialType(materialType)
+                    .compositions(materialCompositions.stream()
+                            .map(ProductMaterialCompositionReq::toMaterialComposition)
+                            .toList())
+                    .build();
+        }
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class ProductMaterialCompositionReq {
+        @NotBlank private String materialCode;
+        @NotNull @Min(0) private Integer ratio;
+
+        public ProductMaterialComposition toMaterialComposition() {
+            return ProductMaterialComposition.builder()
+                    .materialCode(materialCode.trim().toUpperCase())
+                    .ratio(ratio)
                     .build();
         }
     }
@@ -100,11 +128,23 @@ public class ProductDto {
         private Integer warehouseSafetyStock;
         private Integer storeSafetyStock;
         private String mainVendorCode;
+        private ProductMaterialType materialType;
+        private List<ProductMaterialCompositionRes> materialCompositions;
         private ProductStatus status;
         private long skuCount;
         private Date updatedAt;
 
-        public static ProductMasterRes from(ProductMaster m, long skuCount) {
+        public static ProductMasterRes from(ProductMaster m, long skuCount, java.util.Map<String, String> materialNameMap) {
+            ProductMaterialSpec materialSpec = m.getMaterialSpec();
+            List<ProductMaterialCompositionRes> compositions = materialSpec == null || materialSpec.getCompositions() == null
+                    ? List.of()
+                    : materialSpec.getCompositions().stream()
+                    .map(c -> ProductMaterialCompositionRes.builder()
+                            .materialCode(c.getMaterialCode())
+                            .materialNameKo(materialNameMap.getOrDefault(c.getMaterialCode(), c.getMaterialCode()))
+                            .ratio(c.getRatio())
+                            .build())
+                    .toList();
             return ProductMasterRes.builder()
                     .code(m.getCode())
                     .name(m.getName())
@@ -114,11 +154,23 @@ public class ProductDto {
                     .warehouseSafetyStock(m.getWarehouseSafetyStock())
                     .storeSafetyStock(m.getStoreSafetyStock())
                     .mainVendorCode(m.getMainVendorCode())
+                    .materialType(materialSpec == null ? null : materialSpec.getMaterialType())
+                    .materialCompositions(compositions)
                     .status(m.getStatus())
                     .skuCount(skuCount)
                     .updatedAt(m.getUpdatedAt())
                     .build();
         }
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class ProductMaterialCompositionRes {
+        private String materialCode;
+        private String materialNameKo;
+        private Integer ratio;
     }
 
     @Getter
