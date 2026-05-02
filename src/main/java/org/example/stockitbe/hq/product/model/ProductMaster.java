@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.example.stockitbe.common.model.BaseEntity;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "product_master", uniqueConstraints = {
@@ -42,13 +44,18 @@ public class ProductMaster extends BaseEntity {
     @Column(name = "main_vendor_code", nullable = false, length = 32)
     private String mainVendorCode;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "material_spec", columnDefinition = "json")
+    private ProductMaterialSpec materialSpec;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)
     private ProductStatus status;
 
     @Builder
     private ProductMaster(String code, String name, String categoryCode, Long basePrice, Integer leadTimeDays,
-                          Integer warehouseSafetyStock, Integer storeSafetyStock, String mainVendorCode, ProductStatus status) {
+                          Integer warehouseSafetyStock, Integer storeSafetyStock, String mainVendorCode,
+                          ProductMaterialSpec materialSpec, ProductStatus status) {
         this.code = code;
         this.name = name;
         this.categoryCode = categoryCode;
@@ -57,11 +64,12 @@ public class ProductMaster extends BaseEntity {
         this.warehouseSafetyStock = warehouseSafetyStock == null ? 0 : warehouseSafetyStock;
         this.storeSafetyStock = storeSafetyStock == null ? 0 : storeSafetyStock;
         this.mainVendorCode = mainVendorCode;
+        this.materialSpec = materialSpec;
         this.status = status == null ? ProductStatus.ACTIVE : status;
     }
 
     public void update(String name, String categoryCode, Long basePrice, Integer leadTimeDays, Integer warehouseSafetyStock,
-                       Integer storeSafetyStock, String mainVendorCode, ProductStatus status) {
+                       Integer storeSafetyStock, String mainVendorCode, ProductMaterialSpec materialSpec, ProductStatus status) {
         this.name = name;
         this.categoryCode = categoryCode;
         this.basePrice = basePrice;
@@ -69,6 +77,7 @@ public class ProductMaster extends BaseEntity {
         this.warehouseSafetyStock = warehouseSafetyStock == null ? 0 : warehouseSafetyStock;
         this.storeSafetyStock = storeSafetyStock == null ? 0 : storeSafetyStock;
         this.mainVendorCode = mainVendorCode;
+        this.materialSpec = materialSpec;
         this.status = status;
     }
 }

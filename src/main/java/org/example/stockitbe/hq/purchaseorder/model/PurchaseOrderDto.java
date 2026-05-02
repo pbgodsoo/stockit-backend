@@ -9,7 +9,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.example.stockitbe.hq.infrastructure.model.Warehouse;
+import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.product.model.ProductSku;
 import org.example.stockitbe.hq.vendor.model.Vendor;
 import org.example.stockitbe.hq.vendor.model.VendorProduct;
@@ -37,7 +37,7 @@ public class PurchaseOrderDto {
         @NotEmpty
         private List<ItemReq> items;
 
-        public PurchaseOrder toEntity(Vendor vendor, Warehouse warehouse, String code, Long totalAmount) {
+        public PurchaseOrder toEntity(Vendor vendor, Infrastructure warehouse, String code, Long totalAmount) {
             return PurchaseOrder.builder()
                     .code(code)
                     .vendorId(vendor.getId())
@@ -122,7 +122,7 @@ public class PurchaseOrderDto {
         private Date updatedAt;
 
         public static ListRes from(PurchaseOrder po, Vendor vendor, String warehouseCode,
-                                    int itemCount, List<String> productNames) {
+                                   int itemCount, List<String> productNames) {
             return ListRes.builder()
                     .code(po.getCode())
                     .vendorCode(vendor.getCode())
@@ -162,9 +162,9 @@ public class PurchaseOrderDto {
         private List<HistoryRes> statusHistory;
 
         public static DetailRes from(PurchaseOrder po, Vendor vendor, String warehouseCode,
-                                      List<PurchaseOrderItem> items,
-                                      List<PurchaseOrderStatusHistory> history,
-                                      Map<Long, String> vendorProductCodeById) {
+                                     List<PurchaseOrderItem> items,
+                                     List<PurchaseOrderStatusHistory> history,
+                                     Map<Long, String> vendorProductCodeById) {
             List<ItemRes> itemRes = items.stream()
                     .map(item -> ItemRes.from(item, vendorProductCodeById.get(item.getVendorProductId())))
                     .toList();

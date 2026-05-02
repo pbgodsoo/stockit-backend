@@ -14,106 +14,90 @@ import java.util.List;
 @RequiredArgsConstructor
 public class InfrastructureService {
 
-    private final StoreRepository storeRepository;
-    private final WarehouseRepository warehouseRepository;
+    private final InfrastructureRepository infrastructureRepository;
 
     @Transactional(readOnly = true)
-    public List<InfrastructureDto.StoreRes> findStores(String keyword, String region, InfraStatus status) {
+    public List<InfrastructureDto.Res> findInfrastructures(LocationType type, String keyword, String region, InfraStatus status) {
         String safeKeyword = keyword == null ? "" : keyword.trim();
         String safeRegion = region == null ? "" : region.trim();
-        List<Store> stores;
-        if (status != null && !safeRegion.isBlank()) {
-            stores = storeRepository.findByRegionContainingIgnoreCaseAndStatusAndNameContainingIgnoreCaseOrderByIdDesc(safeRegion, status, safeKeyword);
-        } else if (!safeRegion.isBlank()) {
-            stores = storeRepository.findByRegionContainingIgnoreCaseAndNameContainingIgnoreCaseOrderByIdDesc(safeRegion, safeKeyword);
-        } else if (status != null) {
-            stores = storeRepository.findByStatusAndNameContainingIgnoreCaseOrderByIdDesc(status, safeKeyword);
+
+        List<Infrastructure> rows;
+        if (type != null) {
+            if (status != null && !safeRegion.isBlank()) {
+                rows = infrastructureRepository.findByLocationTypeAndRegionContainingIgnoreCaseAndStatusAndNameContainingIgnoreCaseOrderByIdDesc(type, safeRegion, status, safeKeyword);
+            } else if (!safeRegion.isBlank()) {
+                rows = infrastructureRepository.findByLocationTypeAndRegionContainingIgnoreCaseAndNameContainingIgnoreCaseOrderByIdDesc(type, safeRegion, safeKeyword);
+            } else if (status != null) {
+                rows = infrastructureRepository.findByLocationTypeAndStatusAndNameContainingIgnoreCaseOrderByIdDesc(type, status, safeKeyword);
+            } else {
+                rows = infrastructureRepository.findByLocationTypeAndNameContainingIgnoreCaseOrderByIdDesc(type, safeKeyword);
+            }
         } else {
-            stores = storeRepository.findByNameContainingIgnoreCaseOrderByIdDesc(safeKeyword);
+            if (status != null && !safeRegion.isBlank()) {
+                rows = infrastructureRepository.findByRegionContainingIgnoreCaseAndStatusAndNameContainingIgnoreCaseOrderByIdDesc(safeRegion, status, safeKeyword);
+            } else if (!safeRegion.isBlank()) {
+                rows = infrastructureRepository.findByRegionContainingIgnoreCaseAndNameContainingIgnoreCaseOrderByIdDesc(safeRegion, safeKeyword);
+            } else if (status != null) {
+                rows = infrastructureRepository.findByStatusAndNameContainingIgnoreCaseOrderByIdDesc(status, safeKeyword);
+            } else {
+                rows = infrastructureRepository.findByNameContainingIgnoreCaseOrderByIdDesc(safeKeyword);
+            }
         }
-        return stores.stream().map(InfrastructureDto.StoreRes::from).toList();
+
+        return rows.stream().map(this::toRes).toList();
     }
 
     @Transactional(readOnly = true)
-    public InfrastructureDto.StoreRes findStoreByCode(String code) {
-        Store store = storeRepository.findByCode(code)
-                .orElseThrow(() -> BaseException.from(BaseResponseStatus.STORE_NOT_FOUND));
-        return InfrastructureDto.StoreRes.from(store);
-    }
-
-    @Transactional(readOnly = true)
-    public List<InfrastructureDto.WarehouseRes> findWarehouses(String keyword, String region, InfraStatus status) {
-        String safeKeyword = keyword == null ? "" : keyword.trim();
-        String safeRegion = region == null ? "" : region.trim();
-        List<Warehouse> warehouses;
-        if (status != null && !safeRegion.isBlank()) {
-            warehouses = warehouseRepository.findByRegionContainingIgnoreCaseAndStatusAndNameContainingIgnoreCaseOrderByIdDesc(safeRegion, status, safeKeyword);
-        } else if (!safeRegion.isBlank()) {
-            warehouses = warehouseRepository.findByRegionContainingIgnoreCaseAndNameContainingIgnoreCaseOrderByIdDesc(safeRegion, safeKeyword);
-        } else if (status != null) {
-            warehouses = warehouseRepository.findByStatusAndNameContainingIgnoreCaseOrderByIdDesc(status, safeKeyword);
-        } else {
-            warehouses = warehouseRepository.findByNameContainingIgnoreCaseOrderByIdDesc(safeKeyword);
-        }
-        return warehouses.stream().map(w -> InfrastructureDto.WarehouseRes.from(w, storeRepository.countByWarehouseCode(w.getCode()))).toList();
-    }
-
-    @Transactional(readOnly = true)
-    public InfrastructureDto.WarehouseRes findWarehouseByCode(String code) {
-        Warehouse warehouse = warehouseRepository.findByCode(code)
-                .orElseThrow(() -> BaseException.from(BaseResponseStatus.WAREHOUSE_NOT_FOUND));
-        return InfrastructureDto.WarehouseRes.from(warehouse, storeRepository.countByWarehouseCode(warehouse.getCode()));
+    public InfrastructureDto.Res findInfrastructureByCode(String code) {
+        Infrastructure infra = infrastructureRepository.findByCode(code)
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.NOT_FOUND_DATA));
+        return toRes(infra);
     }
 
     @Transactional
-    public InfrastructureDto.StoreRes createStore(InfrastructureDto.StoreUpsertReq req) {
-        if (!warehouseRepository.existsByCode(req.getWarehouseCode().trim())) {
-            throw BaseException.from(BaseResponseStatus.WAREHOUSE_NOT_FOUND);
+    public InfrastructureDto.Res createInfrastructure(InfrastructureDto.UpsertReq req) {
+        NormalizedInfra normalized = normalizeAndValidate(req, null);
+        if (infrastructureRepository.existsByLocationTypeAndNameIgnoreCase(req.getLocationType(), req.getName().trim())) {
+            throw BaseException.from(duplicateNameStatus(req.getLocationType()));
         }
-        if (storeRepository.existsByNameIgnoreCase(req.getName().trim())) {
-            throw BaseException.from(BaseResponseStatus.DUPLICATE_STORE_NAME);
-        }
-        Store saved = saveStoreWithGeneratedCode(req);
-        return InfrastructureDto.StoreRes.from(saved);
+        Infrastructure saved = saveWithGeneratedCode(req, normalized);
+        return toRes(saved);
     }
 
     @Transactional
-    public InfrastructureDto.StoreRes updateStore(String code, InfrastructureDto.StoreUpsertReq req) {
-        Store store = storeRepository.findByCode(code).orElseThrow(() -> BaseException.from(BaseResponseStatus.STORE_NOT_FOUND));
-        if (!warehouseRepository.existsByCode(req.getWarehouseCode().trim())) {
-            throw BaseException.from(BaseResponseStatus.WAREHOUSE_NOT_FOUND);
+    public InfrastructureDto.Res updateInfrastructure(String code, InfrastructureDto.UpsertReq req) {
+        Infrastructure infra = infrastructureRepository.findByCode(code)
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.NOT_FOUND_DATA));
+
+        if (infra.getLocationType() != req.getLocationType()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
         }
-        if (storeRepository.existsByNameIgnoreCaseAndCodeNot(req.getName().trim(), code)) {
-            throw BaseException.from(BaseResponseStatus.DUPLICATE_STORE_NAME);
+
+        NormalizedInfra normalized = normalizeAndValidate(req, code);
+        if (infrastructureRepository.existsByLocationTypeAndNameIgnoreCaseAndCodeNot(req.getLocationType(), req.getName().trim(), code)) {
+            throw BaseException.from(duplicateNameStatus(req.getLocationType()));
         }
-        store.update(req.getName().trim(), req.getRegion().trim(), req.getType(), req.getManagerName().trim(), req.getContact().trim(), req.getAddress().trim(), req.getWarehouseCode().trim(), req.getStatus());
-        return InfrastructureDto.StoreRes.from(store);
+
+        infra.update(
+                req.getName().trim(),
+                req.getRegion().trim(),
+                req.getManagerName().trim(),
+                req.getContact().trim(),
+                req.getAddress().trim(),
+                req.getStatus(),
+                normalized.storeType(),
+                normalized.mappedWarehouseCode(),
+                normalized.capacity()
+        );
+        return toRes(infra);
     }
 
-    @Transactional
-    public InfrastructureDto.WarehouseRes createWarehouse(InfrastructureDto.WarehouseUpsertReq req) {
-        if (warehouseRepository.existsByNameIgnoreCase(req.getName().trim())) {
-            throw BaseException.from(BaseResponseStatus.DUPLICATE_WAREHOUSE_NAME);
-        }
-        Warehouse saved = saveWarehouseWithGeneratedCode(req);
-        return InfrastructureDto.WarehouseRes.from(saved, 0);
-    }
-
-    @Transactional
-    public InfrastructureDto.WarehouseRes updateWarehouse(String code, InfrastructureDto.WarehouseUpsertReq req) {
-        Warehouse warehouse = warehouseRepository.findByCode(code).orElseThrow(() -> BaseException.from(BaseResponseStatus.WAREHOUSE_NOT_FOUND));
-        if (warehouseRepository.existsByNameIgnoreCaseAndCodeNot(req.getName().trim(), code)) {
-            throw BaseException.from(BaseResponseStatus.DUPLICATE_WAREHOUSE_NAME);
-        }
-        warehouse.update(req.getName().trim(), req.getRegion().trim(), req.getManagerName().trim(), req.getContact().trim(), req.getAddress().trim(), req.getCapacity().trim(), req.getStatus());
-        return InfrastructureDto.WarehouseRes.from(warehouse, storeRepository.countByWarehouseCode(warehouse.getCode()));
-    }
-
-    private Store saveStoreWithGeneratedCode(InfrastructureDto.StoreUpsertReq req) {
+    private Infrastructure saveWithGeneratedCode(InfrastructureDto.UpsertReq req, NormalizedInfra normalized) {
+        String prefix = req.getLocationType() == LocationType.STORE ? "ST" : "WH";
         for (int i = 0; i < 2; i++) {
-            String code = nextCode(storeRepository.findAllByOrderByIdDesc().stream().map(Store::getCode).toList(), "ST");
+            String code = nextCode(infrastructureRepository.findAllByOrderByIdDesc().stream().map(Infrastructure::getCode).toList(), prefix);
             try {
-                return storeRepository.save(req.toEntity(code));
+                return infrastructureRepository.save(req.toEntity(code, normalized.storeType(), normalized.mappedWarehouseCode(), normalized.capacity()));
             } catch (DataIntegrityViolationException e) {
                 if (i == 1) throw e;
             }
@@ -121,16 +105,37 @@ public class InfrastructureService {
         throw BaseException.from(BaseResponseStatus.FAIL);
     }
 
-    private Warehouse saveWarehouseWithGeneratedCode(InfrastructureDto.WarehouseUpsertReq req) {
-        for (int i = 0; i < 2; i++) {
-            String code = nextCode(warehouseRepository.findAllByOrderByIdDesc().stream().map(Warehouse::getCode).toList(), "WH");
-            try {
-                return warehouseRepository.save(req.toEntity(code));
-            } catch (DataIntegrityViolationException e) {
-                if (i == 1) throw e;
+    private NormalizedInfra normalizeAndValidate(InfrastructureDto.UpsertReq req, String selfCodeForUpdate) {
+        if (req.getLocationType() == LocationType.STORE) {
+            if (req.getStoreType() == null || req.getMappedWarehouseCode() == null || req.getMappedWarehouseCode().isBlank()) {
+                throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
             }
+            String mappedCode = req.getMappedWarehouseCode().trim();
+            boolean exists = infrastructureRepository.existsByCodeAndLocationType(mappedCode, LocationType.WAREHOUSE);
+            if (!exists || (selfCodeForUpdate != null && selfCodeForUpdate.equals(mappedCode))) {
+                throw BaseException.from(BaseResponseStatus.WAREHOUSE_NOT_FOUND);
+            }
+            return new NormalizedInfra(req.getStoreType(), mappedCode, null);
         }
-        throw BaseException.from(BaseResponseStatus.FAIL);
+
+        if (req.getCapacity() == null || req.getCapacity().isBlank()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+        return new NormalizedInfra(null, null, req.getCapacity().trim());
+    }
+
+    private InfrastructureDto.Res toRes(Infrastructure infra) {
+        Long mappedStoreCount = null;
+        if (infra.getLocationType() == LocationType.WAREHOUSE) {
+            mappedStoreCount = infrastructureRepository.countByMappedWarehouseCode(infra.getCode());
+        }
+        return InfrastructureDto.Res.from(infra, mappedStoreCount);
+    }
+
+    private BaseResponseStatus duplicateNameStatus(LocationType type) {
+        return type == LocationType.STORE
+                ? BaseResponseStatus.DUPLICATE_STORE_NAME
+                : BaseResponseStatus.DUPLICATE_WAREHOUSE_NAME;
     }
 
     private String nextCode(List<String> codes, String prefix) {
@@ -146,5 +151,8 @@ public class InfrastructureService {
                 .max()
                 .orElse(0L);
         return String.format("%s-%04d", prefix, max + 1);
+    }
+
+    private record NormalizedInfra(StoreType storeType, String mappedWarehouseCode, String capacity) {
     }
 }
