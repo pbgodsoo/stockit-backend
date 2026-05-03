@@ -38,9 +38,9 @@ public enum BaseResponseStatus {
     PAYMENT_DEFAULT_BILLING_REQUIRED(false, 4106, "기본 결제 수단이 존재하지 않습니다."),
 
     // 4200번대~ 공급처별 제품 (CEN-027~031, 033)
-    VENDOR_NOT_FOUND(false, 4200, "거래처를 찾을 수 없습니다."),
+    VENDOR_NOT_FOUND(false, 4200, "공급처를 찾을 수 없습니다."),
     VENDOR_PRODUCT_NOT_FOUND(false, 4201, "공급처별 제품 계약을 찾을 수 없습니다."),
-    DUPLICATE_VENDOR_PRODUCT_CODE(false, 4202, "이미 등록된 거래처-제품 코드 조합입니다."),
+    DUPLICATE_VENDOR_PRODUCT_CODE(false, 4202, "이미 등록된 공급처-제품 코드 조합입니다."),
     CATEGORY_NOT_FOUND(false, 4203, "카테고리를 찾을 수 없습니다."),
     DUPLICATE_CATEGORY_NAME(false, 4204, "동일한 범위에 같은 카테고리명이 이미 존재합니다."),
     CATEGORY_PARENT_REQUIRED(false, 4205, "소분류 등록 시 상위 카테고리가 필요합니다."),
@@ -57,17 +57,17 @@ public enum BaseResponseStatus {
     DUPLICATE_PRODUCT_MASTER_NAME(false, 4216, "이미 등록된 제품명입니다."),
     DUPLICATE_PRODUCT_SKU_OPTION(false, 4217, "이미 등록된 SKU 옵션입니다."),
     INVALID_SKU_PRICE(false, 4218, "SKU 가격은 0 이상이어야 합니다."),
-    VENDOR_PRODUCT_VENDOR_MISMATCH(false, 4219, "이 제품의 메인 거래처가 아닙니다."),
-    VENDOR_INACTIVE(false, 4220, "비활성 거래처는 선택할 수 없습니다."),
+    VENDOR_PRODUCT_VENDOR_MISMATCH(false, 4219, "이 제품의 메인 공급처가 아닙니다."),
+    VENDOR_INACTIVE(false, 4220, "비활성 공급처는 선택할 수 없습니다."),
     INVALID_PRODUCT_MATERIAL_SPEC(false, 4221, "제품 소재 정보가 올바르지 않습니다."),
 
     // 4300번대~ 본사 발주 (CEN-035~040)
     PURCHASE_ORDER_NOT_FOUND(false, 4300, "본사 발주를 찾을 수 없습니다."),
     PURCHASE_ORDER_INVALID_STATUS_TRANSITION(false, 4301, "허용되지 않는 발주 상태 전환입니다."),
     PURCHASE_ORDER_EMPTY_ITEMS(false, 4302, "발주 품목이 비어 있습니다."),
-    PURCHASE_ORDER_VENDOR_PRODUCT_MISMATCH(false, 4303, "발주 거래처와 품목의 거래처가 일치하지 않습니다."),
+    PURCHASE_ORDER_VENDOR_PRODUCT_MISMATCH(false, 4303, "발주 공급처와 품목의 공급처가 일치하지 않습니다."),
     PURCHASE_ORDER_CANCEL_REASON_REQUIRED(false, 4304, "발주 취소 사유는 필수입니다."),
-    PURCHASE_ORDER_SKU_PRODUCT_MISMATCH(false, 4305, "발주 품목의 SKU가 거래처 계약 제품의 옵션이 아닙니다."),
+    PURCHASE_ORDER_SKU_PRODUCT_MISMATCH(false, 4305, "발주 품목의 SKU가 공급처 계약 제품의 옵션이 아닙니다."),
 
     // 4400번대~ 순환재고 거래처 (ADR-020 / ADR-021)
     CIRCULAR_BUYER_NOT_FOUND(false, 4400, "순환재고 거래처를 찾을 수 없습니다."),

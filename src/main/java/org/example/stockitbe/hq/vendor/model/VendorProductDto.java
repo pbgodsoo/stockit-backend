@@ -109,7 +109,7 @@ public class VendorProductDto {
     }
 
     /**
-     * 거래처 계약 표 한 행 (E 안 — UX 친화 inline edit).
+     * 공급처 계약 표 한 행 (E 안 — UX 친화 inline edit).
      * ProductMaster 가 mainVendorCode 매칭으로 무조건 노출되고, VendorProduct 매칭이 있으면 계약 디테일을 채워서 반환.
      * contracted=false 인 행 = "미정" 상태 (마스터 제품은 있지만 계약 정보 없음).
      */

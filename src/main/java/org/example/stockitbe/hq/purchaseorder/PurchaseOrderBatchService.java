@@ -38,8 +38,8 @@ public class PurchaseOrderBatchService {
      * @param force true 면 시간 조건 무시 (시연·QA·장애 대응) — 모든 PENDING/APPROVED/SHIPPING 즉시 처리.
      *              false 면 {@code updatedAt < now - waitMinutes} 인 건만.
      *
-     * 거래처 책임 단계 3개 모두 SYS-001 자동 전환 (ADR-013/019).
-     * SHIPPING → DELIVERED 도 같은 패턴 — 배송 도착 시점도 거래처 책임이라 자동화.
+     * 공급처 책임 단계 3개 모두 SYS-001 자동 전환 (ADR-013/019).
+     * SHIPPING → DELIVERED 도 같은 패턴 — 배송 도착 시점도 공급처 책임이라 자동화.
      * DELIVERED → COMPLETED 는 창고 [입고 확정] 매뉴얼 트리거(WHS-007) — 배치 처리 안 함.
      */
     public BatchResult run(boolean force) {

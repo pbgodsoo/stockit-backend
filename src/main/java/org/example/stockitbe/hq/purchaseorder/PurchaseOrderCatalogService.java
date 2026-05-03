@@ -44,13 +44,13 @@ public class PurchaseOrderCatalogService {
     private final ProductSkuRepository productSkuRepository;
 
     /**
-     * vendorCode 미지정 → 모든 ACTIVE 거래처의 ACTIVE 계약 펼침.
-     * 지정 시 그 거래처만.
+     * vendorCode 미지정 → 모든 ACTIVE 공급처의 ACTIVE 계약 펼침.
+     * 지정 시 그 공급처만.
      *
      * warehouseId 는 본 사이클에선 사용 X (인벤토리 합류 후 stock 필터링용 placeholder).
      *
      * 응답 룰:
-     *  - vendor.status != ACTIVE 거래처는 제외
+     *  - vendor.status != ACTIVE 공급처는 제외
      *  - vendor_product.status != ACTIVE 계약은 제외
      *  - product_master.status != ACTIVE 마스터는 제외
      *  - product_sku.status != ACTIVE SKU 는 제외

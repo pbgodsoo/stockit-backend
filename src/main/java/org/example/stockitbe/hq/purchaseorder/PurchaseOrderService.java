@@ -303,7 +303,7 @@ public class PurchaseOrderService {
 
     /**
      * 진행 이력 한 행 추가. changedByName 은 도메인 책임자 기준 분기:
-     *   - APPROVED / SHIPPING / DELIVERED : "담당자명 (회사명)" 형식 — 발주 시점 거래처 스냅샷
+     *   - APPROVED / SHIPPING / DELIVERED : "담당자명 (회사명)" 형식 — 발주 시점 공급처 스냅샷
      *     (실제 트리거는 SYS-001 배치지만 자동화는 구현 디테일이라 도메인 이력에 노출하지 않음, ADR-013/019)
      *     실무 ERP 표준 — 법적 주체(회사) + 실무 처리자(담당자) 둘 다 노출.
      *   - COMPLETED            : 입고 확정은 창고 관리자 책임
