@@ -18,7 +18,7 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, updatable = false)
+    @Column(unique = true)
     private String employeeCode;   // 로그인용 사원코드
 
     @Column(nullable = false)
@@ -51,4 +51,17 @@ public class User {
 
     private LocalDateTime processedAt; // 본사 관리자의 회원가입 처리일시
 
+
+    //  본사 관리자가 가입 신청을 승인할 때 호출
+    public void approve(String employeeCode) {
+        this.employeeCode = employeeCode;
+        this.status = UserStatus.APPROVED;
+        this.processedAt = LocalDateTime.now();
+    }
+
+    //  본사 관리자가 가입 신청을 거절할 때 호출
+    public void reject() {
+        this.status = UserStatus.REJECTED;
+        this.processedAt = LocalDateTime.now();
+    }
 }
