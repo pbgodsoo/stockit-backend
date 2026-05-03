@@ -24,7 +24,7 @@ public class InboundService {
 
     /**
      * 입고 목록 — 창고 관심사는 DELIVERED(도착됨)/COMPLETED(입고완료) 만.
-     * SHIPPING 은 거래처 단계(운송중)라 창고 화면에서 안 보임 — 본사 발주 화면에서 진행 상황만 확인.
+     * SHIPPING 은 공급처 단계(운송중)라 창고 화면에서 안 보임 — 본사 발주 화면에서 진행 상황만 확인.
      * status 미지정 시 두 상태 모두, 지정 시 그 status 만 (DELIVERED/COMPLETED 외엔 빈 결과).
      */
     @Transactional(readOnly = true)

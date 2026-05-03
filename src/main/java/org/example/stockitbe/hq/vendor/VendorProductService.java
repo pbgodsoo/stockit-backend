@@ -36,7 +36,7 @@ public class VendorProductService {
     }
 
     /**
-     * 전체 거래처의 제품 일괄 조회 (CEN-035 발주 작성 페이지 카탈로그용).
+     * 전체 공급처의 제품 일괄 조회 (CEN-035 발주 작성 페이지 카탈로그용).
      * statusFilter == null → DELETED 만 제외한 전체.
      * statusFilter != null → 정확히 그 status 만 (DELETED 도 호출자가 의도하면 그대로 통과).
      */
@@ -81,7 +81,7 @@ public class VendorProductService {
         ProductMaster product = productMasterRepository.findByCode(req.getProductCode())
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_MASTER_NOT_FOUND));
 
-        // 한 제품 = 한 거래처 검증 — ProductMaster.mainVendorCode 와 요청 vendor 일치해야 함
+        // 한 제품 = 한 공급처 검증 — ProductMaster.mainVendorCode 와 요청 vendor 일치해야 함
         if (!vendor.getCode().equals(product.getMainVendorCode())) {
             throw BaseException.from(BaseResponseStatus.VENDOR_PRODUCT_VENDOR_MISMATCH);
         }
@@ -114,7 +114,7 @@ public class VendorProductService {
     }
 
     /**
-     * 거래처 계약 표 (E 안 — UX 친화 inline edit).
+     * 공급처 계약 표 (E 안 — UX 친화 inline edit).
      * mainVendorCode 매칭 ProductMaster 전체를 행으로 보여주고, 매칭되는 VendorProduct 가 있으면 계약 디테일 채움.
      * VendorProduct 0건이면 모두 contracted=false ("미정") 상태로 반환.
      */
@@ -122,7 +122,7 @@ public class VendorProductService {
     public List<VendorProductDto.ContractRowRes> findContractRows(String vendorCode) {
         Vendor vendor = lookupVendor(vendorCode);
 
-        // 이 거래처를 메인으로 둔 ProductMaster (in-memory 필터 — ProductMasterRepository 메소드 추가 회피, 팀원 코드 보호)
+        // 이 공급처를 메인으로 둔 ProductMaster (in-memory 필터 — ProductMasterRepository 메소드 추가 회피, 팀원 코드 보호)
         List<ProductMaster> products = productMasterRepository.findAllByOrderByIdDesc().stream()
                 .filter(p -> vendor.getCode().equals(p.getMainVendorCode()))
                 .toList();
@@ -130,7 +130,7 @@ public class VendorProductService {
             return List.of();
         }
 
-        // 해당 거래처의 active VendorProduct (DELETED 제외)
+        // 해당 공급처의 active VendorProduct (DELETED 제외)
         List<VendorProduct> vps = vendorProductRepository
                 .findAllByVendorIdAndStatusNotOrderByIdDesc(vendor.getId(), VendorProductStatus.DELETED);
         Map<String, VendorProduct> vpByProductCode = vps.stream()

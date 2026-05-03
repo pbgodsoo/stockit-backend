@@ -29,11 +29,11 @@ public class PurchaseOrder extends BaseEntity {
     @Column(name = "vendor_id", nullable = false)
     private Long vendorId;
 
-    // vendor.name 시점 복사 — 발주 시점의 거래처명 스냅샷 (warehouseName/memberName 패턴과 동일).
+    // vendor.name 시점 복사 — 발주 시점의 공급처명 스냅샷 (warehouseName/memberName 패턴과 동일).
     @Column(name = "vendor_name", nullable = false, length = 128)
     private String vendorName;
 
-    // vendor.contactName 시점 복사 — 거래처 담당자명. statusHistory.changedByName 에
+    // vendor.contactName 시점 복사 — 공급처 담당자명. statusHistory.changedByName 에
     // APPROVED/SHIPPING/DELIVERED 단계 주체로 박힘 (회사명보다 사람 이름이 자연).
     @Column(name = "vendor_contact_name", nullable = false, length = 64)
     private String vendorContactName;
@@ -95,7 +95,7 @@ public class PurchaseOrder extends BaseEntity {
 
     /**
      * 배송 완료 — SHIPPING → DELIVERED. SYS-001 배치 자동 (30분 경과) 또는 force 트리거.
-     * 거래처 책임 단계 (운송 도착) — ADR-013 / ADR-019 일관.
+     * 공급처 책임 단계 (운송 도착) — ADR-013 / ADR-019 일관.
      */
     public void markDelivered() {
         if (this.status != PurchaseOrderStatus.SHIPPING) {

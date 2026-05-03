@@ -11,8 +11,8 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * dev 프로파일 부팅 시 vendor 테이블이 비어 있으면 거래처 12개를 자동 INSERT.
- * 운영(prod) 에선 동작하지 않음 — 운영 거래처 데이터는 운영자가 별도 관리.
+ * dev 프로파일 부팅 시 vendor 테이블이 비어 있으면 공급처 12개를 자동 INSERT.
+ * 운영(prod) 에선 동작하지 않음 — 운영 공급처 데이터는 운영자가 별도 관리.
  *
  * 빈 테이블 조건(count == 0) — 이미 데이터 있으면 건너뜀.
  */
