@@ -329,7 +329,7 @@ public class StoreSaleService {
         if (items.size() == 1) {
             return items.get(0).getProductName();
         }
-        return items.get(0).getProductName() + " and " + (items.size() - 1) + " more";
+        return items.get(0).getProductName() + " 외 " + (items.size() - 1) + "건";
     }
 
 @Builder
