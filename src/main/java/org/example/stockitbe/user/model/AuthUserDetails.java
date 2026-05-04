@@ -16,6 +16,7 @@ import java.util.List;
 public class AuthUserDetails implements UserDetails {
     private String employeeCode;
     private String password;
+    private String name;
     private UserStatus status;
     private UserRole role;
 
@@ -23,6 +24,7 @@ public class AuthUserDetails implements UserDetails {
         return AuthUserDetails.builder()
                 .employeeCode(entity.getEmployeeCode())
                 .password(entity.getPassword())
+                .name(entity.getName())
                 .role(entity.getRole())
                 .status(entity.getStatus())
                 .build();

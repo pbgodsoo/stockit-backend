@@ -1,15 +1,14 @@
 package org.example.stockitbe.common.config;
 
 import lombok.RequiredArgsConstructor;
+import org.example.stockitbe.common.jwt.JwtAuthFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
@@ -17,37 +16,46 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 @EnableWebSecurity
 public class SecurityConfig {
+
     private final AuthenticationConfiguration configuration;
-    //private final LoginFilter loginFilter;
+    private final LoginSuccessHandler loginSuccessHandler;
+    private final LoginFailureHandler loginFailureHandler;
+    private final JwtAuthFilter jwtAuthFilter;
 
     @Bean
     public SecurityFilterChain configure(HttpSecurity http) throws Exception {
-        //  CSRF 비활성화 (REST API + JWT 기반)
+        // CSRF 비활성화 (REST API + JWT 기반)
         http.csrf((csrf) -> csrf.disable());
 
-        //  Form 로그인/Basic 인증 비활성화
+        // Form 로그인 비활성화
         http.formLogin((form) -> form.disable());
+
+        //Basic 인증 비활성화
         http.httpBasic((basic) -> basic.disable());
 
-
-        //  세션 STATELESS (JWT 사용 시)
+        // 세션 STATELESS (JWT 사용)
         http.sessionManagement((session) ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
-
-        http.authorizeHttpRequests(
-                (auth) -> auth.anyRequest().permitAll()
-                       // .requestMatchers("/api/user/**","/login").permitAll() // 모든 사용자 허용 페이지
-                       // .requestMatchers("/api/hq/**").permitAll()         // 본사 관리자 hasRole("HQ")
-                       // .requestMatchers("/api/store/**").hasRole("STORE")          //  매장 관리자
-                       // .requestMatchers("/api/warehouse/**").hasRole("WAREHOUSE")  //  창고 관리자
-                       // .anyRequest().authenticated()         // 위에서 명시하지 않은 나머지 모든 주소들은 로그인을 해야 접근할 수 이싿.
+        // 권한별 접근 제어
+        http.authorizeHttpRequests((auth) -> auth
+                .requestMatchers("/api/user/**", "/api/auth/**").permitAll()        // 회원가입/로그인
+                .requestMatchers("/api/hq/**").hasRole("HQ")                  // 본사
+                .requestMatchers("/api/store/**").hasRole("STORE")            // 매장
+                .requestMatchers("/api/warehouse/**").hasRole("WAREHOUSE")    // 창고
+                .anyRequest().authenticated()
         );
 
+        // LoginFilter 등록 (직접 인스턴스화)
+        AuthenticationManager authManager = configuration.getAuthenticationManager();
+        LoginFilter loginFilter = new LoginFilter(authManager);
+        loginFilter.setAuthenticationManager(authManager);
+        loginFilter.setAuthenticationSuccessHandler(loginSuccessHandler);
+        loginFilter.setAuthenticationFailureHandler(loginFailureHandler);
 
-        //http.addFilterAt(loginFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterAt(loginFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
-
 }

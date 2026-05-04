@@ -1,44 +1,49 @@
 package org.example.stockitbe.common.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
+import org.example.stockitbe.common.model.BaseResponseStatus;
+import org.example.stockitbe.user.model.UserDto;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.stereotype.Component;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 
 
-//@Component
+import java.io.IOException;
+
 public class LoginFilter extends UsernamePasswordAuthenticationFilter {
-    private final AuthenticationManager authenticationManager;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public LoginFilter(AuthenticationManager authenticationManager) {
         super(authenticationManager);
-        this.authenticationManager = authenticationManager;
+        setRequiresAuthenticationRequestMatcher(
+                PathPatternRequestMatcher.withDefaults()
+                        .matcher(HttpMethod.POST, "/api/auth/login")
+        );
     }
 
-
-
-
-
-    // 1번
     @Override
-    public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response) throws AuthenticationException {
-        System.out.println("내 필터가 실행되는데요??");
+    public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response)
+            throws AuthenticationException {
+        try {
+            UserDto.LoginReq loginReq = objectMapper.readValue(
+                    request.getInputStream(), UserDto.LoginReq.class);
 
-        String email = "test01@test.com";
-        String password = "qwer1234";
-        // 2번
-        UsernamePasswordAuthenticationToken token =
-                new UsernamePasswordAuthenticationToken(email, password, null);
+            UsernamePasswordAuthenticationToken authToken =
+                    new UsernamePasswordAuthenticationToken(
+                            loginReq.getEmployeeCode(), loginReq.getPassword());
 
-        // 3번
-        authenticationManager.authenticate(token);
-
-        return super.attemptAuthentication(request, response);
+            return getAuthenticationManager().authenticate(authToken);
+        } catch (IOException e) {
+            throw new AuthenticationServiceException(
+                    BaseResponseStatus.LOGIN_FAILED.getMessage(), e);
+        }
     }
-
 }

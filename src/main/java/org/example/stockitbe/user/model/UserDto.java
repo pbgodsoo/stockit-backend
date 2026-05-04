@@ -67,4 +67,21 @@ public class UserDto {
                     .build();
         }
     }
+
+    //  로그인 요청
+    @Getter
+    @NoArgsConstructor
+    public static class LoginReq {
+        private String employeeCode;
+        private String password;
+    }
+
+    //  로그인 응답
+    @Getter
+    @Builder
+    public static class LoginRes {
+        private String employeeCode;
+        private String name;
+        private UserRole role;
+    }
 }
