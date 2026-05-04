@@ -74,6 +74,14 @@ public enum BaseResponseStatus {
     DUPLICATE_CIRCULAR_BUYER_CODE(false, 4401, "이미 등록된 순환재고 거래처 코드입니다."),
     INVALID_MATERIAL_FIT(false, 4402, "유효하지 않은 소재 적합도입니다."),
 
+    // 4500번대~ 매장 판매
+    STORE_SALE_NOT_FOUND(false, 4500, "판매 내역을 찾을 수 없습니다."),
+    STORE_SALE_EMPTY_ITEMS(false, 4501, "판매 항목이 비어 있습니다."),
+    STORE_SALE_INVALID_QUANTITY(false, 4502, "판매 수량이 올바르지 않습니다."),
+    STORE_SALE_STORE_NOT_FOUND(false, 4503, "매장 정보를 찾을 수 없습니다."),
+    STORE_SALE_SKU_NOT_FOUND(false, 4504, "판매 SKU를 찾을 수 없습니다."),
+    STORE_SALE_INSUFFICIENT_STOCK(false, 4505, "재고가 부족하여 판매를 확정할 수 없습니다."),
+
     // 5000번대 실패
     FAIL(false, 5000, "요청 실패");
 
