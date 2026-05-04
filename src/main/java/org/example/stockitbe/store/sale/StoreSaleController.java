@@ -3,7 +3,7 @@ package org.example.stockitbe.store.sale;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.model.BaseResponse;
-import org.example.stockitbe.store.sale.model.StoreSaleDto;
+import org.example.stockitbe.store.sale.model.dto.StoreSaleDto;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;

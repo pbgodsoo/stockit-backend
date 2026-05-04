@@ -16,9 +16,9 @@ import org.example.stockitbe.hq.product.ProductSkuRepository;
 import org.example.stockitbe.hq.product.model.ProductMaster;
 import org.example.stockitbe.hq.product.model.ProductSku;
 import org.example.stockitbe.hq.product.model.ProductStatus;
-import org.example.stockitbe.store.sale.model.StoreSaleDto;
-import org.example.stockitbe.store.sale.model.StoreSaleHeader;
-import org.example.stockitbe.store.sale.model.StoreSaleItem;
+import org.example.stockitbe.store.sale.model.dto.StoreSaleDto;
+import org.example.stockitbe.store.sale.model.entity.StoreSaleHeader;
+import org.example.stockitbe.store.sale.model.entity.StoreSaleItem;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

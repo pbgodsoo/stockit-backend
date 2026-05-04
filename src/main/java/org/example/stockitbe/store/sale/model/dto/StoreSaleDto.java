@@ -1,4 +1,4 @@
-package org.example.stockitbe.store.sale.model;
+package org.example.stockitbe.store.sale.model.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -8,6 +8,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.example.stockitbe.store.sale.model.entity.StoreSaleHeader;
+import org.example.stockitbe.store.sale.model.entity.StoreSaleItem;
+import org.example.stockitbe.store.sale.model.StoreSaleStatus;
 
 import java.util.Date;
 import java.util.List;

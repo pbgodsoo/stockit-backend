@@ -1,6 +1,6 @@
 package org.example.stockitbe.store.sale;
 
-import org.example.stockitbe.store.sale.model.StoreSaleItem;
+import org.example.stockitbe.store.sale.model.entity.StoreSaleItem;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Collection;

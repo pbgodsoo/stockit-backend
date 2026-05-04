@@ -1,4 +1,4 @@
-package org.example.stockitbe.store.sale.model;
+package org.example.stockitbe.store.sale.model.entity;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.example.stockitbe.common.model.BaseEntity;
+import org.example.stockitbe.store.sale.model.StoreSaleStatus;
 
 import java.util.Date;
 
