@@ -39,7 +39,7 @@ public class SecurityConfig {
 
         // 권한별 접근 제어
         http.authorizeHttpRequests((auth) -> auth
-                .requestMatchers("/api/user/**", "/api/auth/**").permitAll()        // 회원가입/로그인
+                .requestMatchers("/api/user/signup", "/api/user/login", "/api/user/logout").permitAll()        // 회원가입/로그인
                 .requestMatchers("/api/hq/**").hasRole("HQ")                  // 본사
                 .requestMatchers("/api/store/**").hasRole("STORE")            // 매장
                 .requestMatchers("/api/warehouse/**").hasRole("WAREHOUSE")    // 창고

@@ -25,7 +25,7 @@ public class LoginFilter extends UsernamePasswordAuthenticationFilter {
         super(authenticationManager);
         setRequiresAuthenticationRequestMatcher(
                 PathPatternRequestMatcher.withDefaults()
-                        .matcher(HttpMethod.POST, "/api/auth/login")
+                        .matcher(HttpMethod.POST, "/api/user/login")
         );
     }
 
