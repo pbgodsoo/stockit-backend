@@ -32,7 +32,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String path = request.getServletPath();
         return path.equals("/api/user/login")       // 로그인
                 || path.equals("/api/user/signup")   // 회원가입
-                || path.equals("/api/user/logout");
+                || path.equals("/api/user/logout")
+                || path.equals("/api/user/refresh");
     }
 
 

@@ -5,51 +5,77 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.example.stockitbe.common.jwt.JwtRefresh;
+import org.example.stockitbe.common.jwt.JwtRefreshRepository;
 import org.example.stockitbe.common.jwt.JwtUtil;
 import org.example.stockitbe.common.model.BaseResponse;
 import org.example.stockitbe.user.model.AuthUserDetails;
 import org.example.stockitbe.user.model.UserDto;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 
 @Component
 @RequiredArgsConstructor
 public class LoginSuccessHandler implements AuthenticationSuccessHandler {
 
     private static final String ACCESS_TOKEN_COOKIE = "Atoken";
+    private static final String REFRESH_TOKEN_COOKIE = "Rtoken";
+    /** Refresh Token 은 /api/user/refresh 호출 시에만 전송되도록 Path 제한 */
+    private static final String REFRESH_TOKEN_PATH = "/api/user";
 
     private final JwtUtil jwtUtil;
+    private final JwtRefreshRepository jwtRefreshRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @Value("${jwt.expiration-ms}")
-    private long expirationMs;
-
     @Override
+    @Transactional
     public void onAuthenticationSuccess(HttpServletRequest request,
                                         HttpServletResponse response,
                                         Authentication authentication) throws IOException {
         AuthUserDetails userDetails = (AuthUserDetails) authentication.getPrincipal();
+        String employeeCode = userDetails.getEmployeeCode();
 
-        String token = jwtUtil.createToken(userDetails.getEmployeeCode(), userDetails.getRole());
+        // 1. Access / Refresh 토큰 발급
+        String accessToken = jwtUtil.createAccessToken(employeeCode, userDetails.getRole());
+        String refreshToken = jwtUtil.createRefreshToken(employeeCode);
 
-        // HttpOnly Cookie 발급
-        Cookie cookie = new Cookie(ACCESS_TOKEN_COOKIE, token);
-        cookie.setHttpOnly(true);            // JS 접근 차단 (XSS 방지)
-        cookie.setSecure(false);             // 운영(HTTPS): true 로 변경
-        cookie.setPath("/");
-        cookie.setMaxAge((int) (expirationMs / 1000));   // 초 단위
-        cookie.setAttribute("SameSite", "Lax");          // CSRF 일부 방지
-        response.addCookie(cookie);
+        // 2. 기존 Refresh Token 삭제 후 새로 저장 (1 user = 1 active refresh)
+        jwtRefreshRepository.deleteAllByEmployeeCode(employeeCode);
+        jwtRefreshRepository.save(JwtRefresh.builder()
+                .employeeCode(employeeCode)
+                .token(refreshToken)
+                .expiresAt(LocalDateTime.now().plusSeconds(jwtUtil.getRefreshExpirationMs() / 1000))
+                .createdAt(LocalDateTime.now())
+                .build());
 
-        // Body는 사용자 정보만 (token 제외)
+        // 3. Access Token 쿠키 (모든 경로에서 전송)
+        Cookie accessCookie = new Cookie(ACCESS_TOKEN_COOKIE, accessToken);
+        accessCookie.setHttpOnly(true);
+        accessCookie.setSecure(false);   // 운영(HTTPS): true
+        accessCookie.setPath("/");
+        accessCookie.setMaxAge((int) (jwtUtil.getAccessExpirationMs() / 1000));
+        accessCookie.setAttribute("SameSite", "Lax");
+        response.addCookie(accessCookie);
+
+        // 4. Refresh Token 쿠키 (Path 제한 — refresh 호출 시에만 전송)
+        Cookie refreshCookie = new Cookie(REFRESH_TOKEN_COOKIE, refreshToken);
+        refreshCookie.setHttpOnly(true);
+        refreshCookie.setSecure(false);
+        refreshCookie.setPath(REFRESH_TOKEN_PATH);
+        refreshCookie.setMaxAge((int) (jwtUtil.getRefreshExpirationMs() / 1000));
+        refreshCookie.setAttribute("SameSite", "Lax");
+        response.addCookie(refreshCookie);
+
+        // 5. Body 응답 (사용자 정보)
         UserDto.LoginRes loginRes = UserDto.LoginRes.builder()
-                .employeeCode(userDetails.getEmployeeCode())
+                .employeeCode(employeeCode)
                 .name(userDetails.getName())
                 .role(userDetails.getRole())
                 .build();

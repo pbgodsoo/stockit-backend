@@ -14,31 +14,46 @@ import java.util.Date;
 @Component
 public class JwtUtil {
     private final SecretKey secretKey;
-    private final long expirationMs;
+    private final long accessExpirationMs;
+    private final long refreshExpirationMs;
 
     public JwtUtil(
             @Value("${jwt.secret}") String secret,
-            @Value("${jwt.expiration-ms}") long expirationMs
+            @Value("${jwt.access-expiration-ms}") long accessExpirationMs,
+            @Value("${jwt.refresh-expiration-ms}") long refreshExpirationMs
     ) {
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
-        this.expirationMs = expirationMs;
+        this.accessExpirationMs = accessExpirationMs;
+        this.refreshExpirationMs = refreshExpirationMs;
     }
 
-    /** JWT 발급 — employeeCode + role 클레임 포함 */
-    public String createToken(String employeeCode, UserRole role) {
+    //  Access Token 발급 — employeeCode + role + type=access 클레임
+    public String createAccessToken(String employeeCode, UserRole role) {
         Date now = new Date();
-        Date expiresAt = new Date(now.getTime() + expirationMs);
-
         return Jwts.builder()
                 .subject(employeeCode)
-                .claim("role", role.name())   // HQ / STORE / WAREHOUSE
+                .claim("role", role.name())
+                .claim("type", "access")
                 .issuedAt(now)
-                .expiration(expiresAt)
+                .expiration(new Date(now.getTime() + accessExpirationMs))
                 .signWith(secretKey)
                 .compact();
     }
 
-    /** JWT 검증 + 클레임 추출 */
+    //  Refresh Token 발급 — employeeCode + type=refresh 클레임 (role 없음)
+    public String createRefreshToken(String employeeCode) {
+        Date now = new Date();
+        return Jwts.builder()
+                .subject(employeeCode)
+                .claim("type", "refresh")
+                .issuedAt(now)
+                .expiration(new Date(now.getTime() + refreshExpirationMs))
+                .signWith(secretKey)
+                .compact();
+    }
+
+
+    //  JWT 클레임 파싱
     public Claims parseClaims(String token) {
         return Jwts.parser()
                 .verifyWith(secretKey)
@@ -47,7 +62,7 @@ public class JwtUtil {
                 .getPayload();
     }
 
-    /** 토큰 유효성 검증 (만료 여부 등) */
+    //  토큰 유효성 검증
     public boolean validate(String token) {
         try {
             parseClaims(token);
@@ -56,4 +71,9 @@ public class JwtUtil {
             return false;
         }
     }
+
+    public long getAccessExpirationMs() { return accessExpirationMs; }
+    public long getRefreshExpirationMs() { return refreshExpirationMs; }
 }
+
+
