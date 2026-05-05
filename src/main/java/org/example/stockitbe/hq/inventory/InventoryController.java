@@ -52,6 +52,11 @@ public class InventoryController {
         return BaseResponse.success(inventoryService.findCircularCandidates());
     }
 
+    @GetMapping("/circular")
+    public BaseResponse<List<InventoryDto.CircularInventoryRes>> getCircularInventories() {
+        return BaseResponse.success(inventoryService.findCircularInventories());
+    }
+
     @PostMapping("/circular-candidates/convert")
     public BaseResponse<InventoryDto.CircularCandidateConvertRes> convertCircularCandidates(
             @RequestBody @Valid List<InventoryDto.CircularCandidateConvertItemReq> requests

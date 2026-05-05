@@ -115,4 +115,56 @@ public class InventoryDto {
         private Integer skippedCount;
         private List<CircularCandidateConvertItemRes> items;
     }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class CircularInventoryRes {
+        private Long inventoryId;
+        private String skuCode;
+        private String itemCode;
+        private String itemName;
+        private String warehouseCode;
+        private String warehouseName;
+        private String parentCategory;
+        private String childCategory;
+        private String color;
+        private String size;
+        private Integer availableQuantity;
+        private String materialType;
+        private List<MaterialCompositionRes> materialCompositions;
+        private Integer materialKgPrice;
+        private Double unitWeightKg;
+        private Double totalWeightKg;
+        private Long circularSalePrice;
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class MaterialCompositionRes {
+        private String materialCode;
+        private String materialNameKo;
+        private Integer ratio;
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class CircularMaterialPriceRes {
+        private String materialCode;
+        private String materialNameKo;
+        private String materialGroup;
+        private Integer pricePerKg;
+        private Boolean active;
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CircularMaterialPriceUpdateReq {
+        @NotNull
+        @Min(0)
+        private Integer pricePerKg;
+    }
 }

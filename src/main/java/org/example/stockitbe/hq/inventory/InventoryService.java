@@ -1,18 +1,24 @@
 package org.example.stockitbe.hq.inventory;
 
 import lombok.RequiredArgsConstructor;
+import org.example.stockitbe.common.exception.BaseException;
+import org.example.stockitbe.common.model.BaseResponseStatus;
 import org.example.stockitbe.hq.category.CategoryRepository;
 import org.example.stockitbe.hq.category.model.Category;
 import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
+import org.example.stockitbe.hq.inventory.model.CircularMaterialPricePolicy;
 import org.example.stockitbe.hq.inventory.model.Inventory;
 import org.example.stockitbe.hq.inventory.model.InventoryCandidateCondition;
 import org.example.stockitbe.hq.inventory.model.InventoryDto;
 import org.example.stockitbe.hq.inventory.model.InventoryStatus;
 import org.example.stockitbe.hq.product.ProductMasterRepository;
 import org.example.stockitbe.hq.product.ProductSkuRepository;
+import org.example.stockitbe.hq.product.model.ProductMaterialComposition;
+import org.example.stockitbe.hq.product.model.ProductMaterialSpec;
 import org.example.stockitbe.hq.product.model.ProductMaster;
+import org.example.stockitbe.hq.product.model.ProductMaterialType;
 import org.example.stockitbe.hq.product.model.ProductSku;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +33,7 @@ public class InventoryService {
 
     private final InventoryRepository inventoryRepository;
     private final InventoryCandidateConditionRepository inventoryCandidateConditionRepository;
+    private final CircularMaterialPricePolicyRepository circularMaterialPricePolicyRepository;
     private final ProductSkuRepository productSkuRepository;
     private final ProductMasterRepository productMasterRepository;
     private final CategoryRepository categoryRepository;
@@ -40,6 +47,27 @@ public class InventoryService {
     private static final String LABEL_LOW_PERFORMANCE = "안전재고 대비 초과 누적 SKU";
     private static final String LABEL_SIZE_COLOR_BIAS = "극단 사이즈 재고 또는 특정 컬러 재고에 편중된 SKU";
     private static final double SIZE_COLOR_BIAS_THRESHOLD = 0.60d;
+    private static final String MAT_BLEND = "BLEND";
+    private static final double DEFAULT_UNIT_WEIGHT_KG = 0.300d;
+    private static final Map<String, Double> CATEGORY_UNIT_WEIGHT_KG = Map.ofEntries(
+            Map.entry("반팔", 0.180d), Map.entry("긴팔", 0.220d), Map.entry("셔츠", 0.230d),
+            Map.entry("니트", 0.350d), Map.entry("후드티", 0.600d), Map.entry("청바지", 0.700d),
+            Map.entry("반바지", 0.250d), Map.entry("긴바지", 0.400d), Map.entry("츄리닝", 0.450d),
+            Map.entry("미니스커트", 0.200d), Map.entry("롱스커트", 0.350d), Map.entry("패딩", 0.800d),
+            Map.entry("후드집업", 0.455d), Map.entry("자켓", 0.490d), Map.entry("가디건", 0.300d)
+    );
+    private static final Map<String, String> MATERIAL_NAME_KO_MAP = Map.of(
+            "COTTON", "면",
+            "WOOL", "울",
+            "CASHMERE", "캐시미어",
+            "SILK", "실크",
+            "LINEN", "린넨",
+            "POLYESTER", "폴리에스터",
+            "ACRYLIC", "아크릴",
+            "POLYAMIDE", "나일론",
+            "ELASTANE", "스판덱스",
+            MAT_BLEND, "혼방"
+    );
 
     @Transactional(readOnly = true)
     public InventoryDto.CompanyWidePageRes findCompanyWide(LocationType locationType,
@@ -416,6 +444,98 @@ public class InventoryService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<InventoryDto.CircularInventoryRes> findCircularInventories() {
+        List<Inventory> circularInventories = inventoryRepository.findAllByInventoryStatus(InventoryStatus.CIRCULAR);
+        if (circularInventories.isEmpty()) return List.of();
+
+        Map<Long, Infrastructure> warehouseById = infrastructureRepository.findAll().stream()
+                .filter(i -> i.getLocationType() == LocationType.WAREHOUSE)
+                .collect(Collectors.toMap(Infrastructure::getId, Function.identity()));
+        List<Inventory> warehouseCirculars = circularInventories.stream()
+                .filter(inv -> warehouseById.containsKey(inv.getLocationId()))
+                .toList();
+        if (warehouseCirculars.isEmpty()) return List.of();
+
+        Set<Long> skuIds = warehouseCirculars.stream().map(Inventory::getSkuId).collect(Collectors.toSet());
+        Map<Long, ProductSku> skuById = productSkuRepository.findAllById(skuIds).stream()
+                .collect(Collectors.toMap(ProductSku::getId, Function.identity()));
+        Set<String> productCodes = skuById.values().stream().map(ProductSku::getProductCode).collect(Collectors.toSet());
+        Map<String, ProductMaster> masterByCode = productMasterRepository.findAllByCodeIn(productCodes).stream()
+                .collect(Collectors.toMap(ProductMaster::getCode, Function.identity()));
+
+        List<Category> categories = categoryRepository.findAllByOrderByIdAsc();
+        Map<String, Category> categoryByCode = categories.stream().collect(Collectors.toMap(Category::getCode, Function.identity()));
+        Map<Long, Category> categoryById = categories.stream().collect(Collectors.toMap(Category::getId, Function.identity()));
+        Map<String, Integer> materialPriceByCode = loadActiveMaterialPriceByCode();
+
+        return warehouseCirculars.stream()
+                .map(inv -> {
+                    ProductSku sku = skuById.get(inv.getSkuId());
+                    if (sku == null) return null;
+                    ProductMaster master = masterByCode.get(sku.getProductCode());
+                    if (master == null) return null;
+                    Infrastructure warehouse = warehouseById.get(inv.getLocationId());
+                    if (warehouse == null) return null;
+                    Category child = categoryByCode.get(master.getCategoryCode());
+                    if (child == null) return null;
+                    Category parent = child.getParentId() == null ? child : categoryById.get(child.getParentId());
+
+                    int availableQuantity = Math.max(0, n(inv.getAvailableQuantity()));
+                    double unitWeightKg = resolveCategoryUnitWeightKg(child.getName());
+                    double totalWeightKg = round3(availableQuantity * unitWeightKg);
+
+                    ProductMaterialSpec materialSpec = master.getMaterialSpec();
+                    String materialType = resolveMaterialTypeLabel(materialSpec);
+                    List<InventoryDto.MaterialCompositionRes> compositions = toMaterialCompositionRes(materialSpec);
+                    int materialKgPrice = resolveMaterialKgPrice(materialSpec, materialPriceByCode);
+                    long circularSalePrice = Math.round(totalWeightKg * materialKgPrice);
+
+                    return InventoryDto.CircularInventoryRes.builder()
+                            .inventoryId(inv.getId())
+                            .skuCode(sku.getSkuCode())
+                            .itemCode(master.getCode())
+                            .itemName(master.getName())
+                            .warehouseCode(warehouse.getCode())
+                            .warehouseName(warehouse.getName())
+                            .parentCategory(parent == null ? "" : parent.getName())
+                            .childCategory(child.getName())
+                            .color(sku.getColor())
+                            .size(sku.getSize())
+                            .availableQuantity(availableQuantity)
+                            .materialType(materialType)
+                            .materialCompositions(compositions)
+                            .materialKgPrice(materialKgPrice)
+                            .unitWeightKg(unitWeightKg)
+                            .totalWeightKg(totalWeightKg)
+                            .circularSalePrice(circularSalePrice)
+                            .build();
+                })
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(InventoryDto.CircularInventoryRes::getSkuCode))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<InventoryDto.CircularMaterialPriceRes> findCircularMaterialPrices() {
+        return circularMaterialPricePolicyRepository.findAll().stream()
+                .sorted(Comparator.comparing(CircularMaterialPricePolicy::getMaterialCode))
+                .map(this::toCircularMaterialPriceRes)
+                .toList();
+    }
+
+    @Transactional
+    public InventoryDto.CircularMaterialPriceRes updateCircularMaterialPrice(
+            String materialCode,
+            InventoryDto.CircularMaterialPriceUpdateReq request
+    ) {
+        String key = materialCode == null ? "" : materialCode.trim().toUpperCase(Locale.ROOT);
+        CircularMaterialPricePolicy policy = circularMaterialPricePolicyRepository.findById(key)
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.NOT_FOUND_DATA));
+        policy.updatePrice(request.getPricePerKg());
+        return toCircularMaterialPriceRes(policy);
+    }
+
     @Transactional
     public InventoryDto.CircularCandidateConvertRes convertCircularCandidates(List<InventoryDto.CircularCandidateConvertItemReq> requests) {
         if (requests == null || requests.isEmpty()) {
@@ -632,6 +752,70 @@ public class InventoryService {
             case CONDITION_SIZE_COLOR_BIAS -> LABEL_SIZE_COLOR_BIAS;
             default -> "";
         };
+    }
+
+    private Map<String, Integer> loadActiveMaterialPriceByCode() {
+        return circularMaterialPricePolicyRepository.findAllByActiveTrueOrderByMaterialCodeAsc().stream()
+                .collect(Collectors.toMap(CircularMaterialPricePolicy::getMaterialCode, CircularMaterialPricePolicy::getPricePerKg));
+    }
+
+    private InventoryDto.CircularMaterialPriceRes toCircularMaterialPriceRes(CircularMaterialPricePolicy policy) {
+        return InventoryDto.CircularMaterialPriceRes.builder()
+                .materialCode(policy.getMaterialCode())
+                .materialNameKo(policy.getMaterialNameKo())
+                .materialGroup(policy.getMaterialGroup())
+                .pricePerKg(policy.getPricePerKg())
+                .active(policy.getActive())
+                .build();
+    }
+
+    private double resolveCategoryUnitWeightKg(String childCategoryName) {
+        if (childCategoryName == null) return DEFAULT_UNIT_WEIGHT_KG;
+        return CATEGORY_UNIT_WEIGHT_KG.getOrDefault(childCategoryName.trim(), DEFAULT_UNIT_WEIGHT_KG);
+    }
+
+    private String resolveMaterialTypeLabel(ProductMaterialSpec materialSpec) {
+        if (materialSpec == null || materialSpec.getMaterialType() == null) return "혼방";
+        ProductMaterialType type = materialSpec.getMaterialType();
+        if (type == ProductMaterialType.NATURAL_SINGLE) return "천연 단일 섬유";
+        if (type == ProductMaterialType.SYNTHETIC) return "합성 섬유";
+        return "혼방";
+    }
+
+    private List<InventoryDto.MaterialCompositionRes> toMaterialCompositionRes(ProductMaterialSpec materialSpec) {
+        if (materialSpec == null || materialSpec.getCompositions() == null) return List.of();
+        return materialSpec.getCompositions().stream()
+                .filter(comp -> comp.getMaterialCode() != null)
+                .map(comp -> {
+                    String code = comp.getMaterialCode().trim().toUpperCase(Locale.ROOT);
+                    return InventoryDto.MaterialCompositionRes.builder()
+                            .materialCode(code)
+                            .materialNameKo(MATERIAL_NAME_KO_MAP.getOrDefault(code, code))
+                            .ratio(comp.getRatio() == null ? 0 : comp.getRatio())
+                            .build();
+                })
+                .toList();
+    }
+
+    private int resolveMaterialKgPrice(ProductMaterialSpec materialSpec, Map<String, Integer> materialPriceByCode) {
+        if (materialSpec == null || materialSpec.getMaterialType() == null) {
+            return materialPriceByCode.getOrDefault(MAT_BLEND, 1000);
+        }
+        if (materialSpec.getMaterialType() == ProductMaterialType.BLEND) {
+            return materialPriceByCode.getOrDefault(MAT_BLEND, 1000);
+        }
+
+        List<ProductMaterialComposition> compositions = materialSpec.getCompositions();
+        if (compositions == null || compositions.isEmpty()) {
+            return materialPriceByCode.getOrDefault(MAT_BLEND, 1000);
+        }
+        ProductMaterialComposition single = compositions.get(0);
+        String code = single.getMaterialCode() == null ? "" : single.getMaterialCode().trim().toUpperCase(Locale.ROOT);
+        return materialPriceByCode.getOrDefault(code, materialPriceByCode.getOrDefault(MAT_BLEND, 1000));
+    }
+
+    private double round3(double value) {
+        return Math.round(value * 1000d) / 1000d;
     }
 
     private static class GroupAvailabilityAggregate {
