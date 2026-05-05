@@ -194,6 +194,7 @@ public class InventoryService {
                             .skuCode(agg.sku.getSkuCode())
                             .color(agg.sku.getColor())
                             .size(agg.sku.getSize())
+                            .unitPrice(agg.sku.getUnitPrice())
                             .actualStock(agg.actualStock)
                             .availableStock(agg.availableStock)
                             .safetyStock(safetyStock)

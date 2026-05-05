@@ -82,4 +82,18 @@ public class Inventory extends BaseEntity {
         this.quantity = this.quantity + delta;
         this.lastMovementAt = new Date();
     }
+
+    // 판매 가능 여부를 실재고(quantity) 기준으로 확인 (해당 수량을 팔 수 있는지 검사)
+    public boolean canSell(int sellQuantity) {
+        return sellQuantity > 0 && this.quantity >= sellQuantity;
+    }
+
+    // 판매 반영 - 실재고를 차감하고 이동 시각을 갱신
+    public void applySale(int sellQuantity) {
+        this.quantity -= sellQuantity;
+        // 기존 화면 정합성을 위해 availableQuantity도 함께 감산하되 음수는 방지
+        this.availableQuantity = Math.max(0, this.availableQuantity - sellQuantity);
+        this.lastMovementAt = new Date();
+    }
 }
+
