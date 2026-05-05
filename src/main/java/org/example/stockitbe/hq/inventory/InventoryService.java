@@ -38,8 +38,7 @@ public class InventoryService {
     private static final String LABEL_LONG_NO_MOVEMENT = "최근 24개월 이상 판매 이력이 없는 SKU";
     private static final String LABEL_LOW_PERFORMANCE = "목표 판매 기준 대비 실적이 낮은 SKU";
     private static final String LABEL_SIZE_COLOR_BIAS = "극단 사이즈 재고 또는 특정 컬러 재고에 편중된 SKU";
-    private static final Set<String> EXTREME_SIZES = Set.of("XS", "XL");
-    private static final Set<String> BIASED_COLORS = Set.of("검정", "아이보리", "BLACK", "IVORY");
+    private static final double SIZE_COLOR_BIAS_THRESHOLD = 0.60d;
 
     @Transactional(readOnly = true)
     public InventoryDto.CompanyWidePageRes findCompanyWide(LocationType locationType,
@@ -291,6 +290,8 @@ public class InventoryService {
         Map<Long, ProductSku> skuById = productSkuRepository.findAllById(skuIds).stream()
                 .collect(Collectors.toMap(ProductSku::getId, Function.identity()));
 
+        Map<String, GroupAvailabilityAggregate> groupAvailability = buildGroupAvailability(normalInventories, skuById);
+
         Date now = new Date();
         List<Inventory> converted = new ArrayList<>();
         Map<Long, List<Integer>> matchedByInventoryId = new HashMap<>();
@@ -298,7 +299,7 @@ public class InventoryService {
         for (Inventory inventory : normalInventories) {
             ProductSku sku = skuById.get(inventory.getSkuId());
             if (sku == null) continue;
-            List<Integer> matchedCodes = evaluateCandidateConditions(inventory, sku);
+            List<Integer> matchedCodes = evaluateCandidateConditions(inventory, sku, groupAvailability);
             if (matchedCodes.isEmpty()) continue;
 
             inventory.markCircularCandidate(now);
@@ -410,7 +411,8 @@ public class InventoryService {
                 .toList();
     }
 
-    private List<Integer> evaluateCandidateConditions(Inventory inventory, ProductSku sku) {
+    private List<Integer> evaluateCandidateConditions(Inventory inventory, ProductSku sku,
+                                                      Map<String, GroupAvailabilityAggregate> groupAvailability) {
         List<Integer> matchedCodes = new ArrayList<>();
 
         long daysSinceMovement = daysSince(inventory.getLastMovementAt());
@@ -426,13 +428,60 @@ public class InventoryService {
             matchedCodes.add(CONDITION_LOW_PERFORMANCE);
         }
 
-        String size = sku.getSize() == null ? "" : sku.getSize().trim().toUpperCase(Locale.ROOT);
-        String color = sku.getColor() == null ? "" : sku.getColor().trim().toUpperCase(Locale.ROOT);
-        if (EXTREME_SIZES.contains(size) || BIASED_COLORS.contains(color) || BIASED_COLORS.contains(sku.getColor())) {
+        double sizeShare = calculateSizeShare(inventory, sku, groupAvailability);
+        double colorShare = calculateColorShare(inventory, sku, groupAvailability);
+        if (sizeShare >= SIZE_COLOR_BIAS_THRESHOLD || colorShare >= SIZE_COLOR_BIAS_THRESHOLD) {
             matchedCodes.add(CONDITION_SIZE_COLOR_BIAS);
         }
 
         return matchedCodes;
+    }
+
+    private Map<String, GroupAvailabilityAggregate> buildGroupAvailability(List<Inventory> inventories,
+                                                                           Map<Long, ProductSku> skuById) {
+        Map<String, GroupAvailabilityAggregate> grouped = new HashMap<>();
+
+        for (Inventory inventory : inventories) {
+            ProductSku sku = skuById.get(inventory.getSkuId());
+            if (sku == null) continue;
+            String groupKey = buildGroupKey(sku.getProductCode(), inventory.getLocationId());
+            GroupAvailabilityAggregate aggregate = grouped.computeIfAbsent(groupKey, key -> new GroupAvailabilityAggregate());
+            int available = Math.max(0, n(inventory.getAvailableQuantity()));
+
+            aggregate.totalAvailable += available;
+            aggregate.availableBySize.merge(normalizeToken(sku.getSize()), available, Integer::sum);
+            aggregate.availableByColor.merge(normalizeToken(sku.getColor()), available, Integer::sum);
+        }
+
+        return grouped;
+    }
+
+    private double calculateSizeShare(Inventory inventory, ProductSku sku,
+                                      Map<String, GroupAvailabilityAggregate> groupAvailability) {
+        String groupKey = buildGroupKey(sku.getProductCode(), inventory.getLocationId());
+        GroupAvailabilityAggregate aggregate = groupAvailability.get(groupKey);
+        if (aggregate == null || aggregate.totalAvailable <= 0) return 0d;
+
+        int matched = aggregate.availableBySize.getOrDefault(normalizeToken(sku.getSize()), 0);
+        return (double) matched / aggregate.totalAvailable;
+    }
+
+    private double calculateColorShare(Inventory inventory, ProductSku sku,
+                                       Map<String, GroupAvailabilityAggregate> groupAvailability) {
+        String groupKey = buildGroupKey(sku.getProductCode(), inventory.getLocationId());
+        GroupAvailabilityAggregate aggregate = groupAvailability.get(groupKey);
+        if (aggregate == null || aggregate.totalAvailable <= 0) return 0d;
+
+        int matched = aggregate.availableByColor.getOrDefault(normalizeToken(sku.getColor()), 0);
+        return (double) matched / aggregate.totalAvailable;
+    }
+
+    private String normalizeToken(String value) {
+        return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String buildGroupKey(String productCode, Long locationId) {
+        return (productCode == null ? "" : productCode.trim()) + "::" + (locationId == null ? 0L : locationId);
     }
 
     private int calculateConvertibleStock(Inventory inventory) {
@@ -457,5 +506,11 @@ public class InventoryService {
             case CONDITION_SIZE_COLOR_BIAS -> LABEL_SIZE_COLOR_BIAS;
             default -> "";
         };
+    }
+
+    private static class GroupAvailabilityAggregate {
+        private int totalAvailable = 0;
+        private final Map<String, Integer> availableBySize = new HashMap<>();
+        private final Map<String, Integer> availableByColor = new HashMap<>();
     }
 }
