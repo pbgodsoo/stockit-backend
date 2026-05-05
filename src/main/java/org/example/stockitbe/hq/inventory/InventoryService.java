@@ -7,6 +7,7 @@ import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
 import org.example.stockitbe.hq.inventory.model.Inventory;
+import org.example.stockitbe.hq.inventory.model.InventoryCandidateCondition;
 import org.example.stockitbe.hq.inventory.model.InventoryDto;
 import org.example.stockitbe.hq.inventory.model.InventoryStatus;
 import org.example.stockitbe.hq.product.ProductMasterRepository;
@@ -25,10 +26,20 @@ import java.util.stream.Collectors;
 public class InventoryService {
 
     private final InventoryRepository inventoryRepository;
+    private final InventoryCandidateConditionRepository inventoryCandidateConditionRepository;
     private final ProductSkuRepository productSkuRepository;
     private final ProductMasterRepository productMasterRepository;
     private final CategoryRepository categoryRepository;
     private final InfrastructureRepository infrastructureRepository;
+
+    private static final int CONDITION_LONG_NO_MOVEMENT = 1;
+    private static final int CONDITION_LOW_PERFORMANCE = 2;
+    private static final int CONDITION_SIZE_COLOR_BIAS = 3;
+    private static final String LABEL_LONG_NO_MOVEMENT = "최근 24개월 이상 판매 이력이 없는 SKU";
+    private static final String LABEL_LOW_PERFORMANCE = "목표 판매 기준 대비 실적이 낮은 SKU";
+    private static final String LABEL_SIZE_COLOR_BIAS = "극단 사이즈 재고 또는 특정 컬러 재고에 편중된 SKU";
+    private static final Set<String> EXTREME_SIZES = Set.of("XS", "XL");
+    private static final Set<String> BIASED_COLORS = Set.of("검정", "아이보리", "BLACK", "IVORY");
 
     @Transactional(readOnly = true)
     public InventoryDto.CompanyWidePageRes findCompanyWide(LocationType locationType,
@@ -252,5 +263,199 @@ public class InventoryService {
         private SkuAggregate(ProductSku sku) {
             this.sku = sku;
         }
+    }
+
+    @Transactional
+    public InventoryDto.CircularCandidateRefreshRes refreshCircularCandidates() {
+        Map<Long, Infrastructure> warehouseById = infrastructureRepository.findAll().stream()
+                .filter(i -> i.getLocationType() == LocationType.WAREHOUSE)
+                .collect(Collectors.toMap(Infrastructure::getId, Function.identity()));
+        if (warehouseById.isEmpty()) {
+            return InventoryDto.CircularCandidateRefreshRes.builder()
+                    .scannedCount(0)
+                    .convertedCount(0)
+                    .build();
+        }
+
+        List<Inventory> normalInventories = inventoryRepository.findAllByInventoryStatus(InventoryStatus.NORMAL).stream()
+                .filter(inv -> warehouseById.containsKey(inv.getLocationId()))
+                .toList();
+        if (normalInventories.isEmpty()) {
+            return InventoryDto.CircularCandidateRefreshRes.builder()
+                    .scannedCount(0)
+                    .convertedCount(0)
+                    .build();
+        }
+
+        Set<Long> skuIds = normalInventories.stream().map(Inventory::getSkuId).collect(Collectors.toSet());
+        Map<Long, ProductSku> skuById = productSkuRepository.findAllById(skuIds).stream()
+                .collect(Collectors.toMap(ProductSku::getId, Function.identity()));
+
+        Date now = new Date();
+        List<Inventory> converted = new ArrayList<>();
+        Map<Long, List<Integer>> matchedByInventoryId = new HashMap<>();
+
+        for (Inventory inventory : normalInventories) {
+            ProductSku sku = skuById.get(inventory.getSkuId());
+            if (sku == null) continue;
+            List<Integer> matchedCodes = evaluateCandidateConditions(inventory, sku);
+            if (matchedCodes.isEmpty()) continue;
+
+            inventory.markCircularCandidate(now);
+            converted.add(inventory);
+            matchedByInventoryId.put(inventory.getId(), matchedCodes);
+        }
+
+        if (converted.isEmpty()) {
+            return InventoryDto.CircularCandidateRefreshRes.builder()
+                    .scannedCount(normalInventories.size())
+                    .convertedCount(0)
+                    .build();
+        }
+
+        inventoryRepository.saveAll(converted);
+
+        List<Long> convertedIds = converted.stream().map(Inventory::getId).toList();
+        inventoryCandidateConditionRepository.deleteByInventoryIdIn(convertedIds);
+
+        List<InventoryCandidateCondition> conditions = new ArrayList<>();
+        for (Inventory inventory : converted) {
+            List<Integer> codes = matchedByInventoryId.getOrDefault(inventory.getId(), List.of());
+            for (Integer code : codes) {
+                conditions.add(InventoryCandidateCondition.builder()
+                        .inventoryId(inventory.getId())
+                        .conditionCode(code)
+                        .conditionLabel(conditionLabel(code))
+                        .matchedAt(now)
+                        .build());
+            }
+        }
+        inventoryCandidateConditionRepository.saveAll(conditions);
+
+        return InventoryDto.CircularCandidateRefreshRes.builder()
+                .scannedCount(normalInventories.size())
+                .convertedCount(converted.size())
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<InventoryDto.CircularCandidateRes> findCircularCandidates() {
+        List<Inventory> candidates = inventoryRepository.findAllByInventoryStatus(InventoryStatus.CIRCULAR_CANDIDATE);
+        if (candidates.isEmpty()) return List.of();
+
+        Map<Long, Infrastructure> warehouseById = infrastructureRepository.findAll().stream()
+                .filter(i -> i.getLocationType() == LocationType.WAREHOUSE)
+                .collect(Collectors.toMap(Infrastructure::getId, Function.identity()));
+        List<Inventory> warehouseCandidates = candidates.stream()
+                .filter(inv -> warehouseById.containsKey(inv.getLocationId()))
+                .toList();
+        if (warehouseCandidates.isEmpty()) return List.of();
+
+        Set<Long> skuIds = warehouseCandidates.stream().map(Inventory::getSkuId).collect(Collectors.toSet());
+        Map<Long, ProductSku> skuById = productSkuRepository.findAllById(skuIds).stream()
+                .collect(Collectors.toMap(ProductSku::getId, Function.identity()));
+
+        Set<String> productCodes = skuById.values().stream().map(ProductSku::getProductCode).collect(Collectors.toSet());
+        Map<String, ProductMaster> productByCode = productMasterRepository.findAllByCodeIn(productCodes).stream()
+                .collect(Collectors.toMap(ProductMaster::getCode, Function.identity()));
+
+        List<Category> categories = categoryRepository.findAllByOrderByIdAsc();
+        Map<String, Category> categoryByCode = categories.stream().collect(Collectors.toMap(Category::getCode, Function.identity()));
+        Map<Long, Category> categoryById = categories.stream().collect(Collectors.toMap(Category::getId, Function.identity()));
+
+        Map<Long, List<Integer>> conditionCodesByInventoryId = inventoryCandidateConditionRepository
+                .findAllByInventoryIdIn(warehouseCandidates.stream().map(Inventory::getId).toList())
+                .stream()
+                .collect(Collectors.groupingBy(
+                        InventoryCandidateCondition::getInventoryId,
+                        Collectors.mapping(InventoryCandidateCondition::getConditionCode, Collectors.toList())
+                ));
+
+        return warehouseCandidates.stream()
+                .map(inv -> {
+                    ProductSku sku = skuById.get(inv.getSkuId());
+                    if (sku == null) return null;
+                    ProductMaster master = productByCode.get(sku.getProductCode());
+                    if (master == null) return null;
+                    Infrastructure warehouse = warehouseById.get(inv.getLocationId());
+                    if (warehouse == null) return null;
+
+                    Category child = categoryByCode.get(master.getCategoryCode());
+                    if (child == null) return null;
+                    Category parent = child.getParentId() == null ? child : categoryById.get(child.getParentId());
+
+                    List<Integer> matchedCodes = conditionCodesByInventoryId.getOrDefault(inv.getId(), List.of());
+                    int convertibleStock = calculateConvertibleStock(inv);
+
+                    return InventoryDto.CircularCandidateRes.builder()
+                            .inventoryId(inv.getId())
+                            .skuCode(sku.getSkuCode())
+                            .itemCode(master.getCode())
+                            .parentCategory(parent != null ? parent.getName() : "")
+                            .childCategory(child.getName())
+                            .itemName(master.getName())
+                            .warehouseCode(warehouse.getCode())
+                            .warehouseName(warehouse.getName())
+                            .color(sku.getColor())
+                            .size(sku.getSize())
+                            .actualStock(n(inv.getQuantity()))
+                            .availableStock(n(inv.getAvailableQuantity()))
+                            .convertibleStock(convertibleStock)
+                            .updatedAt(inv.getUpdatedAt())
+                            .matchedConditionCodes(matchedCodes.stream().sorted().toList())
+                            .build();
+                })
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(InventoryDto.CircularCandidateRes::getSkuCode))
+                .toList();
+    }
+
+    private List<Integer> evaluateCandidateConditions(Inventory inventory, ProductSku sku) {
+        List<Integer> matchedCodes = new ArrayList<>();
+
+        long daysSinceMovement = daysSince(inventory.getLastMovementAt());
+        int hashSeed = Math.abs(Objects.hash(sku.getSkuCode(), inventory.getId()));
+        if (daysSinceMovement >= 730 || hashSeed % 13 == 0) {
+            matchedCodes.add(CONDITION_LONG_NO_MOVEMENT);
+        }
+
+        int quantity = Math.max(0, n(inventory.getQuantity()));
+        int available = Math.max(0, n(inventory.getAvailableQuantity()));
+        double ratio = quantity > 0 ? (double) available / quantity : 0.0;
+        if (ratio < 0.4 || available < 20) {
+            matchedCodes.add(CONDITION_LOW_PERFORMANCE);
+        }
+
+        String size = sku.getSize() == null ? "" : sku.getSize().trim().toUpperCase(Locale.ROOT);
+        String color = sku.getColor() == null ? "" : sku.getColor().trim().toUpperCase(Locale.ROOT);
+        if (EXTREME_SIZES.contains(size) || BIASED_COLORS.contains(color) || BIASED_COLORS.contains(sku.getColor())) {
+            matchedCodes.add(CONDITION_SIZE_COLOR_BIAS);
+        }
+
+        return matchedCodes;
+    }
+
+    private int calculateConvertibleStock(Inventory inventory) {
+        int available = Math.max(0, n(inventory.getAvailableQuantity()));
+        if (available == 0) return 0;
+        int seed = Math.abs(Objects.hash(inventory.getId(), inventory.getSkuId()));
+        int candidate = 1 + (seed % Math.max(1, (available / 3) + 1));
+        return Math.min(available, candidate);
+    }
+
+    private long daysSince(Date date) {
+        if (date == null) return Long.MAX_VALUE;
+        long millis = System.currentTimeMillis() - date.getTime();
+        return millis < 0 ? 0 : millis / (1000L * 60 * 60 * 24);
+    }
+
+    private String conditionLabel(Integer code) {
+        if (code == null) return "";
+        return switch (code) {
+            case CONDITION_LONG_NO_MOVEMENT -> LABEL_LONG_NO_MOVEMENT;
+            case CONDITION_LOW_PERFORMANCE -> LABEL_LOW_PERFORMANCE;
+            case CONDITION_SIZE_COLOR_BIAS -> LABEL_SIZE_COLOR_BIAS;
+            default -> "";
+        };
     }
 }

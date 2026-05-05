@@ -63,4 +63,9 @@ public class Inventory extends BaseEntity {
         this.statusChangedAt = statusChangedAt == null ? new Date() : statusChangedAt;
         this.lastMovementAt = lastMovementAt == null ? new Date() : lastMovementAt;
     }
+
+    public void markCircularCandidate(Date changedAt) {
+        this.inventoryStatus = InventoryStatus.CIRCULAR_CANDIDATE;
+        this.statusChangedAt = changedAt == null ? new Date() : changedAt;
+    }
 }

@@ -52,4 +52,33 @@ public class InventoryDto {
         private List<CompanyWideRes> items;
         private List<LocationOptionRes> locationOptions;
     }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class CircularCandidateRes {
+        private Long inventoryId;
+        private String skuCode;
+        private String itemCode;
+        private String parentCategory;
+        private String childCategory;
+        private String itemName;
+        private String warehouseCode;
+        private String warehouseName;
+        private String color;
+        private String size;
+        private Integer actualStock;
+        private Integer availableStock;
+        private Integer convertibleStock;
+        private Date updatedAt;
+        private List<Integer> matchedConditionCodes;
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class CircularCandidateRefreshRes {
+        private Integer scannedCount;
+        private Integer convertedCount;
+    }
 }

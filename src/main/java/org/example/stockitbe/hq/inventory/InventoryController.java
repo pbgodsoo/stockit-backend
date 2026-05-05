@@ -40,4 +40,14 @@ public class InventoryController {
     ) {
         return BaseResponse.success(inventoryService.findCompanyWideSkuDetails(itemCode, locationType, locationIds, parentCategory, childCategory, status, keyword));
     }
+
+    @PostMapping("/circular-candidates/refresh")
+    public BaseResponse<InventoryDto.CircularCandidateRefreshRes> refreshCircularCandidates() {
+        return BaseResponse.success(inventoryService.refreshCircularCandidates());
+    }
+
+    @GetMapping("/circular-candidates")
+    public BaseResponse<List<InventoryDto.CircularCandidateRes>> getCircularCandidates() {
+        return BaseResponse.success(inventoryService.findCircularCandidates());
+    }
 }
