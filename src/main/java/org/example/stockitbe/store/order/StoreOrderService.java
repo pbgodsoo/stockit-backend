@@ -47,6 +47,8 @@ public class StoreOrderService {
 
     // 매장 발주 요청 생성
     @Transactional
+    // 매장 발주를 신규 생성한다.
+    // 라인 검증, 매장/창고 조회, 헤더·라인 저장, 상태 이력 기록을 순차적으로 수행한다.
     public StoreOrderDto.CreateRes create(StoreOrderDto.CreateReq dto) {
         validateCreateItems(dto.getItems());
         Infrastructure store = lookupStore(dto.getStoreCode());
@@ -65,6 +67,8 @@ public class StoreOrderService {
 
     // 매장 발주 요청 수정
     @Transactional
+    // 수정 가능한 발주를 업데이트한다.
+    // 헤더 합계를 재계산하고 상세 라인을 전체 교체한 뒤 이력을 남긴다.
     public StoreOrderDto.UpdateRes update(String orderNo, StoreOrderDto.UpdateReq dto) {
         validateUpdateItems(dto.getItems());
         StoreOrderHeader header = getOrderByOrderNo(orderNo);
@@ -86,6 +90,8 @@ public class StoreOrderService {
 
     // 매장 발주 요청 취소
     @Transactional
+    // 발주를 취소한다.
+    // 추적을 위해 취소 사유는 필수로 검증한다.
     public StoreOrderDto.CancelRes cancel(String orderNo, StoreOrderDto.CancelReq dto) {
         StoreOrderHeader header = getOrderByOrderNo(orderNo);
         String cancelReason = trimToNull(dto.getCancelReason());
@@ -100,6 +106,8 @@ public class StoreOrderService {
 
     // 매장 발주 내역 목록 조회
     @Transactional(readOnly = true)
+    // 발주 목록을 조회한다.
+    // 매장/상태/기간/키워드 필터를 적용한다.
     public List<StoreOrderDto.ListRes> list(String storeCode, String status, LocalDate from, LocalDate to, String keyword) {
         Long storeIdFilter = (storeCode == null || storeCode.isBlank()) ? null : lookupStore(storeCode).getId();
         String safeKeyword = keyword == null ? "" : keyword.trim().toLowerCase(Locale.ROOT);
@@ -131,12 +139,16 @@ public class StoreOrderService {
 
     // 매장 발주 상세 조회
     @Transactional(readOnly = true)
+    // 발주 상세를 조회한다.
+    // 헤더, 아이템, 상태 이력을 결합해 응답한다.
     public StoreOrderDto.DetailRes detail(String orderNo) {
         return StoreOrderDto.DetailRes.from(buildCreateRes(getOrderByOrderNo(orderNo)));
     }
 
     // 매장 발주 분석 조회
     @Transactional(readOnly = true)
+    // 발주 분석 데이터를 조회한다.
+    // 상태별 건수, 상위 SKU, 카테고리 분포를 집계한다.
     public StoreOrderDto.AnalyticsRes analytics(String storeCode, LocalDate from, LocalDate to) {
         List<StoreOrderDto.ListRes> orders = list(storeCode, null, from, to, null);
         List<StoreOrderHeader> headers = orders.stream().map(o -> getOrderByOrderNo(o.getOrderId())).toList();
@@ -261,7 +273,8 @@ public class StoreOrderService {
     }
 
     // 사용하는 메서드: create
-    // 생성 요청 아이템을 스냅샷 저장용 컨텍스트로 해석한다.
+    // 생성 라인을 저장한다.
+    // 변환 규칙에 따라 CreateLineReq.toEntity(CreateLineContext)를 직접 사용한다.
     private void saveCreateOrderItems(Long headerId, List<StoreOrderDto.CreateLineReq> items, CategoryLookup categoryLookup) {
         List<StoreOrderItem> entities = new ArrayList<>();
         for (StoreOrderDto.CreateLineReq req : items) {
