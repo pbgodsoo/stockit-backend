@@ -35,8 +35,9 @@ public class InventoryService {
     private static final int CONDITION_LONG_NO_MOVEMENT = 1;
     private static final int CONDITION_LOW_PERFORMANCE = 2;
     private static final int CONDITION_SIZE_COLOR_BIAS = 3;
+    private static final double SAFETY_STOCK_MULTIPLIER = 2.5d;
     private static final String LABEL_LONG_NO_MOVEMENT = "최근 24개월 이상 판매 이력이 없는 SKU";
-    private static final String LABEL_LOW_PERFORMANCE = "목표 판매 기준 대비 실적이 낮은 SKU";
+    private static final String LABEL_LOW_PERFORMANCE = "안전재고 대비 초과 누적 SKU";
     private static final String LABEL_SIZE_COLOR_BIAS = "극단 사이즈 재고 또는 특정 컬러 재고에 편중된 SKU";
     private static final double SIZE_COLOR_BIAS_THRESHOLD = 0.60d;
 
@@ -289,6 +290,9 @@ public class InventoryService {
         Set<Long> skuIds = normalInventories.stream().map(Inventory::getSkuId).collect(Collectors.toSet());
         Map<Long, ProductSku> skuById = productSkuRepository.findAllById(skuIds).stream()
                 .collect(Collectors.toMap(ProductSku::getId, Function.identity()));
+        Set<String> productCodes = skuById.values().stream().map(ProductSku::getProductCode).collect(Collectors.toSet());
+        Map<String, ProductMaster> productMasterByCode = productMasterRepository.findAllByCodeIn(productCodes).stream()
+                .collect(Collectors.toMap(ProductMaster::getCode, Function.identity()));
 
         Map<String, GroupAvailabilityAggregate> groupAvailability = buildGroupAvailability(normalInventories, skuById);
 
@@ -299,7 +303,8 @@ public class InventoryService {
         for (Inventory inventory : normalInventories) {
             ProductSku sku = skuById.get(inventory.getSkuId());
             if (sku == null) continue;
-            List<Integer> matchedCodes = evaluateCandidateConditions(inventory, sku, groupAvailability);
+            ProductMaster productMaster = productMasterByCode.get(sku.getProductCode());
+            List<Integer> matchedCodes = evaluateCandidateConditions(inventory, sku, productMaster, groupAvailability);
             if (matchedCodes.isEmpty()) continue;
 
             inventory.markCircularCandidate(now);
@@ -412,6 +417,7 @@ public class InventoryService {
     }
 
     private List<Integer> evaluateCandidateConditions(Inventory inventory, ProductSku sku,
+                                                      ProductMaster master,
                                                       Map<String, GroupAvailabilityAggregate> groupAvailability) {
         List<Integer> matchedCodes = new ArrayList<>();
 
@@ -421,10 +427,9 @@ public class InventoryService {
             matchedCodes.add(CONDITION_LONG_NO_MOVEMENT);
         }
 
-        int quantity = Math.max(0, n(inventory.getQuantity()));
         int available = Math.max(0, n(inventory.getAvailableQuantity()));
-        double ratio = quantity > 0 ? (double) available / quantity : 0.0;
-        if (ratio < 0.4 || available < 20) {
+        int warehouseSafetyStock = master == null ? 0 : Math.max(0, n(master.getWarehouseSafetyStock()));
+        if (warehouseSafetyStock > 0 && available > (warehouseSafetyStock * SAFETY_STOCK_MULTIPLIER)) {
             matchedCodes.add(CONDITION_LOW_PERFORMANCE);
         }
 
