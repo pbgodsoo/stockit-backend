@@ -416,6 +416,131 @@ public class InventoryService {
                 .toList();
     }
 
+    @Transactional
+    public InventoryDto.CircularCandidateConvertRes convertCircularCandidates(List<InventoryDto.CircularCandidateConvertItemReq> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return InventoryDto.CircularCandidateConvertRes.builder()
+                    .requestedCount(0)
+                    .convertedCount(0)
+                    .skippedCount(0)
+                    .items(List.of())
+                    .build();
+        }
+
+        Map<Long, Infrastructure> warehouseById = infrastructureRepository.findAll().stream()
+                .filter(i -> i.getLocationType() == LocationType.WAREHOUSE)
+                .collect(Collectors.toMap(Infrastructure::getId, Function.identity()));
+
+        Date now = new Date();
+        int convertedCount = 0;
+        List<InventoryDto.CircularCandidateConvertItemRes> results = new ArrayList<>();
+
+        for (InventoryDto.CircularCandidateConvertItemReq request : requests) {
+            Long inventoryId = request.getInventoryId();
+            int requested = request.getConvertQuantity() == null ? 0 : request.getConvertQuantity();
+
+            if (inventoryId == null || requested <= 0) {
+                results.add(InventoryDto.CircularCandidateConvertItemRes.builder()
+                        .inventoryId(inventoryId)
+                        .requested(requested)
+                        .converted(0)
+                        .reason("유효하지 않은 전환 수량입니다.")
+                        .build());
+                continue;
+            }
+
+            Optional<Inventory> sourceOpt = inventoryRepository.findWithLockById(inventoryId);
+            if (sourceOpt.isEmpty()) {
+                results.add(InventoryDto.CircularCandidateConvertItemRes.builder()
+                        .inventoryId(inventoryId)
+                        .requested(requested)
+                        .converted(0)
+                        .reason("재고를 찾을 수 없습니다.")
+                        .build());
+                continue;
+            }
+
+            Inventory source = sourceOpt.get();
+            if (source.getInventoryStatus() != InventoryStatus.CIRCULAR_CANDIDATE) {
+                results.add(InventoryDto.CircularCandidateConvertItemRes.builder()
+                        .inventoryId(inventoryId)
+                        .requested(requested)
+                        .converted(0)
+                        .reason("순환 재고 후보 상태가 아닙니다.")
+                        .build());
+                continue;
+            }
+            if (!warehouseById.containsKey(source.getLocationId())) {
+                results.add(InventoryDto.CircularCandidateConvertItemRes.builder()
+                        .inventoryId(inventoryId)
+                        .requested(requested)
+                        .converted(0)
+                        .reason("창고 재고만 전환할 수 있습니다.")
+                        .build());
+                continue;
+            }
+
+            int available = Math.max(0, n(source.getAvailableQuantity()));
+            if (requested > available) {
+                results.add(InventoryDto.CircularCandidateConvertItemRes.builder()
+                        .inventoryId(inventoryId)
+                        .requested(requested)
+                        .converted(0)
+                        .reason("전환 가능 재고를 초과했습니다.")
+                        .build());
+                continue;
+            }
+
+            Inventory target = inventoryRepository
+                    .findWithLockBySkuIdAndLocationIdAndInventoryStatus(source.getSkuId(), source.getLocationId(), InventoryStatus.CIRCULAR)
+                    .orElse(null);
+            if (target == null) {
+                target = Inventory.builder()
+                        .skuId(source.getSkuId())
+                        .locationId(source.getLocationId())
+                        .inventoryStatus(InventoryStatus.CIRCULAR)
+                        .quantity(0)
+                        .availableQuantity(0)
+                        .reservedQuantity(0)
+                        .inTransitQuantity(0)
+                        .statusChangedAt(now)
+                        .lastMovementAt(source.getLastMovementAt())
+                        .build();
+                target.markCircular(now);
+            } else {
+                target.markCircular(now);
+            }
+
+            source.decreaseForConversion(requested);
+            target.increaseForConversion(requested);
+
+            if (source.isEmptyStock()) {
+                inventoryCandidateConditionRepository.deleteByInventoryIdIn(List.of(source.getId()));
+                inventoryRepository.delete(source);
+            } else {
+                inventoryRepository.save(source);
+            }
+            inventoryRepository.save(target);
+
+            convertedCount += 1;
+            results.add(InventoryDto.CircularCandidateConvertItemRes.builder()
+                    .inventoryId(inventoryId)
+                    .requested(requested)
+                    .converted(requested)
+                    .reason("SUCCESS")
+                    .build());
+        }
+
+        int requestedCount = requests.size();
+        int skippedCount = requestedCount - convertedCount;
+        return InventoryDto.CircularCandidateConvertRes.builder()
+                .requestedCount(requestedCount)
+                .convertedCount(convertedCount)
+                .skippedCount(skippedCount)
+                .items(results)
+                .build();
+    }
+
     private List<Integer> evaluateCandidateConditions(Inventory inventory, ProductSku sku,
                                                       ProductMaster master,
                                                       Map<String, GroupAvailabilityAggregate> groupAvailability) {
@@ -490,11 +615,7 @@ public class InventoryService {
     }
 
     private int calculateConvertibleStock(Inventory inventory) {
-        int available = Math.max(0, n(inventory.getAvailableQuantity()));
-        if (available == 0) return 0;
-        int seed = Math.abs(Objects.hash(inventory.getId(), inventory.getSkuId()));
-        int candidate = 1 + (seed % Math.max(1, (available / 3) + 1));
-        return Math.min(available, candidate);
+        return Math.max(0, n(inventory.getAvailableQuantity()));
     }
 
     private long daysSince(Date date) {

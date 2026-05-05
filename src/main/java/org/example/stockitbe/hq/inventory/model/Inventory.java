@@ -11,7 +11,7 @@ import java.util.Date;
 
 @Entity
 @Table(name = "inventory", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_inventory_sku_location", columnNames = {"sku_id", "location_id"})
+        @UniqueConstraint(name = "uk_inventory_sku_location_status", columnNames = {"sku_id", "location_id", "inventory_status"})
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -67,5 +67,32 @@ public class Inventory extends BaseEntity {
     public void markCircularCandidate(Date changedAt) {
         this.inventoryStatus = InventoryStatus.CIRCULAR_CANDIDATE;
         this.statusChangedAt = changedAt == null ? new Date() : changedAt;
+    }
+
+    public void markCircular(Date changedAt) {
+        this.inventoryStatus = InventoryStatus.CIRCULAR;
+        this.statusChangedAt = changedAt == null ? new Date() : changedAt;
+    }
+
+    public void decreaseForConversion(int quantityToMove) {
+        int safeMove = Math.max(0, quantityToMove);
+        int nextAvailable = Math.max(0, n(this.availableQuantity) - safeMove);
+        int nextQuantity = Math.max(0, n(this.quantity) - safeMove);
+        this.availableQuantity = nextAvailable;
+        this.quantity = nextQuantity;
+    }
+
+    public void increaseForConversion(int quantityToMove) {
+        int safeMove = Math.max(0, quantityToMove);
+        this.availableQuantity = n(this.availableQuantity) + safeMove;
+        this.quantity = n(this.quantity) + safeMove;
+    }
+
+    public boolean isEmptyStock() {
+        return n(this.quantity) <= 0 && n(this.availableQuantity) <= 0;
+    }
+
+    private int n(Integer value) {
+        return value == null ? 0 : value;
     }
 }

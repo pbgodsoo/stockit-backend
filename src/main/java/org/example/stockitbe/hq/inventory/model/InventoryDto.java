@@ -1,6 +1,8 @@
 package org.example.stockitbe.hq.inventory.model;
 
 import lombok.*;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 
 import java.util.Date;
 import java.util.List;
@@ -80,5 +82,37 @@ public class InventoryDto {
     public static class CircularCandidateRefreshRes {
         private Integer scannedCount;
         private Integer convertedCount;
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CircularCandidateConvertItemReq {
+        @NotNull
+        private Long inventoryId;
+
+        @NotNull
+        @Min(1)
+        private Integer convertQuantity;
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class CircularCandidateConvertItemRes {
+        private Long inventoryId;
+        private Integer requested;
+        private Integer converted;
+        private String reason;
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class CircularCandidateConvertRes {
+        private Integer requestedCount;
+        private Integer convertedCount;
+        private Integer skippedCount;
+        private List<CircularCandidateConvertItemRes> items;
     }
 }
