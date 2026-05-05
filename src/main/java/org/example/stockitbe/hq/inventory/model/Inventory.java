@@ -63,4 +63,23 @@ public class Inventory extends BaseEntity {
         this.statusChangedAt = statusChangedAt == null ? new Date() : statusChangedAt;
         this.lastMovementAt = lastMovementAt == null ? new Date() : lastMovementAt;
     }
+
+    /**
+     * 발주 SHIPPING 진입 시 가용재고 증가 (이슈 #169 — 발주 ↔ 인벤토리 연결 룰).
+     * 도착 전 예약 가용재고로, 실재고(quantity) 는 변하지 않는다.
+     */
+    public void increaseAvailable(int delta) {
+        this.availableQuantity = this.availableQuantity + delta;
+        this.lastMovementAt = new Date();
+    }
+
+    /**
+     * 발주 COMPLETED (입고 확정) 시 가용재고를 실재고로 이동.
+     * available_quantity -= delta, quantity += delta.
+     */
+    public void moveAvailableToPhysical(int delta) {
+        this.availableQuantity = this.availableQuantity - delta;
+        this.quantity = this.quantity + delta;
+        this.lastMovementAt = new Date();
+    }
 }
