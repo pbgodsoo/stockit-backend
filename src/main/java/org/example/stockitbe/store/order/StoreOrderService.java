@@ -51,14 +51,12 @@ public class StoreOrderService {
         validateCreateItems(dto.getItems());
         Infrastructure store = lookupStore(dto.getStoreCode());
         Infrastructure warehouse = lookupWarehouseFromStore(store);
-        CategoryLookup categoryLookup = buildCategoryLookup();
-        List<ResolvedItem> resolvedItems = resolveCreateItems(dto.getItems(), categoryLookup);
         Date now = new Date();
 
-        StoreOrderHeader header = createHeader(dto, store, warehouse, resolvedItems, now);
+        StoreOrderHeader header = createHeader(dto, store, warehouse, now);
         StoreOrderHeader saved = headerRepository.save(header);
         saved.assignOrderNo(generateOrderNo(saved.getId(), now));
-        saveOrderItems(saved.getId(), resolvedItems);
+        saveCreateOrderItems(saved.getId(), dto.getItems(), buildCategoryLookup());
         appendOrderStatusHistory(saved.getId(), StoreOrderStatus.REQUESTED.name(), now,
                 safe(dto.getRequestedByMemberId()), dto.getRequestedByName(), null);
 
@@ -70,18 +68,16 @@ public class StoreOrderService {
     public StoreOrderDto.UpdateRes update(String orderNo, StoreOrderDto.UpdateReq dto) {
         validateUpdateItems(dto.getItems());
         StoreOrderHeader header = getOrderByOrderNo(orderNo);
-        CategoryLookup categoryLookup = buildCategoryLookup();
-        List<ResolvedItem> resolvedItems = resolveUpdateItems(dto.getItems(), categoryLookup);
         Date now = new Date();
 
         header.updateRequested(
                 now,
-                resolvedItems.size(),
-                resolvedItems.stream().mapToInt(r -> r.requestedQuantity).sum(),
+                dto.getItems().size(),
+                dto.getItems().stream().mapToInt(StoreOrderDto.UpdateLineReq::getRequestedQuantity).sum(),
                 trimToNull(dto.getMemo())
         );
         itemRepository.deleteAllByOrderHeaderId(header.getId());
-        saveOrderItems(header.getId(), resolvedItems);
+        saveUpdateOrderItems(header.getId(), dto.getItems(), buildCategoryLookup());
         appendOrderStatusHistory(header.getId(), StoreOrderStatus.REQUESTED.name(), now,
                 header.getRequestedByMemberId(), header.getRequestedByName(), "매장 발주 요청 수정");
 
@@ -266,27 +262,51 @@ public class StoreOrderService {
 
     // 사용하는 메서드: create
     // 생성 요청 아이템을 스냅샷 저장용 컨텍스트로 해석한다.
-    private List<ResolvedItem> resolveCreateItems(List<StoreOrderDto.CreateLineReq> items, CategoryLookup categoryLookup) {
-        List<ResolvedItem> resolved = new ArrayList<>();
+    private void saveCreateOrderItems(Long headerId, List<StoreOrderDto.CreateLineReq> items, CategoryLookup categoryLookup) {
+        List<StoreOrderItem> entities = new ArrayList<>();
         for (StoreOrderDto.CreateLineReq req : items) {
-            resolved.add(resolveSingleItem(req.getSkuCode(), req.getRequestedQuantity(), categoryLookup));
+            ResolvedItem resolved = resolveSingleItem(req.getSkuCode(), categoryLookup);
+            StoreOrderDto.CreateLineContext context = StoreOrderDto.CreateLineContext.builder()
+                    .orderHeaderId(headerId)
+                    .skuId(resolved.sku.getId())
+                    .productCode(resolved.product.getCode())
+                    .productName(resolved.product.getName())
+                    .mainCategory(resolved.mainCategory)
+                    .subCategory(resolved.subCategory)
+                    .color(resolved.sku.getColor())
+                    .size(resolved.sku.getSize())
+                    .unitPrice(resolved.sku.getUnitPrice())
+                    .build();
+            entities.add(req.toEntity(context));
         }
-        return resolved;
+        itemRepository.saveAll(entities);
     }
 
     // 사용하는 메서드: update
     // 수정 요청 아이템을 스냅샷 저장용 컨텍스트로 해석한다.
-    private List<ResolvedItem> resolveUpdateItems(List<StoreOrderDto.UpdateLineReq> items, CategoryLookup categoryLookup) {
-        List<ResolvedItem> resolved = new ArrayList<>();
+    private void saveUpdateOrderItems(Long headerId, List<StoreOrderDto.UpdateLineReq> items, CategoryLookup categoryLookup) {
+        List<StoreOrderItem> entities = new ArrayList<>();
         for (StoreOrderDto.UpdateLineReq req : items) {
-            resolved.add(resolveSingleItem(req.getSkuCode(), req.getRequestedQuantity(), categoryLookup));
+            ResolvedItem resolved = resolveSingleItem(req.getSkuCode(), categoryLookup);
+            StoreOrderDto.UpdateLineContext context = StoreOrderDto.UpdateLineContext.builder()
+                    .orderHeaderId(headerId)
+                    .skuId(resolved.sku.getId())
+                    .productCode(resolved.product.getCode())
+                    .productName(resolved.product.getName())
+                    .mainCategory(resolved.mainCategory)
+                    .subCategory(resolved.subCategory)
+                    .color(resolved.sku.getColor())
+                    .size(resolved.sku.getSize())
+                    .unitPrice(resolved.sku.getUnitPrice())
+                    .build();
+            entities.add(req.toEntity(context));
         }
-        return resolved;
+        itemRepository.saveAll(entities);
     }
 
     // 사용하는 메서드: create, update
     // SKU/상품/카테고리를 조회해 단일 아이템 컨텍스트를 구성한다.
-    private ResolvedItem resolveSingleItem(String skuCode, Integer requestedQuantity, CategoryLookup categoryLookup) {
+    private ResolvedItem resolveSingleItem(String skuCode, CategoryLookup categoryLookup) {
         ProductSku sku = lookupActiveSku(skuCode);
         ProductMaster product = productMasterRepository.findByCode(sku.getProductCode())
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_MASTER_NOT_FOUND));
@@ -300,7 +320,6 @@ public class StoreOrderService {
                 .product(product)
                 .mainCategory(mainCategory)
                 .subCategory(subCategory)
-                .requestedQuantity(requestedQuantity)
                 .build();
     }
 
@@ -318,27 +337,20 @@ public class StoreOrderService {
     // 사용하는 메서드: create
     // 발주 헤더 엔티티를 생성한다.
     private StoreOrderHeader createHeader(StoreOrderDto.CreateReq dto, Infrastructure store,
-                                          Infrastructure warehouse, List<ResolvedItem> resolvedItems, Date now) {
+                                          Infrastructure warehouse, Date now) {
         return dto.toEntity(
                 StoreOrderDto.CreateHeaderContext.builder()
                         .storeId(store.getId())
                         .warehouseId(warehouse.getId())
                         .requestedAt(now)
-                        .totalSkuCount(resolvedItems.size())
-                        .totalRequestedQuantity(resolvedItems.stream().mapToInt(r -> r.requestedQuantity).sum())
+                        .totalSkuCount(dto.getItems().size())
+                        .totalRequestedQuantity(dto.getItems().stream()
+                                .mapToInt(StoreOrderDto.CreateLineReq::getRequestedQuantity)
+                                .sum())
                         .memo(trimToNull(dto.getMemo()))
                         .temporaryOrderNo("TEMP-" + UUID.randomUUID())
                         .build()
         );
-    }
-
-    // 사용하는 메서드: create, update
-    // 발주 아이템 엔티티를 저장한다.
-    private void saveOrderItems(Long headerId, List<ResolvedItem> resolvedItems) {
-        List<StoreOrderItem> entities = resolvedItems.stream()
-                .map(r -> r.toEntity(headerId))
-                .toList();
-        itemRepository.saveAll(entities);
     }
 
     // 사용하는 메서드: create, update, cancel
@@ -478,23 +490,6 @@ public class StoreOrderService {
         private ProductMaster product;
         private String mainCategory;
         private String subCategory;
-        private Integer requestedQuantity;
-
-        private StoreOrderItem toEntity(Long orderHeaderId) {
-            return StoreOrderItem.builder()
-                    .orderHeaderId(orderHeaderId)
-                    .skuId(sku.getId())
-                    .skuCode(sku.getSkuCode())
-                    .productCode(product.getCode())
-                    .productName(product.getName())
-                    .mainCategory(mainCategory)
-                    .subCategory(subCategory)
-                    .color(sku.getColor())
-                    .size(sku.getSize())
-                    .unitPrice(sku.getUnitPrice())
-                    .requestedQuantity(requestedQuantity)
-                    .build();
-        }
     }
 
     private static class SkuAgg {
