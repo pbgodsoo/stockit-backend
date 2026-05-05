@@ -1,6 +1,8 @@
 package org.example.stockitbe.hq.inventory;
 
 import lombok.RequiredArgsConstructor;
+import org.example.stockitbe.common.exception.BaseException;
+import org.example.stockitbe.common.model.BaseResponseStatus;
 import org.example.stockitbe.hq.category.CategoryRepository;
 import org.example.stockitbe.hq.category.model.Category;
 import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
@@ -202,6 +204,55 @@ public class InventoryService {
                 })
                 .sorted(Comparator.comparing(InventoryDto.CompanyWideSkuDetailRes::getSkuCode))
                 .toList();
+    }
+
+    /**
+     * 발주 SHIPPING 진입 시 해당 창고 SKU 의 가용재고 증가 (이슈 #169 — 발주 ↔ 인벤토리 연결 룰).
+     * row 부재 시 신규 INSERT 분기. 동일 트랜잭션에서 호출자(PurchaseOrderService.startShipping)
+     * 가 실패하면 함께 롤백된다.
+     */
+    @Transactional
+    public void increaseAvailable(Long locationId, String skuCode, int quantity) {
+        if (quantity <= 0) return;
+        ProductSku sku = productSkuRepository.findBySkuCode(skuCode)
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_SKU_NOT_FOUND));
+
+        inventoryRepository.findBySkuIdAndLocationId(sku.getId(), locationId)
+                .ifPresentOrElse(
+                        inv -> inv.increaseAvailable(quantity),
+                        () -> inventoryRepository.save(Inventory.builder()
+                                .skuId(sku.getId())
+                                .locationId(locationId)
+                                .inventoryStatus(InventoryStatus.NORMAL)
+                                .quantity(0)
+                                .reservedQuantity(0)
+                                .inTransitQuantity(0)
+                                .availableQuantity(quantity)
+                                .build()));
+    }
+
+    /**
+     * 발주 COMPLETED (입고 확정) 진입 시 가용재고를 실재고로 이동.
+     * row 부재 시 신규 INSERT (가용재고 0, 실재고 quantity — SHIPPING 누락된 비정상 케이스 방어).
+     */
+    @Transactional
+    public void markPhysical(Long locationId, String skuCode, int quantity) {
+        if (quantity <= 0) return;
+        ProductSku sku = productSkuRepository.findBySkuCode(skuCode)
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_SKU_NOT_FOUND));
+
+        inventoryRepository.findBySkuIdAndLocationId(sku.getId(), locationId)
+                .ifPresentOrElse(
+                        inv -> inv.moveAvailableToPhysical(quantity),
+                        () -> inventoryRepository.save(Inventory.builder()
+                                .skuId(sku.getId())
+                                .locationId(locationId)
+                                .inventoryStatus(InventoryStatus.NORMAL)
+                                .quantity(quantity)
+                                .reservedQuantity(0)
+                                .inTransitQuantity(0)
+                                .availableQuantity(0)
+                                .build()));
     }
 
     private List<InventoryDto.LocationOptionRes> buildLocationOptions(LocationType locationType) {

@@ -7,6 +7,7 @@ import org.example.stockitbe.common.model.BaseResponseStatus;
 import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
+import org.example.stockitbe.hq.inventory.InventoryService;
 import org.example.stockitbe.hq.product.ProductSkuRepository;
 import org.example.stockitbe.hq.product.model.ProductSku;
 import org.example.stockitbe.hq.product.model.ProductStatus;
@@ -49,6 +50,7 @@ public class PurchaseOrderService {
     private final VendorProductRepository vendorProductRepository;
     private final InfrastructureRepository infrastructureRepository;
     private final ProductSkuRepository productSkuRepository;
+    private final InventoryService inventoryService;
 
     @Transactional(readOnly = true)
     public List<PurchaseOrderDto.ListRes> findAll(String vendorCode, PurchaseOrderStatus status,
@@ -222,6 +224,9 @@ public class PurchaseOrderService {
         PurchaseOrder po = lookupPurchaseOrder(code);
         po.markShipping();
         appendHistory(po, null);
+        // 발주 ↔ 인벤토리 연결 (이슈 #169) — 가용재고 += 발주 수량 (도착 전 예약)
+        itemRepository.findAllByPurchaseOrderId(po.getId())
+                .forEach(it -> inventoryService.increaseAvailable(po.getWarehouseId(), it.getSkuCode(), it.getQuantity()));
         return buildDetailRes(po);
     }
 
@@ -238,6 +243,9 @@ public class PurchaseOrderService {
         PurchaseOrder po = lookupPurchaseOrder(code);
         po.markCompleted();
         appendHistory(po, null);
+        // 발주 ↔ 인벤토리 연결 (이슈 #169) — 가용재고 → 실재고 이동
+        itemRepository.findAllByPurchaseOrderId(po.getId())
+                .forEach(it -> inventoryService.markPhysical(po.getWarehouseId(), it.getSkuCode(), it.getQuantity()));
         return buildDetailRes(po);
     }
 
