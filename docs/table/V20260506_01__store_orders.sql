@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS store_order_header (
     update_date DATETIME NOT NULL,
     CONSTRAINT pk_store_order_header PRIMARY KEY (id),
     CONSTRAINT uk_store_order_header_order_no UNIQUE (order_no),
+    CONSTRAINT chk_store_order_header_status CHECK (status IN ('REQUESTED', 'APPROVED', 'COMPLETED', 'CANCELLED')),
+    CONSTRAINT chk_store_order_header_fulfillment_status CHECK (
+        fulfillment_status IS NULL OR fulfillment_status IN ('READY_TO_SHIP', 'IN_TRANSIT', 'ARRIVED', 'RECEIVED')
+    ),
     CONSTRAINT chk_store_order_header_total_sku_count CHECK (total_sku_count >= 0),
     CONSTRAINT chk_store_order_header_total_requested_quantity CHECK (total_requested_quantity >= 0),
     CONSTRAINT fk_store_order_header_store FOREIGN KEY (store_id) REFERENCES infrastructure (id),
@@ -57,12 +61,17 @@ CREATE TABLE IF NOT EXISTS store_order_status_history (
     create_date DATETIME NOT NULL,
     update_date DATETIME NOT NULL,
     CONSTRAINT pk_store_order_status_history PRIMARY KEY (id),
+    CONSTRAINT chk_store_order_status_history_type CHECK (history_type IN ('ORDER_STATUS', 'FULFILLMENT_STATUS')),
     CONSTRAINT fk_store_order_status_history_header FOREIGN KEY (order_header_id) REFERENCES store_order_header (id)
 );
 
 CREATE INDEX idx_store_order_header_store_requestedat ON store_order_header (store_id, requested_at DESC);
 CREATE INDEX idx_store_order_header_status_requestedat ON store_order_header (status, requested_at DESC);
+CREATE INDEX idx_store_order_header_warehouse_fulfillment_requestedat
+    ON store_order_header (warehouse_id, fulfillment_status, requested_at DESC);
 CREATE INDEX idx_store_order_item_order_header_id ON store_order_item (order_header_id);
 CREATE INDEX idx_store_order_item_sku_id ON store_order_item (sku_id);
 CREATE INDEX idx_store_order_status_history_order_changedat ON store_order_status_history (order_header_id, changed_at DESC);
+CREATE INDEX idx_store_order_status_history_type_status_changedat
+    ON store_order_status_history (history_type, status, changed_at DESC);
 
