@@ -25,8 +25,6 @@ public class StoreSaleDto {
     @AllArgsConstructor
     @Builder
     public static class SaleReq {
-        @NotBlank
-        private String storeCode;
         @Valid
         @NotEmpty
         private List<SaleLineReq> items;

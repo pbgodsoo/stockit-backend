@@ -90,6 +90,7 @@ public enum BaseResponseStatus {
     STORE_SALE_STORE_NOT_FOUND(false, 4503, "매장 정보를 찾을 수 없습니다."),
     STORE_SALE_SKU_NOT_FOUND(false, 4504, "판매 SKU를 찾을 수 없습니다."),
     STORE_SALE_INSUFFICIENT_STOCK(false, 4505, "재고가 부족하여 판매를 확정할 수 없습니다."),
+    STORE_SALE_SCOPE_FORBIDDEN(false, 4506, "로그인한 매장 범위를 벗어난 요청입니다."),
 
     // 4600번대~ 매장 발주
     STORE_ORDER_NOT_FOUND(false, 4600, "매장 발주를 찾을 수 없습니다."),
@@ -100,6 +101,7 @@ public enum BaseResponseStatus {
     STORE_ORDER_SKU_NOT_FOUND(false, 4605, "발주 SKU를 찾을 수 없습니다."),
     STORE_ORDER_INVALID_STATUS_TRANSITION(false, 4606, "허용되지 않는 발주 상태 전환입니다."),
     STORE_ORDER_CANCEL_REASON_REQUIRED(false, 4607, "발주 취소 사유는 필수입니다."),
+    STORE_ORDER_SCOPE_FORBIDDEN(false, 4608, "로그인한 매장 범위를 벗어난 요청입니다."),
 
     // 4400번대 회원 관리
     USER_NOT_PENDING(false, 4400, "대기 상태인 신청만 처리할 수 있습니다."),
