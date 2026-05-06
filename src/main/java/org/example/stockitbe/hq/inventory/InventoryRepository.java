@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface InventoryRepository extends JpaRepository<Inventory, Long> {
+    List<Inventory> findAllByLocationId(Long locationId);
     List<Inventory> findAllBySkuIdIn(Collection<Long> skuIds);
     List<Inventory> findAllByInventoryStatus(InventoryStatus inventoryStatus);
 
