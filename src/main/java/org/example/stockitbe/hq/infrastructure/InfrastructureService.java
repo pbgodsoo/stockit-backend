@@ -90,7 +90,6 @@ public class InfrastructureService {
                 req.getContact().trim(),
                 req.getAddress().trim(),
                 req.getStatus(),
-                normalized.storeType(),
                 normalized.capacity()
         );
         Map<Long, Long> mappedStoreCountByWarehouseId = mappedStoreCountByWarehouseId(List.of(infra));
@@ -102,7 +101,7 @@ public class InfrastructureService {
         for (int i = 0; i < 2; i++) {
             String code = nextCode(infrastructureRepository.findAllByOrderByIdDesc().stream().map(Infrastructure::getCode).toList(), prefix);
             try {
-                return infrastructureRepository.save(req.toEntity(code, normalized.storeType(), normalized.capacity()));
+                return infrastructureRepository.save(req.toEntity(code, normalized.capacity()));
             } catch (DataIntegrityViolationException e) {
                 if (i == 1) throw e;
             }
@@ -112,16 +111,13 @@ public class InfrastructureService {
 
     private NormalizedInfra normalizeAndValidate(InfrastructureDto.UpsertReq req) {
         if (req.getLocationType() == LocationType.STORE) {
-            if (req.getStoreType() == null) {
-                throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
-            }
-            return new NormalizedInfra(req.getStoreType(), null);
+            return new NormalizedInfra(null);
         }
 
         if (req.getCapacity() == null || req.getCapacity().isBlank()) {
             throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
         }
-        return new NormalizedInfra(null, req.getCapacity().trim());
+        return new NormalizedInfra(req.getCapacity().trim());
     }
 
     private InfrastructureDto.Res toRes(Infrastructure infra, Map<Long, Long> mappedStoreCountByWarehouseId) {
@@ -170,6 +166,6 @@ public class InfrastructureService {
         return String.format("%s-%04d", prefix, max + 1);
     }
 
-    private record NormalizedInfra(StoreType storeType, String capacity) {
+    private record NormalizedInfra(String capacity) {
     }
 }
