@@ -36,4 +36,9 @@ public class AccountController {
         return ResponseEntity.ok(BaseResponse.success(accountService.reject(id)));
     }
 
+    @PostMapping("/{id}/withdraw")
+    public ResponseEntity<BaseResponse<AccountDto.ProcessRes>> withdraw(@PathVariable Long id) {
+        return ResponseEntity.ok(BaseResponse.success(accountService.withdraw(id)));
+    }
+
 }

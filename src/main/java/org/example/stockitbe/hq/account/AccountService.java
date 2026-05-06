@@ -2,6 +2,7 @@ package org.example.stockitbe.hq.account;
 
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.exception.BaseException;
+import org.example.stockitbe.common.jwt.JwtRefreshRepository;
 import org.example.stockitbe.common.model.BaseResponseStatus;
 import org.example.stockitbe.hq.account.model.AccountDto;
 import org.example.stockitbe.user.UserRepository;
@@ -18,6 +19,7 @@ import java.util.List;
 public class AccountService {
 
     private final UserRepository userRepository;
+    private final JwtRefreshRepository jwtRefreshRepository;
 
     @Transactional(readOnly = true)
     public List<AccountDto.PendingRes> getPendingAccounts() {
@@ -47,6 +49,20 @@ public class AccountService {
         return AccountDto.ProcessRes.from(user);
     }
 
+    //  본사 관리자가 사용자 계정을 탈퇴 처리
+    @Transactional
+    public AccountDto.ProcessRes withdraw(Long accountId) {
+        User user = findUserOrThrow(accountId);
+        validateApproved(user);
+
+        user.withdraw();
+        // 탈퇴 사용자의 모든 Refresh Token 삭제 → 즉시 강제 로그아웃 효과
+        jwtRefreshRepository.deleteAllByEmployeeCode(user.getEmployeeCode());
+
+        return AccountDto.ProcessRes.from(user);
+    }
+
+
     private User findUserOrThrow(Long accountId) {
         return userRepository.findById(accountId)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.USER_NOT_FOUND));
@@ -55,6 +71,16 @@ public class AccountService {
     private void validatePending(User user) {
         if (user.getStatus() != UserStatus.PENDING) {
             throw BaseException.from(BaseResponseStatus.USER_NOT_PENDING);
+        }
+    }
+
+    //  APPROVED 상태인 사용자만 탈퇴 처리 가능
+    private void validateApproved(User user) {
+        if (user.getStatus() != UserStatus.APPROVED) {
+            if (user.getStatus() == UserStatus.WITHDRAWN) {
+                throw BaseException.from(BaseResponseStatus.USER_ALREADY_WITHDRAWN);
+            }
+            throw BaseException.from(BaseResponseStatus.USER_NOT_APPROVED);
         }
     }
 

@@ -64,4 +64,10 @@ public class User {
         this.status = UserStatus.REJECTED;
         this.processedAt = LocalDateTime.now();
     }
+
+    //  본사 관리자가 사용자 계정을 탈퇴 처리
+    public void withdraw() {
+        this.status = UserStatus.WITHDRAWN;
+        this.processedAt = LocalDateTime.now();
+    }
 }
