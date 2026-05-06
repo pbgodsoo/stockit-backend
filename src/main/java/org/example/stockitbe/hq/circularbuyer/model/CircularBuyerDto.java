@@ -29,6 +29,8 @@ public class CircularBuyerDto {
         private String managerName;
         @NotBlank
         private String phone;
+        @NotBlank
+        private String partnerType;
 
         public CircularBuyer toEntity(String code) {
             return CircularBuyer.builder()
@@ -41,6 +43,7 @@ public class CircularBuyerDto {
                     .primaryMaterialFit(this.primaryMaterialFit)
                     .managerName(this.managerName)
                     .phone(this.phone)
+                    .partnerType(this.partnerType)
                     .build();
         }
     }
@@ -58,6 +61,7 @@ public class CircularBuyerDto {
         private String primaryMaterialFit;
         private String managerName;
         private String phone;
+        private String partnerType;
     }
 
     @Getter
@@ -75,6 +79,7 @@ public class CircularBuyerDto {
         private String primaryMaterialFit;
         private String managerName;
         private String phone;
+        private String partnerType;
 
         public static ListRes from(CircularBuyer v) {
             return ListRes.builder()
@@ -87,6 +92,7 @@ public class CircularBuyerDto {
                     .primaryMaterialFit(v.getPrimaryMaterialFit())
                     .managerName(v.getManagerName())
                     .phone(v.getPhone())
+                    .partnerType(v.getPartnerType())
                     .build();
         }
     }
@@ -120,6 +126,7 @@ public class CircularBuyerDto {
         private String companyName;
         private String primaryMaterialFit;
         private String industryGroup;
+        private String partnerType;
         private String rationale;
     }
 
@@ -143,6 +150,7 @@ public class CircularBuyerDto {
         private String primaryMaterialFit;
         private String managerName;
         private String phone;
+        private String partnerType;
         private Date createdAt;
         private Date updatedAt;
 
@@ -157,6 +165,7 @@ public class CircularBuyerDto {
                     .primaryMaterialFit(v.getPrimaryMaterialFit())
                     .managerName(v.getManagerName())
                     .phone(v.getPhone())
+                    .partnerType(v.getPartnerType())
                     .createdAt(v.getCreatedAt())
                     .updatedAt(v.getUpdatedAt())
                     .build();

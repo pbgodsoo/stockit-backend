@@ -25,6 +25,10 @@ public class CircularBuyerService {
             "natural-single", "synthetic", "blended"
     );
 
+    private static final Set<String> ALLOWED_PARTNER_TYPES = Set.of(
+            "local_small", "social_enterprise", "general"
+    );
+
     private static final String CODE_PREFIX = "RCV-";
     private static final int CODE_NUMBER_WIDTH = 3;
     private static final int CODE_NUMBER_MAX = 999;
@@ -52,6 +56,7 @@ public class CircularBuyerService {
     @Transactional
     public CircularBuyerDto.DetailRes create(CircularBuyerDto.CreateReq req) {
         validateMaterialFit(req.getPrimaryMaterialFit());
+        validatePartnerType(req.getPartnerType());
         String nextCode = nextCircularBuyerCode();
         CircularBuyer saved;
         try {
@@ -92,6 +97,9 @@ public class CircularBuyerService {
         if (req.getPrimaryMaterialFit() != null) {
             validateMaterialFit(req.getPrimaryMaterialFit());
         }
+        if (req.getPartnerType() != null) {
+            validatePartnerType(req.getPartnerType());
+        }
         CircularBuyer v = lookup(code);
         boolean rebuildEmbedding = isSemanticFieldChange(v, req);
         v.updateProfile(
@@ -102,7 +110,8 @@ public class CircularBuyerService {
                 req.getDescription(),
                 req.getPrimaryMaterialFit(),
                 req.getManagerName(),
-                req.getPhone()
+                req.getPhone(),
+                req.getPartnerType()
         );
         // ADR-021 — 의미 필드 중 하나라도 변경된 경우에만 임베딩 재생성. managerName/phone 만 바뀌면 OpenAI 콜 절약.
         if (rebuildEmbedding) {
@@ -135,6 +144,12 @@ public class CircularBuyerService {
     private void validateMaterialFit(String materialFit) {
         if (!ALLOWED_MATERIAL_FITS.contains(materialFit)) {
             throw BaseException.from(BaseResponseStatus.INVALID_MATERIAL_FIT);
+        }
+    }
+
+    private void validatePartnerType(String partnerType) {
+        if (!ALLOWED_PARTNER_TYPES.contains(partnerType)) {
+            throw BaseException.from(BaseResponseStatus.INVALID_PARTNER_TYPE);
         }
     }
 
