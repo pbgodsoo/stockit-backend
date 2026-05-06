@@ -6,6 +6,8 @@ import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.model.BaseResponseStatus;
 import org.example.stockitbe.hq.circularbuyer.model.CircularBuyer;
 import org.example.stockitbe.hq.circularbuyer.model.CircularBuyerDto;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +24,10 @@ public class CircularBuyerService {
     private static final Set<String> ALLOWED_MATERIAL_FITS = Set.of(
             "natural-single", "synthetic", "blended"
     );
+
+    private static final String CODE_PREFIX = "RCV-";
+    private static final int CODE_NUMBER_WIDTH = 3;
+    private static final int CODE_NUMBER_MAX = 999;
 
     private final CircularBuyerRepository circularBuyerRepository;
     private final CircularBuyerEmbeddingService embeddingService;
@@ -46,13 +52,39 @@ public class CircularBuyerService {
     @Transactional
     public CircularBuyerDto.DetailRes create(CircularBuyerDto.CreateReq req) {
         validateMaterialFit(req.getPrimaryMaterialFit());
-        if (circularBuyerRepository.existsByCode(req.getCode())) {
-            throw BaseException.from(BaseResponseStatus.DUPLICATE_CIRCULAR_BUYER_CODE);
+        String nextCode = nextCircularBuyerCode();
+        CircularBuyer saved;
+        try {
+            saved = circularBuyerRepository.save(req.toEntity(nextCode));
+        } catch (DataIntegrityViolationException e) {
+            // PESSIMISTIC_WRITE 가 잡지 못한 가장자리 케이스(빈 테이블 동시 호출 등) 안전망.
+            throw BaseException.from(BaseResponseStatus.CONCURRENT_CIRCULAR_BUYER_REGISTRATION);
         }
-        CircularBuyer saved = circularBuyerRepository.save(req.toEntity());
         // ADR-021 — 등록 시 항상 임베딩 생성. 실패해도 등록은 성공.
         embeddingService.embedAndApply(saved);
         return CircularBuyerDto.DetailRes.from(saved);
+    }
+
+    /**
+     * 자동 코드 부여 — RCV-{NNN} 3자리 zero-padded.
+     * PESSIMISTIC_WRITE 로 마지막 row 락을 잡아 동시 등록 시 한 트랜잭션이 끝날 때까지 다른 트랜잭션 대기.
+     */
+    private String nextCircularBuyerCode() {
+        List<CircularBuyer> top = circularBuyerRepository.findAllOrderByCodeDescForUpdate(PageRequest.of(0, 1));
+        int next = top.isEmpty() ? 1 : parseCodeNumber(top.get(0).getCode()) + 1;
+        if (next > CODE_NUMBER_MAX) {
+            throw BaseException.from(BaseResponseStatus.CIRCULAR_BUYER_CODE_EXHAUSTED);
+        }
+        return String.format("%s%0" + CODE_NUMBER_WIDTH + "d", CODE_PREFIX, next);
+    }
+
+    private static int parseCodeNumber(String code) {
+        if (code == null || !code.startsWith(CODE_PREFIX)) return 0;
+        try {
+            return Integer.parseInt(code.substring(CODE_PREFIX.length()));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     @Transactional
