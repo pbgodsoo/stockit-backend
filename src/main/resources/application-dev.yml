@@ -16,13 +16,29 @@ spring:
       hibernate:
         format_sql: true
 
-jwt:
-  secret: ${JWT_SECRET}
-  access-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS}
-  refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS}
-
+  # ADR-021 AI 거래처 추천 — 임베딩(text-embedding-3-small) + 추천 사유(gpt-4o-mini)
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      embedding:
+        options:
+          model: text-embedding-3-small
+      chat:
+        options:
+          model: gpt-4o-mini
 
 logging:
   level:
     org.hibernate.SQL: debug
     org.hibernate.orm.jdbc.bind: trace
+
+# SYS-001 본사 발주 자동 전환 배치
+purchase-order:
+  batch:
+    delay-ms: 300000      # 스케줄러 fixedDelay (5분)
+    wait-minutes: 1       # dev 에선 짧게 (시연·테스트 편의)
+
+jwt:
+  secret: ${JWT_SECRET}
+  access-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS}
+  refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS}
