@@ -48,6 +48,7 @@ public class InfrastructureMappingService {
                 if (map.getRole() == StoreWarehouseRole.BACKUP) backup = map;
             }
             return InfrastructureMappingDto.StoreMappingItem.builder()
+                    .storeId(store.getId())
                     .storeCode(store.getCode())
                     .storeName(store.getName())
                     .region(store.getRegion())
@@ -150,6 +151,7 @@ public class InfrastructureMappingService {
             if (map.getRole() == StoreWarehouseRole.BACKUP) backup = map;
         }
         return InfrastructureMappingDto.StoreMappingItem.builder()
+                .storeId(store.getId())
                 .storeCode(store.getCode())
                 .storeName(store.getName())
                 .region(store.getRegion())

@@ -13,6 +13,7 @@ public class InfrastructureMappingDto {
     @AllArgsConstructor
     @Builder
     public static class StoreMappingItem {
+        private Long storeId;
         private String storeCode;
         private String storeName;
         private String region;
