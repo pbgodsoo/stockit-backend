@@ -1,5 +1,6 @@
 package org.example.stockitbe.common.config;
 
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.jwt.JwtAuthFilter;
 import org.springframework.context.annotation.Bean;
@@ -44,6 +45,17 @@ public class SecurityConfig {
                 .requestMatchers("/api/store/**").hasRole("STORE")            // 매장
                 .requestMatchers("/api/warehouse/**").hasRole("WAREHOUSE")    // 창고
                 .anyRequest().authenticated()
+        );
+
+        http.exceptionHandling(ex -> ex
+                .authenticationEntryPoint((req, res, authEx) -> {
+                    res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    res.setContentType("application/json;charset=UTF-8");
+                    res.setCharacterEncoding("UTF-8");
+                    res.getWriter().write(
+                            "{\"success\":false,\"code\":3002,\"message\":\"인증이 필요합니다.\"}"
+                    );
+                })
         );
 
         // LoginFilter 등록 (직접 인스턴스화)
