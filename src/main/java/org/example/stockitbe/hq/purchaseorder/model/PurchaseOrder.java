@@ -76,58 +76,64 @@ public class PurchaseOrder extends BaseEntity {
         this.memberId = memberId;
         this.memberName = memberName;
         this.totalAmount = totalAmount == null ? 0L : totalAmount;
-        this.status = PurchaseOrderStatus.PENDING;
+        this.status = PurchaseOrderStatus.REQUESTED;
     }
 
+    /** REQUESTED → APPROVED. SYS-001 배치 자동 전환 (거래처 책임). */
     public void markApproved() {
-        if (this.status != PurchaseOrderStatus.PENDING) {
+        if (this.status != PurchaseOrderStatus.REQUESTED) {
             throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_INVALID_STATUS_TRANSITION);
         }
         this.status = PurchaseOrderStatus.APPROVED;
     }
 
-    public void markShipping() {
+    /** APPROVED → READY_TO_SHIP. SYS-001 배치 자동 전환 (거래처 배송 준비). */
+    public void markReadyToShip() {
         if (this.status != PurchaseOrderStatus.APPROVED) {
             throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_INVALID_STATUS_TRANSITION);
         }
-        this.status = PurchaseOrderStatus.SHIPPING;
+        this.status = PurchaseOrderStatus.READY_TO_SHIP;
     }
 
-    /**
-     * 배송 완료 — SHIPPING → DELIVERED. SYS-001 배치 자동 (30분 경과) 또는 force 트리거.
-     * 공급처 책임 단계 (운송 도착) — ADR-013 / ADR-019 일관.
-     */
-    public void markDelivered() {
-        if (this.status != PurchaseOrderStatus.SHIPPING) {
+    /** READY_TO_SHIP → IN_TRANSIT. SYS-001 배치 자동 전환 — 인벤토리 가용재고 + 시점. */
+    public void markInTransit() {
+        if (this.status != PurchaseOrderStatus.READY_TO_SHIP) {
             throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_INVALID_STATUS_TRANSITION);
         }
-        this.status = PurchaseOrderStatus.DELIVERED;
+        this.status = PurchaseOrderStatus.IN_TRANSIT;
     }
 
-    /**
-     * 입고 확정 — DELIVERED → COMPLETED. 창고 [입고 확정] 액션 (검수 미구현, ADR-015).
-     */
+    /** IN_TRANSIT → ARRIVED. SYS-001 배치 자동 전환 (창고 도착). */
+    public void markArrived() {
+        if (this.status != PurchaseOrderStatus.IN_TRANSIT) {
+            throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_INVALID_STATUS_TRANSITION);
+        }
+        this.status = PurchaseOrderStatus.ARRIVED;
+    }
+
+    /** ARRIVED → COMPLETED. 창고 [입고 확정] 매뉴얼 (검수 미구현, ADR-015). */
     public void markCompleted() {
-        if (this.status != PurchaseOrderStatus.DELIVERED) {
+        if (this.status != PurchaseOrderStatus.ARRIVED) {
             throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_INVALID_STATUS_TRANSITION);
         }
         this.status = PurchaseOrderStatus.COMPLETED;
     }
 
-    public void markRejected(String reason) {
-        if (this.status != PurchaseOrderStatus.PENDING) {
+    /** REQUESTED → CANCELLED. 승인 대기 단계에서만 본사 [취소] 가능. */
+    public void markCancelled(String reason) {
+        if (this.status != PurchaseOrderStatus.REQUESTED) {
             throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_INVALID_STATUS_TRANSITION);
         }
-        this.status = PurchaseOrderStatus.REJECTED;
+        this.status = PurchaseOrderStatus.CANCELLED;
         this.cancelReason = reason;
     }
 
     /**
-     * items 교체 + totalAmount 재계산. PENDING 만 허용.
+     * items 교체 + totalAmount 재계산. REQUESTED 만 허용.
      * Service 가 기존 items 를 별도로 삭제하고 신규 items 를 save 한 뒤 호출.
      */
     public void recalculateTotalAmount(List<PurchaseOrderItem> items) {
-        if (this.status != PurchaseOrderStatus.PENDING) {
+        if (this.status != PurchaseOrderStatus.REQUESTED) {
             throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_INVALID_STATUS_TRANSITION);
         }
         long sum = items.stream().mapToLong(PurchaseOrderItem::getSubtotal).sum();
@@ -135,7 +141,7 @@ public class PurchaseOrder extends BaseEntity {
     }
 
     public void updateLogistics(Long warehouseId, String warehouseName) {
-        if (this.status != PurchaseOrderStatus.PENDING) {
+        if (this.status != PurchaseOrderStatus.REQUESTED) {
             throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_INVALID_STATUS_TRANSITION);
         }
         if (warehouseId != null) this.warehouseId = warehouseId;

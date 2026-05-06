@@ -24,9 +24,9 @@ public class InboundService {
     private final PurchaseOrderService purchaseOrderService;
 
     /**
-     * 입고 목록 — 창고 관심사는 DELIVERED(도착됨)/COMPLETED(입고완료) 만.
-     * SHIPPING 은 공급처 단계(운송중)라 창고 화면에서 안 보임 — 본사 발주 화면에서 진행 상황만 확인.
-     * status 미지정 시 두 상태 모두, 지정 시 그 status 만 (DELIVERED/COMPLETED 외엔 빈 결과).
+     * 입고 목록 — 창고 관심사는 READY_TO_SHIP/IN_TRANSIT/ARRIVED/COMPLETED 4상태.
+     * REQUESTED/APPROVED 는 본사 승인 단계라 창고 화면에서 숨김. CANCELLED 는 취소된 발주.
+     * status 미지정 시 4상태 모두, 지정 시 그 status 만 (4상태 외엔 빈 결과).
      */
     @Transactional(readOnly = true)
     public List<PurchaseOrderDto.ListRes> findAll(PurchaseOrderStatus status,
@@ -56,6 +56,9 @@ public class InboundService {
     }
 
     private static boolean isInboundStatus(PurchaseOrderStatus s) {
-        return s == PurchaseOrderStatus.DELIVERED || s == PurchaseOrderStatus.COMPLETED;
+        return s == PurchaseOrderStatus.READY_TO_SHIP
+                || s == PurchaseOrderStatus.IN_TRANSIT
+                || s == PurchaseOrderStatus.ARRIVED
+                || s == PurchaseOrderStatus.COMPLETED;
     }
 }
