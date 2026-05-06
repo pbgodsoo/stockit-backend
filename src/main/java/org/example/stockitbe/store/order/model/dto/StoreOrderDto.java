@@ -27,9 +27,6 @@ public class StoreOrderDto {
     @AllArgsConstructor
     @Builder
     public static class CreateReq {
-        @NotBlank
-        private String storeCode;
-        private String storeLocationId;
         private String requestedByMemberId;
         @NotBlank
         private String requestedByName;

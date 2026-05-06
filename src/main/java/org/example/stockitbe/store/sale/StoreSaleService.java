@@ -19,6 +19,7 @@ import org.example.stockitbe.hq.product.model.ProductStatus;
 import org.example.stockitbe.store.sale.model.dto.StoreSaleDto;
 import org.example.stockitbe.store.sale.model.entity.StoreSaleHeader;
 import org.example.stockitbe.store.sale.model.entity.StoreSaleItem;
+import org.example.stockitbe.user.model.AuthUserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +31,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -51,12 +53,12 @@ public class StoreSaleService {
 
     // 판매
     @Transactional
-    public StoreSaleDto.SaleRes create(StoreSaleDto.SaleReq dto) {
+    public StoreSaleDto.SaleRes create(StoreSaleDto.SaleReq dto, AuthUserDetails me) {
         // 1) 요청 데이터(판매 SKU 존재 여부)를 검증한다.
         validateCreateRequest(dto);
 
         // 2) 매장/카테고리 기준 데이터를 조회한다.
-        Infrastructure store = lookupStore(dto.getStoreCode());
+        Infrastructure store = resolveStore(me);
         CategoryLookup categoryLookup = buildCategoryLookup();
 
         // 3) 라인별로 SKU/재고/상품 정보를 조회하고 재고 락 기반 검증을 수행한다.
@@ -81,9 +83,10 @@ public class StoreSaleService {
 
     // 판매 내역 목록 조회
     @Transactional(readOnly = true)
-    public List<StoreSaleDto.SaleListRes> findAll(String storeCode, LocalDate from, LocalDate to, String keyword) {
+    public List<StoreSaleDto.SaleListRes> findAll(AuthUserDetails me, LocalDate from, LocalDate to, String keyword) {
         // 1) 조회 필터(매장/기간/키워드)를 표준 형태로 정리한다.
-        Long storeIdFilter = (storeCode == null || storeCode.isBlank()) ? null : lookupStore(storeCode).getId();
+        Infrastructure store = resolveStore(me);
+        Long storeIdFilter = store.getId();
         String safeKeyword = keyword == null ? "" : keyword.trim().toLowerCase(Locale.ROOT);
         Date fromDate = from == null ? null : Date.from(from.atStartOfDay(ZoneId.systemDefault()).toInstant());
         Date toDateExclusive = to == null ? null : Date.from(to.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant());
@@ -107,10 +110,10 @@ public class StoreSaleService {
                 continue;
             }
 
-            Infrastructure store = storeById.get(header.getStoreId());
+            Infrastructure headerStore = storeById.get(header.getStoreId());
             result.add(StoreSaleDto.SaleListRes.from(
                     header,
-                    store == null ? "" : store.getCode(),
+                    headerStore == null ? "" : headerStore.getCode(),
                     buildHeadline(saleItems)
             ));
         }
@@ -119,10 +122,12 @@ public class StoreSaleService {
 
     // 판매 내역 상세 조회
     @Transactional(readOnly = true)
-    public StoreSaleDto.SaleDetailRes findDetail(String saleNo) {
+    public StoreSaleDto.SaleDetailRes findDetail(String saleNo, AuthUserDetails me) {
         // 1) 판매번호로 판매 헤더를 조회한다.
         StoreSaleHeader header = headerRepository.findBySaleNo(saleNo)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.STORE_SALE_NOT_FOUND));
+        Infrastructure store = resolveStore(me);
+        assertOwnedByStore(header.getStoreId(), store.getId());
 
         // 2) 판매 아이템과 매장 코드를 조회한다.
         List<StoreSaleItem> items = itemRepository.findAllBySaleHeaderIdOrderByIdAsc(header.getId());
@@ -154,6 +159,24 @@ public class StoreSaleService {
     private Infrastructure lookupStore(String storeCode) {
         return infrastructureRepository.findByCodeAndLocationType(storeCode, LocationType.STORE)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.STORE_SALE_STORE_NOT_FOUND));
+    }
+
+    // 사용하는 메서드: create, findAll, findDetail
+    // 로그인 사용자 컨텍스트로 매장을 조회한다.
+    private Infrastructure resolveStore(AuthUserDetails me) {
+        String locationCode = me == null ? null : me.getLocationCode();
+        if (locationCode == null || locationCode.isBlank()) {
+            throw BaseException.from(BaseResponseStatus.STORE_SALE_STORE_NOT_FOUND);
+        }
+        return lookupStore(locationCode);
+    }
+
+    // 사용하는 메서드: findDetail
+    // 판매 데이터의 소유 매장과 로그인 매장의 일치 여부를 검증한다.
+    private void assertOwnedByStore(Long targetStoreId, Long actorStoreId) {
+        if (!Objects.equals(targetStoreId, actorStoreId)) {
+            throw BaseException.from(BaseResponseStatus.STORE_SALE_SCOPE_FORBIDDEN);
+        }
     }
 
     // 사용하는 메서드: create

@@ -24,6 +24,7 @@ import org.example.stockitbe.store.order.model.dto.StoreOrderDto;
 import org.example.stockitbe.store.order.model.entity.StoreOrderHeader;
 import org.example.stockitbe.store.order.model.entity.StoreOrderItem;
 import org.example.stockitbe.store.order.model.entity.StoreOrderStatusHistory;
+import org.example.stockitbe.user.model.AuthUserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,9 +56,9 @@ public class StoreOrderService {
     @Transactional
     // 매장 발주를 신규 생성한다.
     // 라인 검증, 매장/창고 조회, 헤더·라인 저장, 상태 이력 기록을 순차적으로 수행한다.
-    public StoreOrderDto.CreateRes create(StoreOrderDto.CreateReq dto) {
+    public StoreOrderDto.CreateRes create(StoreOrderDto.CreateReq dto, AuthUserDetails me) {
         validateCreateItems(dto.getItems());
-        Infrastructure store = lookupStore(dto.getStoreCode());
+        Infrastructure store = resolveStore(me);
         Infrastructure warehouse = lookupWarehouseFromStore(store);
         Date now = new Date();
 
@@ -75,9 +76,10 @@ public class StoreOrderService {
     @Transactional
     // 수정 가능한 발주를 업데이트한다.
     // 헤더 합계를 재계산하고 상세 라인을 전체 교체한 뒤 이력을 남긴다.
-    public StoreOrderDto.UpdateRes update(String orderNo, StoreOrderDto.UpdateReq dto) {
+    public StoreOrderDto.UpdateRes update(String orderNo, StoreOrderDto.UpdateReq dto, AuthUserDetails me) {
         validateUpdateItems(dto.getItems());
-        StoreOrderHeader header = getOrderByOrderNo(orderNo);
+        Infrastructure store = resolveStore(me);
+        StoreOrderHeader header = getOwnedOrderByOrderNo(orderNo, store.getId());
         Date now = new Date();
 
         header.updateRequested(
@@ -98,8 +100,9 @@ public class StoreOrderService {
     @Transactional
     // 발주를 취소한다.
     // 추적을 위해 취소 사유는 필수로 검증한다.
-    public StoreOrderDto.CancelRes cancel(String orderNo, StoreOrderDto.CancelReq dto) {
-        StoreOrderHeader header = getOrderByOrderNo(orderNo);
+    public StoreOrderDto.CancelRes cancel(String orderNo, StoreOrderDto.CancelReq dto, AuthUserDetails me) {
+        Infrastructure store = resolveStore(me);
+        StoreOrderHeader header = getOwnedOrderByOrderNo(orderNo, store.getId());
         String cancelReason = trimToNull(dto.getCancelReason());
         if (cancelReason == null) throw BaseException.from(BaseResponseStatus.STORE_ORDER_CANCEL_REASON_REQUIRED);
 
@@ -111,8 +114,9 @@ public class StoreOrderService {
     }
 
     @Transactional
-    public StoreOrderDto.ApproveRes approve(String orderNo, StoreOrderDto.ApproveReq dto) {
-        StoreOrderHeader header = getOrderByOrderNo(orderNo);
+    public StoreOrderDto.ApproveRes approve(String orderNo, StoreOrderDto.ApproveReq dto, AuthUserDetails me) {
+        Infrastructure store = resolveStore(me);
+        StoreOrderHeader header = getOwnedOrderByOrderNo(orderNo, store.getId());
         Date now = new Date();
 
         header.markApproved();
@@ -137,8 +141,9 @@ public class StoreOrderService {
     @Transactional(readOnly = true)
     // 발주 목록을 조회한다.
     // 매장/상태/기간/키워드 필터를 적용한다.
-    public List<StoreOrderDto.ListRes> list(String storeCode, String status, LocalDate from, LocalDate to, String keyword) {
-        Long storeIdFilter = (storeCode == null || storeCode.isBlank()) ? null : lookupStore(storeCode).getId();
+    public List<StoreOrderDto.ListRes> list(String status, LocalDate from, LocalDate to, String keyword, AuthUserDetails me) {
+        Infrastructure store = resolveStore(me);
+        Long storeIdFilter = store.getId();
         String safeKeyword = keyword == null ? "" : keyword.trim().toLowerCase(Locale.ROOT);
         Date fromDate = from == null ? null : Date.from(from.atStartOfDay(ZoneId.systemDefault()).toInstant());
         Date toDateExclusive = to == null ? null : Date.from(to.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant());
@@ -155,11 +160,11 @@ public class StoreOrderService {
             if (!matchesHeaderFilter(header, storeIdFilter, statusFilter, fromDate, toDateExclusive)) continue;
             List<StoreOrderItem> items = itemsByHeader.getOrDefault(header.getId(), List.of());
             if (!matchesKeyword(header, items, safeKeyword)) continue;
-            Infrastructure store = storeById.get(header.getStoreId());
+            Infrastructure headerStore = storeById.get(header.getStoreId());
             result.add(StoreOrderDto.ListRes.from(
                     header,
-                    store == null ? "" : store.getCode(),
-                    store == null ? "" : store.getName(),
+                    headerStore == null ? "" : headerStore.getCode(),
+                    headerStore == null ? "" : headerStore.getName(),
                     buildHeadline(items)
             ));
         }
@@ -170,16 +175,17 @@ public class StoreOrderService {
     @Transactional(readOnly = true)
     // 발주 상세를 조회한다.
     // 헤더, 아이템, 상태 이력을 결합해 응답한다.
-    public StoreOrderDto.DetailRes detail(String orderNo) {
-        return StoreOrderDto.DetailRes.from(buildCreateRes(getOrderByOrderNo(orderNo)));
+    public StoreOrderDto.DetailRes detail(String orderNo, AuthUserDetails me) {
+        Infrastructure store = resolveStore(me);
+        return StoreOrderDto.DetailRes.from(buildCreateRes(getOwnedOrderByOrderNo(orderNo, store.getId())));
     }
 
     // 매장 발주 분석 조회
     @Transactional(readOnly = true)
     // 발주 분석 데이터를 조회한다.
     // 상태별 건수, 상위 SKU, 카테고리 분포를 집계한다.
-    public StoreOrderDto.AnalyticsRes analytics(String storeCode, LocalDate from, LocalDate to) {
-        List<StoreOrderDto.ListRes> orders = list(storeCode, null, from, to, null);
+    public StoreOrderDto.AnalyticsRes analytics(LocalDate from, LocalDate to, AuthUserDetails me) {
+        List<StoreOrderDto.ListRes> orders = list(null, from, to, null, me);
         List<StoreOrderHeader> headers = orders.stream().map(o -> getOrderByOrderNo(o.getOrderId())).toList();
         Map<Long, List<StoreOrderItem>> itemsByHeader = loadItemsByHeader(headers);
 
@@ -277,6 +283,16 @@ public class StoreOrderService {
     private Infrastructure lookupStore(String storeCode) {
         return infrastructureRepository.findByCodeAndLocationType(storeCode, LocationType.STORE)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.STORE_ORDER_STORE_NOT_FOUND));
+    }
+
+    // 사용하는 메서드: create, update, cancel, approve, list, detail, analytics
+    // 로그인 사용자 컨텍스트로 매장을 조회한다.
+    private Infrastructure resolveStore(AuthUserDetails me) {
+        String locationCode = me == null ? null : me.getLocationCode();
+        if (locationCode == null || locationCode.isBlank()) {
+            throw BaseException.from(BaseResponseStatus.STORE_ORDER_STORE_NOT_FOUND);
+        }
+        return lookupStore(locationCode);
     }
 
     // 사용하는 메서드: create
@@ -519,6 +535,16 @@ public class StoreOrderService {
     private StoreOrderHeader getOrderByOrderNo(String orderNo) {
         return headerRepository.findByOrderNo(orderNo)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.STORE_ORDER_NOT_FOUND));
+    }
+
+    // 사용하는 메서드: update, cancel, approve, detail
+    // 주문 소유 매장과 로그인 매장의 일치 여부를 검증한다.
+    private StoreOrderHeader getOwnedOrderByOrderNo(String orderNo, Long actorStoreId) {
+        StoreOrderHeader header = getOrderByOrderNo(orderNo);
+        if (!Objects.equals(header.getStoreId(), actorStoreId)) {
+            throw BaseException.from(BaseResponseStatus.STORE_ORDER_SCOPE_FORBIDDEN);
+        }
+        return header;
     }
 
     private String trimToNull(String s) {
