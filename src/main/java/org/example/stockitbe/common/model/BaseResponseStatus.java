@@ -60,6 +60,8 @@ public enum BaseResponseStatus {
     USER_NOT_PENDING(false, 4400, "대기 상태인 신청만 처리할 수 있습니다."),
     USER_NOT_APPROVED(false, 4401, "승인된 사용자만 탈퇴 처리할 수 있습니다."),
     USER_ALREADY_WITHDRAWN(false, 4402, "이미 탈퇴 처리된 사용자입니다."),
+    USER_PASSWORD_SAME(false, 4403, "새 비밀번호가 기존 비밀번호와 동일합니다."),
+
 
     // 5000번대 실패
     FAIL(false, 5000, "요청 실패");

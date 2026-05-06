@@ -70,4 +70,15 @@ public class User {
         this.status = UserStatus.WITHDRAWN;
         this.processedAt = LocalDateTime.now();
     }
+
+    //  본인이 마이페이지에서 전화번호 수정
+    public void updatePhone(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
+    }
+
+    //  본인이 마이페이지에서 비밀번호 변경
+    public void updatePassword(String encodedPassword) {
+        this.password = encodedPassword;
+    }
+
 }

@@ -1,5 +1,6 @@
 package org.example.stockitbe.user.model;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -84,4 +85,50 @@ public class UserDto {
         private String name;
         private UserRole role;
     }
+
+    //  마이페이지
+    @Getter
+    @Builder
+    public static class MypageRes {
+        private Long id;
+        private String employeeCode;
+        private String name;
+        private String email;
+        private String locationCode;
+        private String locationName;
+        private UserRole role;
+        private UserStatus status;
+        private String phoneNumber;
+
+        public static MypageRes from(User entity) {
+            return MypageRes.builder()
+                    .id(entity.getId())
+                    .employeeCode(entity.getEmployeeCode())
+                    .name(entity.getName())
+                    .email(entity.getEmail())
+                    .locationCode(entity.getLocationCode())
+                    .locationName(entity.getLocationName())
+                    .role(entity.getRole())
+                    .status(entity.getStatus())
+                    .phoneNumber(entity.getPhoneNumber())
+                    .build();
+        }
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class UpdatePhoneReq {
+        private String phoneNumber;
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class UpdatePasswordReq {
+        private String currentPassword;
+        private String newPassword;
+    }
+
+
 }

@@ -12,14 +12,13 @@ import org.example.stockitbe.common.jwt.JwtRefreshRepository;
 import org.example.stockitbe.common.jwt.JwtUtil;
 import org.example.stockitbe.common.model.BaseResponse;
 import org.example.stockitbe.common.model.BaseResponseStatus;
+import org.example.stockitbe.user.model.AuthUserDetails;
 import org.example.stockitbe.user.model.User;
 import org.example.stockitbe.user.model.UserDto;
 import org.example.stockitbe.user.model.UserStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
 
 
 @RestController
@@ -116,6 +115,29 @@ public class UserController {
 
         return ResponseEntity.ok(BaseResponse.success(null));
     }
+
+    @GetMapping("/mypage")
+    public ResponseEntity<BaseResponse<UserDto.MypageRes>> getMypage(
+            @AuthenticationPrincipal AuthUserDetails userDetails) {
+        return ResponseEntity.ok(BaseResponse.success(
+                userService.getMypage(userDetails.getEmployeeCode())
+        ));
+    }
+
+    @PatchMapping("/mypage/password")
+    public ResponseEntity<BaseResponse<Void>> updatePassword(
+            @AuthenticationPrincipal AuthUserDetails userDetails,
+            @RequestBody UserDto.UpdatePasswordReq req) {
+        userService.updatePassword(
+                userDetails.getEmployeeCode(),
+                req.getCurrentPassword(),
+                req.getNewPassword()
+        );
+        return ResponseEntity.ok(BaseResponse.success(null));
+    }
+
+
+
 
     private String extractCookie(HttpServletRequest request, String name) {
         if (request.getCookies() == null) return null;
