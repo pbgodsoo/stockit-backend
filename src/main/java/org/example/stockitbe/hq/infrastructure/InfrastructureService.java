@@ -8,13 +8,22 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class InfrastructureService {
 
+    private static final Map<String, String> REGION_CODE_MAP = buildRegionCodeMap();
+    private static final Pattern INFRA_CODE_PATTERN = Pattern.compile("^(ST|WH)-([A-Z]{2})-(\\d{4})$");
+
     private final InfrastructureRepository infrastructureRepository;
+    private final StoreWarehouseMapRepository storeWarehouseMapRepository;
 
     @Transactional(readOnly = true)
     public List<InfrastructureDto.Res> findInfrastructures(LocationType type, String keyword, String region, InfraStatus status) {
@@ -44,24 +53,26 @@ public class InfrastructureService {
             }
         }
 
-        return rows.stream().map(this::toRes).toList();
+        Map<Long, Long> mappedStoreCountByWarehouseId = mappedStoreCountByWarehouseId(rows);
+        return rows.stream().map(row -> toRes(row, mappedStoreCountByWarehouseId)).toList();
     }
 
     @Transactional(readOnly = true)
     public InfrastructureDto.Res findInfrastructureByCode(String code) {
         Infrastructure infra = infrastructureRepository.findByCode(code)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.NOT_FOUND_DATA));
-        return toRes(infra);
+        Map<Long, Long> mappedStoreCountByWarehouseId = mappedStoreCountByWarehouseId(List.of(infra));
+        return toRes(infra, mappedStoreCountByWarehouseId);
     }
 
     @Transactional
     public InfrastructureDto.Res createInfrastructure(InfrastructureDto.UpsertReq req) {
-        NormalizedInfra normalized = normalizeAndValidate(req, null);
+        NormalizedInfra normalized = normalizeAndValidate(req);
         if (infrastructureRepository.existsByLocationTypeAndNameIgnoreCase(req.getLocationType(), req.getName().trim())) {
             throw BaseException.from(duplicateNameStatus(req.getLocationType()));
         }
         Infrastructure saved = saveWithGeneratedCode(req, normalized);
-        return toRes(saved);
+        return toRes(saved, Map.of());
     }
 
     @Transactional
@@ -73,7 +84,7 @@ public class InfrastructureService {
             throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
         }
 
-        NormalizedInfra normalized = normalizeAndValidate(req, code);
+        NormalizedInfra normalized = normalizeAndValidate(req);
         if (infrastructureRepository.existsByLocationTypeAndNameIgnoreCaseAndCodeNot(req.getLocationType(), req.getName().trim(), code)) {
             throw BaseException.from(duplicateNameStatus(req.getLocationType()));
         }
@@ -85,19 +96,19 @@ public class InfrastructureService {
                 req.getContact().trim(),
                 req.getAddress().trim(),
                 req.getStatus(),
-                normalized.storeType(),
-                normalized.mappedWarehouseCode(),
                 normalized.capacity()
         );
-        return toRes(infra);
+        Map<Long, Long> mappedStoreCountByWarehouseId = mappedStoreCountByWarehouseId(List.of(infra));
+        return toRes(infra, mappedStoreCountByWarehouseId);
     }
 
     private Infrastructure saveWithGeneratedCode(InfrastructureDto.UpsertReq req, NormalizedInfra normalized) {
-        String prefix = req.getLocationType() == LocationType.STORE ? "ST" : "WH";
+        String typePrefix = req.getLocationType() == LocationType.STORE ? "ST" : "WH";
+        String regionCode = resolveRegionCode(req.getRegion());
         for (int i = 0; i < 2; i++) {
-            String code = nextCode(infrastructureRepository.findAllByOrderByIdDesc().stream().map(Infrastructure::getCode).toList(), prefix);
+            String code = nextCode(typePrefix, regionCode);
             try {
-                return infrastructureRepository.save(req.toEntity(code, normalized.storeType(), normalized.mappedWarehouseCode(), normalized.capacity()));
+                return infrastructureRepository.save(req.toEntity(code, normalized.capacity()));
             } catch (DataIntegrityViolationException e) {
                 if (i == 1) throw e;
             }
@@ -105,31 +116,42 @@ public class InfrastructureService {
         throw BaseException.from(BaseResponseStatus.FAIL);
     }
 
-    private NormalizedInfra normalizeAndValidate(InfrastructureDto.UpsertReq req, String selfCodeForUpdate) {
+    private NormalizedInfra normalizeAndValidate(InfrastructureDto.UpsertReq req) {
+        resolveRegionCode(req.getRegion());
+
         if (req.getLocationType() == LocationType.STORE) {
-            if (req.getStoreType() == null || req.getMappedWarehouseCode() == null || req.getMappedWarehouseCode().isBlank()) {
-                throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
-            }
-            String mappedCode = req.getMappedWarehouseCode().trim();
-            boolean exists = infrastructureRepository.existsByCodeAndLocationType(mappedCode, LocationType.WAREHOUSE);
-            if (!exists || (selfCodeForUpdate != null && selfCodeForUpdate.equals(mappedCode))) {
-                throw BaseException.from(BaseResponseStatus.WAREHOUSE_NOT_FOUND);
-            }
-            return new NormalizedInfra(req.getStoreType(), mappedCode, null);
+            return new NormalizedInfra(null);
         }
 
         if (req.getCapacity() == null || req.getCapacity().isBlank()) {
             throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
         }
-        return new NormalizedInfra(null, null, req.getCapacity().trim());
+        return new NormalizedInfra(req.getCapacity().trim());
     }
 
-    private InfrastructureDto.Res toRes(Infrastructure infra) {
+    private InfrastructureDto.Res toRes(Infrastructure infra, Map<Long, Long> mappedStoreCountByWarehouseId) {
         Long mappedStoreCount = null;
         if (infra.getLocationType() == LocationType.WAREHOUSE) {
-            mappedStoreCount = infrastructureRepository.countByMappedWarehouseCode(infra.getCode());
+            mappedStoreCount = mappedStoreCountByWarehouseId.getOrDefault(infra.getId(), 0L);
         }
         return InfrastructureDto.Res.from(infra, mappedStoreCount);
+    }
+
+    private Map<Long, Long> mappedStoreCountByWarehouseId(List<Infrastructure> rows) {
+        List<Infrastructure> warehouses = rows.stream()
+                .filter(it -> it.getLocationType() == LocationType.WAREHOUSE)
+                .toList();
+        if (warehouses.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, Long> mappedStoreCountByWarehouseId = new HashMap<>();
+        List<StoreWarehouseMap> maps = storeWarehouseMapRepository.findByWarehouseIn(warehouses);
+        for (StoreWarehouseMap map : maps) {
+            Long warehouseId = map.getWarehouse().getId();
+            mappedStoreCountByWarehouseId.put(warehouseId, mappedStoreCountByWarehouseId.getOrDefault(warehouseId, 0L) + 1L);
+        }
+        return mappedStoreCountByWarehouseId;
     }
 
     private BaseResponseStatus duplicateNameStatus(LocationType type) {
@@ -138,21 +160,67 @@ public class InfrastructureService {
                 : BaseResponseStatus.DUPLICATE_WAREHOUSE_NAME;
     }
 
-    private String nextCode(List<String> codes, String prefix) {
-        long max = codes.stream()
-                .filter(c -> c != null && c.startsWith(prefix + "-"))
-                .mapToLong(c -> {
-                    try {
-                        return Long.parseLong(c.substring(prefix.length() + 1));
-                    } catch (Exception e) {
-                        return 0L;
-                    }
-                })
+    private String nextCode(String typePrefix, String regionCode) {
+        long max = infrastructureRepository.findAllByOrderByIdDesc().stream()
+                .map(Infrastructure::getCode)
+                .filter(c -> c != null && c.startsWith(typePrefix + "-" + regionCode + "-"))
+                .map(INFRA_CODE_PATTERN::matcher)
+                .filter(Matcher::matches)
+                .filter(m -> m.group(1).equals(typePrefix) && m.group(2).equals(regionCode))
+                .mapToLong(m -> Long.parseLong(m.group(3)))
                 .max()
                 .orElse(0L);
-        return String.format("%s-%04d", prefix, max + 1);
+        return String.format("%s-%s-%04d", typePrefix, regionCode, max + 1);
     }
 
-    private record NormalizedInfra(StoreType storeType, String mappedWarehouseCode, String capacity) {
+    private String resolveRegionCode(String regionRaw) {
+        String region = regionRaw == null ? "" : regionRaw.trim();
+        if (region.isBlank()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        String upper = region.toUpperCase(Locale.ROOT);
+        String codeFromCode = REGION_CODE_MAP.get(upper);
+        if (codeFromCode != null) {
+            return codeFromCode;
+        }
+
+        String codeFromName = REGION_CODE_MAP.get(region);
+        if (codeFromName != null) {
+            return codeFromName;
+        }
+
+        throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+    }
+
+    private static Map<String, String> buildRegionCodeMap() {
+        Map<String, String> map = new HashMap<>();
+        map.put("SL", "SL");
+        map.put("GG", "GG");
+        map.put("IC", "IC");
+        map.put("BS", "BS");
+        map.put("DJ", "DJ");
+        map.put("GJ", "GJ");
+        map.put("GW", "GW");
+        map.put("JJ", "JJ");
+        map.put("CN", "CN");
+        map.put("YN", "YN");
+        map.put("HN", "HN");
+
+        map.put("서울", "SL");
+        map.put("경기", "GG");
+        map.put("인천", "IC");
+        map.put("부산", "BS");
+        map.put("대전", "DJ");
+        map.put("광주", "GJ");
+        map.put("강원", "GW");
+        map.put("제주", "JJ");
+        map.put("충청", "CN");
+        map.put("영남", "YN");
+        map.put("호남", "HN");
+        return Map.copyOf(map);
+    }
+
+    private record NormalizedInfra(String capacity) {
     }
 }

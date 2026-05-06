@@ -36,17 +36,7 @@ public class ProductDto {
                     .warehouseSafetyStock(warehouseSafetyStock)
                     .storeSafetyStock(storeSafetyStock)
                     .mainVendorCode(mainVendorCode.trim())
-                    .materialSpec(toMaterialSpec())
                     .status(status)
-                    .build();
-        }
-
-        public ProductMaterialSpec toMaterialSpec() {
-            return ProductMaterialSpec.builder()
-                    .materialType(materialType)
-                    .compositions(materialCompositions.stream()
-                            .map(ProductMaterialCompositionReq::toMaterialComposition)
-                            .toList())
                     .build();
         }
     }
@@ -58,13 +48,6 @@ public class ProductDto {
     public static class ProductMaterialCompositionReq {
         @NotBlank private String materialCode;
         @NotNull @Min(0) private Integer ratio;
-
-        public ProductMaterialComposition toMaterialComposition() {
-            return ProductMaterialComposition.builder()
-                    .materialCode(materialCode.trim().toUpperCase())
-                    .ratio(ratio)
-                    .build();
-        }
     }
 
     @Getter
@@ -134,16 +117,21 @@ public class ProductDto {
         private long skuCount;
         private Date updatedAt;
 
-        public static ProductMasterRes from(ProductMaster m, long skuCount, java.util.Map<String, String> materialNameMap) {
-            ProductMaterialSpec materialSpec = m.getMaterialSpec();
-            List<ProductMaterialCompositionRes> compositions = materialSpec == null || materialSpec.getCompositions() == null
+        public static ProductMasterRes from(ProductMaster m,
+                                            long skuCount,
+                                            ProductMaterialType materialType,
+                                            java.util.Map<String, String> materialNameMap) {
+            List<ProductMaterialCompositionRes> compositions = m.getMaterialCompositions() == null
                     ? List.of()
-                    : materialSpec.getCompositions().stream()
-                    .map(c -> ProductMaterialCompositionRes.builder()
-                            .materialCode(c.getMaterialCode())
-                            .materialNameKo(materialNameMap.getOrDefault(c.getMaterialCode(), c.getMaterialCode()))
-                            .ratio(c.getRatio())
-                            .build())
+                    : m.getMaterialCompositions().stream()
+                    .map(c -> {
+                        String code = c.getMaterial() == null ? "" : c.getMaterial().getCode();
+                        return ProductMaterialCompositionRes.builder()
+                                .materialCode(code)
+                                .materialNameKo(materialNameMap.getOrDefault(code, code))
+                                .ratio(c.getRatio())
+                                .build();
+                    })
                     .toList();
             return ProductMasterRes.builder()
                     .code(m.getCode())
@@ -154,7 +142,7 @@ public class ProductDto {
                     .warehouseSafetyStock(m.getWarehouseSafetyStock())
                     .storeSafetyStock(m.getStoreSafetyStock())
                     .mainVendorCode(m.getMainVendorCode())
-                    .materialType(materialSpec == null ? null : materialSpec.getMaterialType())
+                    .materialType(materialType)
                     .materialCompositions(compositions)
                     .status(m.getStatus())
                     .skuCount(skuCount)

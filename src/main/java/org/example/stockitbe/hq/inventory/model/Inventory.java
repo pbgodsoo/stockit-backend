@@ -64,6 +64,38 @@ public class Inventory extends BaseEntity {
         this.lastMovementAt = lastMovementAt == null ? new Date() : lastMovementAt;
     }
 
+    public void markCircularCandidate(Date changedAt) {
+        this.inventoryStatus = InventoryStatus.CIRCULAR_CANDIDATE;
+        this.statusChangedAt = changedAt == null ? new Date() : changedAt;
+    }
+
+    public void markCircular(Date changedAt) {
+        this.inventoryStatus = InventoryStatus.CIRCULAR;
+        this.statusChangedAt = changedAt == null ? new Date() : changedAt;
+    }
+
+    public void decreaseForConversion(int quantityToMove) {
+        int safeMove = Math.max(0, quantityToMove);
+        int nextAvailable = Math.max(0, n(this.availableQuantity) - safeMove);
+        int nextQuantity = Math.max(0, n(this.quantity) - safeMove);
+        this.availableQuantity = nextAvailable;
+        this.quantity = nextQuantity;
+    }
+
+    public void increaseForConversion(int quantityToMove) {
+        int safeMove = Math.max(0, quantityToMove);
+        this.availableQuantity = n(this.availableQuantity) + safeMove;
+        this.quantity = n(this.quantity) + safeMove;
+    }
+
+    public boolean isEmptyStock() {
+        return n(this.quantity) <= 0 && n(this.availableQuantity) <= 0;
+    }
+
+    private int n(Integer value) {
+        return value == null ? 0 : value;
+    }
+
     /**
      * 발주 SHIPPING 진입 시 가용재고 증가 (이슈 #169 — 발주 ↔ 인벤토리 연결 룰).
      * 도착 전 예약 가용재고로, 실재고(quantity) 는 변하지 않는다.
@@ -96,4 +128,3 @@ public class Inventory extends BaseEntity {
         this.lastMovementAt = new Date();
     }
 }
-

@@ -4,11 +4,11 @@ import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.model.BaseResponseStatus;
 import org.example.stockitbe.hq.category.CategoryRepository;
-import org.example.stockitbe.hq.product.model.ProductMaterialComposition;
-import org.example.stockitbe.hq.product.model.ProductMaterialSpec;
-import org.example.stockitbe.hq.product.model.ProductMaterialType;
+import org.example.stockitbe.hq.product.model.Material;
 import org.example.stockitbe.hq.product.model.ProductDto;
 import org.example.stockitbe.hq.product.model.ProductMaster;
+import org.example.stockitbe.hq.product.model.ProductMaterialComposition;
+import org.example.stockitbe.hq.product.model.ProductMaterialType;
 import org.example.stockitbe.hq.product.model.ProductSku;
 import org.example.stockitbe.hq.vendor.VendorRepository;
 import org.example.stockitbe.hq.vendor.model.Vendor;
@@ -17,50 +17,26 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class ProductMasterService {
-    private static final String MAT_COTTON = "COTTON";
-    private static final String MAT_WOOL = "WOOL";
-    private static final String MAT_CASHMERE = "CASHMERE";
-    private static final String MAT_SILK = "SILK";
-    private static final String MAT_LINEN = "LINEN";
-    private static final String MAT_POLYESTER = "POLYESTER";
-    private static final String MAT_ACRYLIC = "ACRYLIC";
-    private static final String MAT_POLYAMIDE = "POLYAMIDE";
-    private static final String MAT_ELASTANE = "ELASTANE";
 
-    private static final Set<String> NATURAL_CODES = Set.of(
-            MAT_COTTON, MAT_WOOL, MAT_CASHMERE, MAT_SILK, MAT_LINEN
-    );
-    private static final Set<String> SYNTHETIC_CODES = Set.of(
-            MAT_POLYESTER, MAT_ACRYLIC, MAT_POLYAMIDE, MAT_ELASTANE
-    );
-    private static final Set<String> ALL_MATERIAL_CODES = Set.of(
-            MAT_COTTON, MAT_WOOL, MAT_CASHMERE, MAT_SILK, MAT_LINEN,
-            MAT_POLYESTER, MAT_ACRYLIC, MAT_POLYAMIDE, MAT_ELASTANE
-    );
-    private static final Map<String, String> MATERIAL_NAME_KO_MAP = Map.of(
-            MAT_COTTON, "면",
-            MAT_WOOL, "울",
-            MAT_CASHMERE, "캐시미어",
-            MAT_SILK, "실크",
-            MAT_LINEN, "린넨",
-            MAT_POLYESTER, "폴리에스터",
-            MAT_ACRYLIC, "아크릴",
-            MAT_POLYAMIDE, "나일론",
-            MAT_ELASTANE, "스판덱스"
-    );
+    private static final String MATERIAL_GROUP_NATURAL = "NATURAL";
+    private static final String MATERIAL_GROUP_SYNTHETIC = "SYNTHETIC";
 
+    private static final Set<String> ALLOWED_COLORS = Set.of("BLK", "WHT", "NVY", "GRY");
+    private static final Set<String> ALLOWED_SIZES = Set.of("XS", "S", "M", "L", "XL");
+    private static final Pattern CATEGORY_CODE_PATTERN = Pattern.compile("^CAT-L2-([A-Z]{3})-([A-Z]{2})$");
+    private static final Pattern PRODUCT_CODE_PATTERN = Pattern.compile("^PRD-([A-Z]{3})-([A-Z]{2})-(\\d{3})$");
 
     private final ProductMasterRepository productMasterRepository;
     private final ProductSkuRepository productSkuRepository;
+    private final MaterialRepository materialRepository;
     private final CategoryRepository categoryRepository;
     private final VendorRepository vendorRepository;
 
@@ -68,10 +44,17 @@ public class ProductMasterService {
     public List<ProductDto.ProductMasterRes> findProducts(String keyword, String categoryCode) {
         String safeKeyword = keyword == null ? "" : keyword.trim();
         String safeCategoryCode = categoryCode == null ? "" : categoryCode.trim();
+        Map<String, String> materialNameMap = loadMaterialNameMap();
+
         return productMasterRepository
                 .findByNameContainingIgnoreCaseAndCategoryCodeContainingIgnoreCaseOrderByIdDesc(safeKeyword, safeCategoryCode)
                 .stream()
-                .map(p -> ProductDto.ProductMasterRes.from(p, productSkuRepository.countByProductCode(p.getCode()), MATERIAL_NAME_KO_MAP))
+                .map(p -> ProductDto.ProductMasterRes.from(
+                        p,
+                        productSkuRepository.countByProductCode(p.getCode()),
+                        deriveMaterialType(p.getMaterialCompositions()),
+                        materialNameMap
+                ))
                 .toList();
     }
 
@@ -79,14 +62,27 @@ public class ProductMasterService {
     public ProductDto.ProductMasterRes findProductByCode(String code) {
         ProductMaster product = productMasterRepository.findByCode(code)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_MASTER_NOT_FOUND));
-        return ProductDto.ProductMasterRes.from(product, productSkuRepository.countByProductCode(product.getCode()), MATERIAL_NAME_KO_MAP);
+        return ProductDto.ProductMasterRes.from(
+                product,
+                productSkuRepository.countByProductCode(product.getCode()),
+                deriveMaterialType(product.getMaterialCompositions()),
+                loadMaterialNameMap()
+        );
     }
 
     @Transactional
     public ProductDto.ProductMasterRes createProduct(ProductDto.ProductMasterUpsertReq req) {
         validateCreate(req);
         ProductMaster saved = saveWithGeneratedCode(req);
-        return ProductDto.ProductMasterRes.from(saved, 0, MATERIAL_NAME_KO_MAP);
+        List<ProductMaterialComposition> compositions = buildCompositions(req);
+        saved.replaceMaterialCompositions(compositions);
+
+        return ProductDto.ProductMasterRes.from(
+                saved,
+                0,
+                deriveMaterialType(saved.getMaterialCompositions()),
+                loadMaterialNameMap()
+        );
     }
 
     @Transactional
@@ -94,6 +90,7 @@ public class ProductMasterService {
         ProductMaster product = productMasterRepository.findByCode(code)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_MASTER_NOT_FOUND));
         validateUpdate(req, code);
+
         product.update(
                 req.getName().trim(),
                 req.getCategoryCode().trim(),
@@ -102,10 +99,16 @@ public class ProductMasterService {
                 req.getWarehouseSafetyStock(),
                 req.getStoreSafetyStock(),
                 req.getMainVendorCode().trim(),
-                req.toMaterialSpec(),
                 req.getStatus()
         );
-        return ProductDto.ProductMasterRes.from(product, productSkuRepository.countByProductCode(product.getCode()), MATERIAL_NAME_KO_MAP);
+        product.replaceMaterialCompositions(buildCompositions(req));
+
+        return ProductDto.ProductMasterRes.from(
+                product,
+                productSkuRepository.countByProductCode(product.getCode()),
+                deriveMaterialType(product.getMaterialCompositions()),
+                loadMaterialNameMap()
+        );
     }
 
     @Transactional
@@ -128,8 +131,10 @@ public class ProductMasterService {
     public ProductDto.ProductSkuRes createSku(String productCode, ProductDto.ProductSkuUpsertReq req) {
         productMasterRepository.findByCode(productCode)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_MASTER_NOT_FOUND));
-        validateSkuDuplicate(productCode, req.getColor().trim(), req.getSize().trim(), null);
-        ProductSku saved = saveSkuWithGeneratedCode(productCode, req);
+        String color = normalizeAndValidateColor(req.getColor());
+        String size = normalizeAndValidateSize(req.getSize());
+        validateSkuDuplicate(productCode, color, size, null);
+        ProductSku saved = saveSkuWithGeneratedCode(productCode, req, color, size);
         return ProductDto.ProductSkuRes.from(saved);
     }
 
@@ -137,8 +142,8 @@ public class ProductMasterService {
     public ProductDto.ProductSkuRes updateSku(String skuCode, ProductDto.ProductSkuUpsertReq req) {
         ProductSku sku = productSkuRepository.findBySkuCode(skuCode)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_SKU_NOT_FOUND));
-        String color = req.getColor().trim();
-        String size = req.getSize().trim();
+        String color = normalizeAndValidateColor(req.getColor());
+        String size = normalizeAndValidateSize(req.getSize());
         validateSkuDuplicate(sku.getProductCode(), color, size, skuCode);
         sku.update(color, size, req.getUnitPrice(), req.getStatus());
         return ProductDto.ProductSkuRes.from(sku);
@@ -158,11 +163,11 @@ public class ProductMasterService {
 
         Set<String> colorSet = req.getColors().stream()
                 .filter(v -> v != null && !v.trim().isEmpty())
-                .map(String::trim)
+                .map(this::normalizeAndValidateColor)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         Set<String> sizeSet = req.getSizes().stream()
                 .filter(v -> v != null && !v.trim().isEmpty())
-                .map(String::trim)
+                .map(this::normalizeAndValidateSize)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
         int requestedCount = colorSet.size() * sizeSet.size();
@@ -182,7 +187,7 @@ public class ProductMasterService {
                         .unitPrice(req.getUnitPrice())
                         .status(req.getStatus())
                         .build();
-                saveSkuWithGeneratedCode(productCode, createReq);
+                saveSkuWithGeneratedCode(productCode, createReq, color, size);
                 createdCount++;
             }
         }
@@ -234,44 +239,50 @@ public class ProductMasterService {
     }
 
     private void validateCreate(ProductDto.ProductMasterUpsertReq req) {
-        if (!categoryRepository.findByCode(req.getCategoryCode().trim()).isPresent()) {
+        String categoryCode = req.getCategoryCode().trim();
+        if (!categoryRepository.findByCode(categoryCode).isPresent()) {
             throw BaseException.from(BaseResponseStatus.CATEGORY_NOT_FOUND);
         }
+        if (!CATEGORY_CODE_PATTERN.matcher(categoryCode).matches()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
         validateMainVendor(req.getMainVendorCode());
-        validateMaterialSpec(req.toMaterialSpec());
+        validateMaterialComposition(req);
         if (productMasterRepository.existsByNameIgnoreCase(req.getName().trim())) {
             throw BaseException.from(BaseResponseStatus.DUPLICATE_PRODUCT_MASTER_NAME);
         }
     }
 
     private void validateUpdate(ProductDto.ProductMasterUpsertReq req, String code) {
-        if (!categoryRepository.findByCode(req.getCategoryCode().trim()).isPresent()) {
+        String categoryCode = req.getCategoryCode().trim();
+        if (!categoryRepository.findByCode(categoryCode).isPresent()) {
             throw BaseException.from(BaseResponseStatus.CATEGORY_NOT_FOUND);
         }
+        if (!CATEGORY_CODE_PATTERN.matcher(categoryCode).matches()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
         validateMainVendor(req.getMainVendorCode());
-        validateMaterialSpec(req.toMaterialSpec());
+        validateMaterialComposition(req);
         if (productMasterRepository.existsByNameIgnoreCaseAndCodeNot(req.getName().trim(), code)) {
             throw BaseException.from(BaseResponseStatus.DUPLICATE_PRODUCT_MASTER_NAME);
         }
     }
 
-    private void validateMaterialSpec(ProductMaterialSpec materialSpec) {
-        if (materialSpec == null || materialSpec.getMaterialType() == null) {
-            throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
-        }
-        List<ProductMaterialComposition> compositions = materialSpec.getCompositions();
-        if (compositions == null || compositions.isEmpty()) {
+    private void validateMaterialComposition(ProductDto.ProductMasterUpsertReq req) {
+        List<ProductDto.ProductMaterialCompositionReq> compositions = req.getMaterialCompositions();
+        if (req.getMaterialType() == null || compositions == null || compositions.isEmpty()) {
             throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
         }
 
+        Set<String> codes = new LinkedHashSet<>();
         int ratioSum = 0;
-        for (ProductMaterialComposition composition : compositions) {
+        for (ProductDto.ProductMaterialCompositionReq composition : compositions) {
             if (composition == null || composition.getMaterialCode() == null || composition.getMaterialCode().trim().isEmpty()) {
                 throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
             }
-            String materialCode = composition.getMaterialCode().trim().toUpperCase();
+            String code = composition.getMaterialCode().trim().toUpperCase(Locale.ROOT);
             Integer ratio = composition.getRatio();
-            if (!ALL_MATERIAL_CODES.contains(materialCode) || ratio == null || ratio <= 0) {
+            if (ratio == null || ratio <= 0 || !codes.add(code)) {
                 throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
             }
             ratioSum += ratio;
@@ -281,8 +292,13 @@ public class ProductMasterService {
             throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
         }
 
-        ProductMaterialType materialType = materialSpec.getMaterialType();
-        if (materialType == ProductMaterialType.BLEND) {
+        Map<String, Material> materialByCode = materialRepository.findAllByCodeIn(codes).stream()
+                .collect(Collectors.toMap(Material::getCode, m -> m));
+        if (materialByCode.size() != codes.size()) {
+            throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
+        }
+
+        if (req.getMaterialType() == ProductMaterialType.BLEND) {
             if (compositions.size() < 2) {
                 throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
             }
@@ -292,13 +308,68 @@ public class ProductMasterService {
         if (compositions.size() != 1) {
             throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
         }
-        String singleCode = compositions.get(0).getMaterialCode().trim().toUpperCase();
-        if (materialType == ProductMaterialType.NATURAL_SINGLE && !NATURAL_CODES.contains(singleCode)) {
+
+        String singleCode = compositions.get(0).getMaterialCode().trim().toUpperCase(Locale.ROOT);
+        Material single = materialByCode.get(singleCode);
+        if (single == null || single.getMaterialGroup() == null) {
             throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
         }
-        if (materialType == ProductMaterialType.SYNTHETIC && !SYNTHETIC_CODES.contains(singleCode)) {
+        String group = single.getMaterialGroup().trim().toUpperCase(Locale.ROOT);
+        if (req.getMaterialType() == ProductMaterialType.NATURAL_SINGLE && !MATERIAL_GROUP_NATURAL.equals(group)) {
             throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
         }
+        if (req.getMaterialType() == ProductMaterialType.SYNTHETIC && !MATERIAL_GROUP_SYNTHETIC.equals(group)) {
+            throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
+        }
+    }
+
+    private List<ProductMaterialComposition> buildCompositions(ProductDto.ProductMasterUpsertReq req) {
+        List<ProductDto.ProductMaterialCompositionReq> requested = req.getMaterialCompositions();
+        List<String> codes = requested.stream()
+                .map(c -> c.getMaterialCode().trim().toUpperCase(Locale.ROOT))
+                .toList();
+
+        Map<String, Material> materialByCode = materialRepository.findAllByCodeIn(codes).stream()
+                .collect(Collectors.toMap(Material::getCode, m -> m));
+
+        List<ProductMaterialComposition> rows = new ArrayList<>();
+        for (int i = 0; i < requested.size(); i++) {
+            ProductDto.ProductMaterialCompositionReq item = requested.get(i);
+            String code = item.getMaterialCode().trim().toUpperCase(Locale.ROOT);
+            Material material = materialByCode.get(code);
+            if (material == null) {
+                throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
+            }
+            rows.add(new ProductMaterialComposition(material, item.getRatio(), i + 1));
+        }
+        return rows;
+    }
+
+    private ProductMaterialType deriveMaterialType(List<ProductMaterialComposition> compositions) {
+        if (compositions == null || compositions.isEmpty()) {
+            return ProductMaterialType.BLEND;
+        }
+        if (compositions.size() >= 2) {
+            return ProductMaterialType.BLEND;
+        }
+
+        Material material = compositions.get(0).getMaterial();
+        if (material == null || material.getMaterialGroup() == null) {
+            return ProductMaterialType.BLEND;
+        }
+        String group = material.getMaterialGroup().trim().toUpperCase(Locale.ROOT);
+        if (MATERIAL_GROUP_NATURAL.equals(group)) {
+            return ProductMaterialType.NATURAL_SINGLE;
+        }
+        if (MATERIAL_GROUP_SYNTHETIC.equals(group)) {
+            return ProductMaterialType.SYNTHETIC;
+        }
+        return ProductMaterialType.BLEND;
+    }
+
+    private Map<String, String> loadMaterialNameMap() {
+        return materialRepository.findAllByActiveTrueOrderByCodeAsc().stream()
+                .collect(Collectors.toMap(Material::getCode, Material::getNameKo));
     }
 
     private void validateMainVendor(String mainVendorCode) {
@@ -310,8 +381,17 @@ public class ProductMasterService {
     }
 
     private ProductMaster saveWithGeneratedCode(ProductDto.ProductMasterUpsertReq req) {
+        String categoryCode = req.getCategoryCode().trim();
+        Matcher matcher = CATEGORY_CODE_PATTERN.matcher(categoryCode);
+        if (!matcher.matches()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+        String l1 = matcher.group(1);
+        String l2 = matcher.group(2);
+        String codePrefix = String.format("PRD-%s-%s", l1, l2);
+
         for (int i = 0; i < 2; i++) {
-            String code = nextCode(productMasterRepository.findAllByOrderByIdDesc().stream().map(ProductMaster::getCode).toList(), "PM");
+            String code = nextProductCode(codePrefix);
             try {
                 return productMasterRepository.save(req.toEntity(code));
             } catch (DataIntegrityViolationException e) {
@@ -321,16 +401,19 @@ public class ProductMasterService {
         throw BaseException.from(BaseResponseStatus.FAIL);
     }
 
-    private ProductSku saveSkuWithGeneratedCode(String productCode, ProductDto.ProductSkuUpsertReq req) {
-        for (int i = 0; i < 2; i++) {
-            String code = nextCode(productSkuRepository.findAllByOrderByIdDesc().stream().map(ProductSku::getSkuCode).toList(), "SKU");
-            try {
-                return productSkuRepository.save(req.toEntity(code, productCode));
-            } catch (DataIntegrityViolationException e) {
-                if (i == 1) throw e;
-            }
+    private ProductSku saveSkuWithGeneratedCode(String productCode, ProductDto.ProductSkuUpsertReq req, String normalizedColor, String normalizedSize) {
+        String skuCode = productCode + "-" + normalizedColor + "-" + normalizedSize;
+        try {
+            ProductDto.ProductSkuUpsertReq normalizedReq = ProductDto.ProductSkuUpsertReq.builder()
+                    .color(normalizedColor)
+                    .size(normalizedSize)
+                    .unitPrice(req.getUnitPrice())
+                    .status(req.getStatus())
+                    .build();
+            return productSkuRepository.save(normalizedReq.toEntity(skuCode, productCode));
+        } catch (DataIntegrityViolationException e) {
+            throw BaseException.from(BaseResponseStatus.DUPLICATE_PRODUCT_SKU_OPTION);
         }
-        throw BaseException.from(BaseResponseStatus.FAIL);
     }
 
     private void validateSkuDuplicate(String productCode, String color, String size, String selfSkuCode) {
@@ -344,17 +427,32 @@ public class ProductMasterService {
         }
     }
 
-    private String nextCode(List<String> codes, String prefix) {
-        long max = codes.stream()
-                .filter(c -> c != null && c.startsWith(prefix + "-"))
-                .mapToLong(c -> {
-                    try {
-                        return Long.parseLong(c.substring(prefix.length() + 1));
-                    } catch (Exception e) {
-                        return 0L;
-                    }
-                })
-                .max().orElse(0L);
-        return String.format("%s-%04d", prefix, max + 1);
+    private String nextProductCode(String codePrefix) {
+        long max = productMasterRepository.findAllByOrderByIdDesc().stream()
+                .map(ProductMaster::getCode)
+                .filter(Objects::nonNull)
+                .map(PRODUCT_CODE_PATTERN::matcher)
+                .filter(Matcher::matches)
+                .filter(m -> ("PRD-" + m.group(1) + "-" + m.group(2)).equals(codePrefix))
+                .mapToLong(m -> Long.parseLong(m.group(3)))
+                .max()
+                .orElse(0L);
+        return String.format("%s-%03d", codePrefix, max + 1);
+    }
+
+    private String normalizeAndValidateColor(String colorRaw) {
+        String color = colorRaw == null ? "" : colorRaw.trim().toUpperCase(Locale.ROOT);
+        if (!ALLOWED_COLORS.contains(color)) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+        return color;
+    }
+
+    private String normalizeAndValidateSize(String sizeRaw) {
+        String size = sizeRaw == null ? "" : sizeRaw.trim().toUpperCase(Locale.ROOT);
+        if (!ALLOWED_SIZES.contains(size)) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+        return size;
     }
 }

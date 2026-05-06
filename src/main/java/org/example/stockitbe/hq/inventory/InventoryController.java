@@ -6,6 +6,7 @@ import org.example.stockitbe.hq.infrastructure.model.LocationType;
 import org.example.stockitbe.hq.inventory.model.InventoryDto;
 import org.example.stockitbe.hq.inventory.model.InventoryStatus;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.util.List;
 
@@ -39,5 +40,27 @@ public class InventoryController {
             @RequestParam(required = false) String keyword
     ) {
         return BaseResponse.success(inventoryService.findCompanyWideSkuDetails(itemCode, locationType, locationIds, parentCategory, childCategory, status, keyword));
+    }
+
+    @PostMapping("/circular-candidates/refresh")
+    public BaseResponse<InventoryDto.CircularCandidateRefreshRes> refreshCircularCandidates() {
+        return BaseResponse.success(inventoryService.refreshCircularCandidates());
+    }
+
+    @GetMapping("/circular-candidates")
+    public BaseResponse<List<InventoryDto.CircularCandidateRes>> getCircularCandidates() {
+        return BaseResponse.success(inventoryService.findCircularCandidates());
+    }
+
+    @GetMapping("/circular")
+    public BaseResponse<List<InventoryDto.CircularInventoryRes>> getCircularInventories() {
+        return BaseResponse.success(inventoryService.findCircularInventories());
+    }
+
+    @PostMapping("/circular-candidates/convert")
+    public BaseResponse<InventoryDto.CircularCandidateConvertRes> convertCircularCandidates(
+            @RequestBody @Valid List<InventoryDto.CircularCandidateConvertItemReq> requests
+    ) {
+        return BaseResponse.success(inventoryService.convertCircularCandidates(requests));
     }
 }

@@ -45,20 +45,12 @@ public class Infrastructure extends BaseEntity {
     @Column(name = "status", nullable = false, length = 16)
     private InfraStatus status;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "store_type", length = 16)
-    private StoreType storeType;
-
-    @Column(name = "mapped_warehouse_code", length = 32)
-    private String mappedWarehouseCode;
-
     @Column(name = "capacity", length = 64)
     private String capacity;
 
     @Builder
     private Infrastructure(String code, LocationType locationType, String name, String region, String managerName,
-                           String contact, String address, InfraStatus status,
-                           StoreType storeType, String mappedWarehouseCode, String capacity) {
+                           String contact, String address, InfraStatus status, String capacity) {
         this.code = code;
         this.locationType = locationType;
         this.name = name;
@@ -67,21 +59,17 @@ public class Infrastructure extends BaseEntity {
         this.contact = contact;
         this.address = address;
         this.status = status == null ? InfraStatus.ACTIVE : status;
-        this.storeType = storeType;
-        this.mappedWarehouseCode = mappedWarehouseCode;
         this.capacity = capacity;
     }
 
     public void update(String name, String region, String managerName, String contact, String address,
-                       InfraStatus status, StoreType storeType, String mappedWarehouseCode, String capacity) {
+                       InfraStatus status, String capacity) {
         this.name = name;
         this.region = region;
         this.managerName = managerName;
         this.contact = contact;
         this.address = address;
         this.status = status;
-        this.storeType = storeType;
-        this.mappedWarehouseCode = mappedWarehouseCode;
         this.capacity = capacity;
     }
 }
