@@ -245,6 +245,90 @@ public class InventoryService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<InventoryDto.ImbalancedSkuRes> findImbalancedSkus() {
+        List<Inventory> inventories = inventoryRepository.findAll();
+        if (inventories.isEmpty()) return List.of();
+
+        Map<Long, Infrastructure> warehouseById = infrastructureRepository.findAll().stream()
+                .filter(infra -> infra.getLocationType() == LocationType.WAREHOUSE)
+                .collect(Collectors.toMap(Infrastructure::getId, Function.identity()));
+        if (warehouseById.isEmpty()) return List.of();
+
+        Set<Long> skuIds = inventories.stream()
+                .filter(inv -> warehouseById.containsKey(inv.getLocationId()))
+                .map(Inventory::getSkuId)
+                .collect(Collectors.toSet());
+        if (skuIds.isEmpty()) return List.of();
+
+        Map<Long, ProductSku> skuById = productSkuRepository.findAllById(skuIds).stream()
+                .collect(Collectors.toMap(ProductSku::getId, Function.identity()));
+        if (skuById.isEmpty()) return List.of();
+
+        Set<String> productCodes = skuById.values().stream()
+                .map(ProductSku::getProductCode)
+                .collect(Collectors.toSet());
+        Map<String, ProductMaster> masterByCode = productMasterRepository.findAllByCodeIn(productCodes).stream()
+                .collect(Collectors.toMap(ProductMaster::getCode, Function.identity()));
+
+        List<Category> categories = categoryRepository.findAllByOrderByIdAsc();
+        Map<String, Category> categoryByCode = categories.stream().collect(Collectors.toMap(Category::getCode, Function.identity()));
+        Map<Long, Category> categoryById = categories.stream().collect(Collectors.toMap(Category::getId, Function.identity()));
+
+        Map<Long, ImbalancedSkuAggregate> aggregateBySkuId = new HashMap<>();
+        for (Inventory inventory : inventories) {
+            if (!warehouseById.containsKey(inventory.getLocationId())) continue;
+
+            ProductSku sku = skuById.get(inventory.getSkuId());
+            if (sku == null) continue;
+            ProductMaster master = masterByCode.get(sku.getProductCode());
+            if (master == null) continue;
+
+            ImbalancedSkuAggregate agg = aggregateBySkuId.computeIfAbsent(sku.getId(), key -> new ImbalancedSkuAggregate(sku, master));
+            int quantity = Math.max(0, n(inventory.getQuantity()));
+            int available = Math.max(0, n(inventory.getAvailableQuantity()));
+            int safetyStock = Math.max(0, n(master.getWarehouseSafetyStock()));
+
+            agg.totalOnHand += quantity;
+            agg.totalAvailable += available;
+
+            if (available < safetyStock) {
+                agg.shortageWarehouseCount += 1;
+                agg.totalShortageQty += (safetyStock - available);
+            }
+        }
+
+        return aggregateBySkuId.values().stream()
+                .map(agg -> {
+                    Category child = categoryByCode.get(agg.master.getCategoryCode());
+                    Category parent = child == null || child.getParentId() == null
+                            ? child
+                            : categoryById.get(child.getParentId());
+                    String categoryLabel = child == null
+                            ? ""
+                            : (parent == null ? child.getName() : parent.getName() + " > " + child.getName());
+
+                    return InventoryDto.ImbalancedSkuRes.builder()
+                            .skuCode(agg.sku.getSkuCode())
+                            .itemCode(agg.master.getCode())
+                            .itemName(agg.master.getName())
+                            .color(agg.sku.getColor())
+                            .size(agg.sku.getSize())
+                            .category(categoryLabel)
+                            .totalOnHand(agg.totalOnHand)
+                            .totalAvailable(agg.totalAvailable)
+                            .shortageWarehouseCount(agg.shortageWarehouseCount)
+                            .totalShortageQty(agg.totalShortageQty)
+                            .build();
+                })
+                .sorted(
+                        Comparator.comparing(InventoryDto.ImbalancedSkuRes::getShortageWarehouseCount, Comparator.reverseOrder())
+                                .thenComparing(InventoryDto.ImbalancedSkuRes::getTotalShortageQty, Comparator.reverseOrder())
+                                .thenComparing(InventoryDto.ImbalancedSkuRes::getSkuCode, Comparator.nullsLast(String::compareTo))
+                )
+                .toList();
+    }
+
     /**
      * 발주 SHIPPING 진입 시 해당 창고 SKU 의 가용재고 증가 (이슈 #169 — 발주 ↔ 인벤토리 연결 룰).
      * row 부재 시 신규 INSERT 분기. 동일 트랜잭션에서 호출자(PurchaseOrderService.startShipping)
@@ -342,6 +426,20 @@ public class InventoryService {
 
         private SkuAggregate(ProductSku sku) {
             this.sku = sku;
+        }
+    }
+
+    private static class ImbalancedSkuAggregate {
+        private final ProductSku sku;
+        private final ProductMaster master;
+        private int totalOnHand = 0;
+        private int totalAvailable = 0;
+        private int shortageWarehouseCount = 0;
+        private int totalShortageQty = 0;
+
+        private ImbalancedSkuAggregate(ProductSku sku, ProductMaster master) {
+            this.sku = sku;
+            this.master = master;
         }
     }
 

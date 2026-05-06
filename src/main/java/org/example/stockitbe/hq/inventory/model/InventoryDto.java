@@ -168,4 +168,20 @@ public class InventoryDto {
         @Min(0)
         private Integer pricePerKg;
     }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class ImbalancedSkuRes {
+        private String skuCode;
+        private String itemCode;
+        private String itemName;
+        private String color;
+        private String size;
+        private String category;
+        private Integer totalOnHand;
+        private Integer totalAvailable;
+        private Integer shortageWarehouseCount;
+        private Integer totalShortageQty;
+    }
 }
