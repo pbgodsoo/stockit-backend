@@ -10,11 +10,17 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class InfrastructureService {
+
+    private static final Map<String, String> REGION_CODE_MAP = buildRegionCodeMap();
+    private static final Pattern INFRA_CODE_PATTERN = Pattern.compile("^(ST|WH)-([A-Z]{2})-(\\d{4})$");
 
     private final InfrastructureRepository infrastructureRepository;
     private final StoreWarehouseMapRepository storeWarehouseMapRepository;
@@ -97,9 +103,10 @@ public class InfrastructureService {
     }
 
     private Infrastructure saveWithGeneratedCode(InfrastructureDto.UpsertReq req, NormalizedInfra normalized) {
-        String prefix = req.getLocationType() == LocationType.STORE ? "ST" : "WH";
+        String typePrefix = req.getLocationType() == LocationType.STORE ? "ST" : "WH";
+        String regionCode = resolveRegionCode(req.getRegion());
         for (int i = 0; i < 2; i++) {
-            String code = nextCode(infrastructureRepository.findAllByOrderByIdDesc().stream().map(Infrastructure::getCode).toList(), prefix);
+            String code = nextCode(typePrefix, regionCode);
             try {
                 return infrastructureRepository.save(req.toEntity(code, normalized.capacity()));
             } catch (DataIntegrityViolationException e) {
@@ -110,6 +117,8 @@ public class InfrastructureService {
     }
 
     private NormalizedInfra normalizeAndValidate(InfrastructureDto.UpsertReq req) {
+        resolveRegionCode(req.getRegion());
+
         if (req.getLocationType() == LocationType.STORE) {
             return new NormalizedInfra(null);
         }
@@ -151,19 +160,65 @@ public class InfrastructureService {
                 : BaseResponseStatus.DUPLICATE_WAREHOUSE_NAME;
     }
 
-    private String nextCode(List<String> codes, String prefix) {
-        long max = codes.stream()
-                .filter(c -> c != null && c.startsWith(prefix + "-"))
-                .mapToLong(c -> {
-                    try {
-                        return Long.parseLong(c.substring(prefix.length() + 1));
-                    } catch (Exception e) {
-                        return 0L;
-                    }
-                })
+    private String nextCode(String typePrefix, String regionCode) {
+        long max = infrastructureRepository.findAllByOrderByIdDesc().stream()
+                .map(Infrastructure::getCode)
+                .filter(c -> c != null && c.startsWith(typePrefix + "-" + regionCode + "-"))
+                .map(INFRA_CODE_PATTERN::matcher)
+                .filter(Matcher::matches)
+                .filter(m -> m.group(1).equals(typePrefix) && m.group(2).equals(regionCode))
+                .mapToLong(m -> Long.parseLong(m.group(3)))
                 .max()
                 .orElse(0L);
-        return String.format("%s-%04d", prefix, max + 1);
+        return String.format("%s-%s-%04d", typePrefix, regionCode, max + 1);
+    }
+
+    private String resolveRegionCode(String regionRaw) {
+        String region = regionRaw == null ? "" : regionRaw.trim();
+        if (region.isBlank()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        String upper = region.toUpperCase(Locale.ROOT);
+        String codeFromCode = REGION_CODE_MAP.get(upper);
+        if (codeFromCode != null) {
+            return codeFromCode;
+        }
+
+        String codeFromName = REGION_CODE_MAP.get(region);
+        if (codeFromName != null) {
+            return codeFromName;
+        }
+
+        throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+    }
+
+    private static Map<String, String> buildRegionCodeMap() {
+        Map<String, String> map = new HashMap<>();
+        map.put("SL", "SL");
+        map.put("GG", "GG");
+        map.put("IC", "IC");
+        map.put("BS", "BS");
+        map.put("DJ", "DJ");
+        map.put("GJ", "GJ");
+        map.put("GW", "GW");
+        map.put("JJ", "JJ");
+        map.put("CN", "CN");
+        map.put("YN", "YN");
+        map.put("HN", "HN");
+
+        map.put("서울", "SL");
+        map.put("경기", "GG");
+        map.put("인천", "IC");
+        map.put("부산", "BS");
+        map.put("대전", "DJ");
+        map.put("광주", "GJ");
+        map.put("강원", "GW");
+        map.put("제주", "JJ");
+        map.put("충청", "CN");
+        map.put("영남", "YN");
+        map.put("호남", "HN");
+        return Map.copyOf(map);
     }
 
     private record NormalizedInfra(String capacity) {

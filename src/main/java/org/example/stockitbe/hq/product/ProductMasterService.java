@@ -18,6 +18,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -26,6 +28,11 @@ public class ProductMasterService {
 
     private static final String MATERIAL_GROUP_NATURAL = "NATURAL";
     private static final String MATERIAL_GROUP_SYNTHETIC = "SYNTHETIC";
+
+    private static final Set<String> ALLOWED_COLORS = Set.of("BLK", "WHT", "NVY", "GRY");
+    private static final Set<String> ALLOWED_SIZES = Set.of("XS", "S", "M", "L", "XL");
+    private static final Pattern CATEGORY_CODE_PATTERN = Pattern.compile("^CAT-L2-([A-Z]{3})-([A-Z]{2})$");
+    private static final Pattern PRODUCT_CODE_PATTERN = Pattern.compile("^PRD-([A-Z]{3})-([A-Z]{2})-(\\d{3})$");
 
     private final ProductMasterRepository productMasterRepository;
     private final ProductSkuRepository productSkuRepository;
@@ -124,8 +131,10 @@ public class ProductMasterService {
     public ProductDto.ProductSkuRes createSku(String productCode, ProductDto.ProductSkuUpsertReq req) {
         productMasterRepository.findByCode(productCode)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_MASTER_NOT_FOUND));
-        validateSkuDuplicate(productCode, req.getColor().trim(), req.getSize().trim(), null);
-        ProductSku saved = saveSkuWithGeneratedCode(productCode, req);
+        String color = normalizeAndValidateColor(req.getColor());
+        String size = normalizeAndValidateSize(req.getSize());
+        validateSkuDuplicate(productCode, color, size, null);
+        ProductSku saved = saveSkuWithGeneratedCode(productCode, req, color, size);
         return ProductDto.ProductSkuRes.from(saved);
     }
 
@@ -133,8 +142,8 @@ public class ProductMasterService {
     public ProductDto.ProductSkuRes updateSku(String skuCode, ProductDto.ProductSkuUpsertReq req) {
         ProductSku sku = productSkuRepository.findBySkuCode(skuCode)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_SKU_NOT_FOUND));
-        String color = req.getColor().trim();
-        String size = req.getSize().trim();
+        String color = normalizeAndValidateColor(req.getColor());
+        String size = normalizeAndValidateSize(req.getSize());
         validateSkuDuplicate(sku.getProductCode(), color, size, skuCode);
         sku.update(color, size, req.getUnitPrice(), req.getStatus());
         return ProductDto.ProductSkuRes.from(sku);
@@ -154,11 +163,11 @@ public class ProductMasterService {
 
         Set<String> colorSet = req.getColors().stream()
                 .filter(v -> v != null && !v.trim().isEmpty())
-                .map(String::trim)
+                .map(this::normalizeAndValidateColor)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         Set<String> sizeSet = req.getSizes().stream()
                 .filter(v -> v != null && !v.trim().isEmpty())
-                .map(String::trim)
+                .map(this::normalizeAndValidateSize)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
         int requestedCount = colorSet.size() * sizeSet.size();
@@ -178,7 +187,7 @@ public class ProductMasterService {
                         .unitPrice(req.getUnitPrice())
                         .status(req.getStatus())
                         .build();
-                saveSkuWithGeneratedCode(productCode, createReq);
+                saveSkuWithGeneratedCode(productCode, createReq, color, size);
                 createdCount++;
             }
         }
@@ -230,8 +239,12 @@ public class ProductMasterService {
     }
 
     private void validateCreate(ProductDto.ProductMasterUpsertReq req) {
-        if (!categoryRepository.findByCode(req.getCategoryCode().trim()).isPresent()) {
+        String categoryCode = req.getCategoryCode().trim();
+        if (!categoryRepository.findByCode(categoryCode).isPresent()) {
             throw BaseException.from(BaseResponseStatus.CATEGORY_NOT_FOUND);
+        }
+        if (!CATEGORY_CODE_PATTERN.matcher(categoryCode).matches()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
         }
         validateMainVendor(req.getMainVendorCode());
         validateMaterialComposition(req);
@@ -241,8 +254,12 @@ public class ProductMasterService {
     }
 
     private void validateUpdate(ProductDto.ProductMasterUpsertReq req, String code) {
-        if (!categoryRepository.findByCode(req.getCategoryCode().trim()).isPresent()) {
+        String categoryCode = req.getCategoryCode().trim();
+        if (!categoryRepository.findByCode(categoryCode).isPresent()) {
             throw BaseException.from(BaseResponseStatus.CATEGORY_NOT_FOUND);
+        }
+        if (!CATEGORY_CODE_PATTERN.matcher(categoryCode).matches()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
         }
         validateMainVendor(req.getMainVendorCode());
         validateMaterialComposition(req);
@@ -364,8 +381,17 @@ public class ProductMasterService {
     }
 
     private ProductMaster saveWithGeneratedCode(ProductDto.ProductMasterUpsertReq req) {
+        String categoryCode = req.getCategoryCode().trim();
+        Matcher matcher = CATEGORY_CODE_PATTERN.matcher(categoryCode);
+        if (!matcher.matches()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+        String l1 = matcher.group(1);
+        String l2 = matcher.group(2);
+        String codePrefix = String.format("PRD-%s-%s", l1, l2);
+
         for (int i = 0; i < 2; i++) {
-            String code = nextCode(productMasterRepository.findAllByOrderByIdDesc().stream().map(ProductMaster::getCode).toList(), "PM");
+            String code = nextProductCode(codePrefix);
             try {
                 return productMasterRepository.save(req.toEntity(code));
             } catch (DataIntegrityViolationException e) {
@@ -375,16 +401,19 @@ public class ProductMasterService {
         throw BaseException.from(BaseResponseStatus.FAIL);
     }
 
-    private ProductSku saveSkuWithGeneratedCode(String productCode, ProductDto.ProductSkuUpsertReq req) {
-        for (int i = 0; i < 2; i++) {
-            String code = nextCode(productSkuRepository.findAllByOrderByIdDesc().stream().map(ProductSku::getSkuCode).toList(), "SKU");
-            try {
-                return productSkuRepository.save(req.toEntity(code, productCode));
-            } catch (DataIntegrityViolationException e) {
-                if (i == 1) throw e;
-            }
+    private ProductSku saveSkuWithGeneratedCode(String productCode, ProductDto.ProductSkuUpsertReq req, String normalizedColor, String normalizedSize) {
+        String skuCode = productCode + "-" + normalizedColor + "-" + normalizedSize;
+        try {
+            ProductDto.ProductSkuUpsertReq normalizedReq = ProductDto.ProductSkuUpsertReq.builder()
+                    .color(normalizedColor)
+                    .size(normalizedSize)
+                    .unitPrice(req.getUnitPrice())
+                    .status(req.getStatus())
+                    .build();
+            return productSkuRepository.save(normalizedReq.toEntity(skuCode, productCode));
+        } catch (DataIntegrityViolationException e) {
+            throw BaseException.from(BaseResponseStatus.DUPLICATE_PRODUCT_SKU_OPTION);
         }
-        throw BaseException.from(BaseResponseStatus.FAIL);
     }
 
     private void validateSkuDuplicate(String productCode, String color, String size, String selfSkuCode) {
@@ -398,17 +427,32 @@ public class ProductMasterService {
         }
     }
 
-    private String nextCode(List<String> codes, String prefix) {
-        long max = codes.stream()
-                .filter(c -> c != null && c.startsWith(prefix + "-"))
-                .mapToLong(c -> {
-                    try {
-                        return Long.parseLong(c.substring(prefix.length() + 1));
-                    } catch (Exception e) {
-                        return 0L;
-                    }
-                })
-                .max().orElse(0L);
-        return String.format("%s-%04d", prefix, max + 1);
+    private String nextProductCode(String codePrefix) {
+        long max = productMasterRepository.findAllByOrderByIdDesc().stream()
+                .map(ProductMaster::getCode)
+                .filter(Objects::nonNull)
+                .map(PRODUCT_CODE_PATTERN::matcher)
+                .filter(Matcher::matches)
+                .filter(m -> ("PRD-" + m.group(1) + "-" + m.group(2)).equals(codePrefix))
+                .mapToLong(m -> Long.parseLong(m.group(3)))
+                .max()
+                .orElse(0L);
+        return String.format("%s-%03d", codePrefix, max + 1);
+    }
+
+    private String normalizeAndValidateColor(String colorRaw) {
+        String color = colorRaw == null ? "" : colorRaw.trim().toUpperCase(Locale.ROOT);
+        if (!ALLOWED_COLORS.contains(color)) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+        return color;
+    }
+
+    private String normalizeAndValidateSize(String sizeRaw) {
+        String size = sizeRaw == null ? "" : sizeRaw.trim().toUpperCase(Locale.ROOT);
+        if (!ALLOWED_SIZES.contains(size)) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+        return size;
     }
 }
