@@ -19,6 +19,8 @@ public class AuthUserDetails implements UserDetails {
     private String name;
     private UserStatus status;
     private UserRole role;
+    private String locationCode;
+    private String locationName;
 
     public static AuthUserDetails from(User entity) {
         return AuthUserDetails.builder()
@@ -27,6 +29,8 @@ public class AuthUserDetails implements UserDetails {
                 .name(entity.getName())
                 .role(entity.getRole())
                 .status(entity.getStatus())
+                .locationCode(entity.getLocationCode())
+                .locationName(entity.getLocationName())
                 .build();
     }
 

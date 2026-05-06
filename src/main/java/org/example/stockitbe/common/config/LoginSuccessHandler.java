@@ -78,6 +78,8 @@ public class LoginSuccessHandler implements AuthenticationSuccessHandler {
                 .employeeCode(employeeCode)
                 .name(userDetails.getName())
                 .role(userDetails.getRole())
+                .locationCode(userDetails.getLocationCode())
+                .locationName(userDetails.getLocationName())
                 .build();
 
         response.setStatus(HttpServletResponse.SC_OK);
