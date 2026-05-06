@@ -332,7 +332,7 @@ public class PurchaseOrderService {
                 if (me == null) {
                     throw BaseException.from(BaseResponseStatus.NOT_AUTHENTICATED);
                 }
-                yield me.getName();
+                yield me.getName() + " (" + me.getLocationName() + ")";
             }
         };
         PurchaseOrderStatusHistory entry = PurchaseOrderStatusHistory.builder()
