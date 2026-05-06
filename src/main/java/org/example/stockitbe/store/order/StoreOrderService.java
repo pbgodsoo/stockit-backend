@@ -7,8 +7,10 @@ import org.example.stockitbe.common.model.BaseResponseStatus;
 import org.example.stockitbe.hq.category.CategoryRepository;
 import org.example.stockitbe.hq.category.model.Category;
 import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
+import org.example.stockitbe.hq.infrastructure.StoreWarehouseMapRepository;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
+import org.example.stockitbe.hq.infrastructure.model.StoreWarehouseRole;
 import org.example.stockitbe.hq.inventory.InventoryService;
 import org.example.stockitbe.hq.product.ProductMasterRepository;
 import org.example.stockitbe.hq.product.ProductSkuRepository;
@@ -43,6 +45,7 @@ public class StoreOrderService {
     private final StoreOrderItemRepository itemRepository;
     private final StoreOrderStatusHistoryRepository historyRepository;
     private final InfrastructureRepository infrastructureRepository;
+    private final StoreWarehouseMapRepository storeWarehouseMapRepository;
     private final InventoryService inventoryService;
     private final ProductSkuRepository productSkuRepository;
     private final ProductMasterRepository productMasterRepository;
@@ -279,11 +282,8 @@ public class StoreOrderService {
     // 사용하는 메서드: create
     // 매장에 매핑된 WAREHOUSE 인프라를 조회한다.
     private Infrastructure lookupWarehouseFromStore(Infrastructure store) {
-        String mappedWarehouseCode = store.getMappedWarehouseCode();
-        if (mappedWarehouseCode == null || mappedWarehouseCode.isBlank()) {
-            throw BaseException.from(BaseResponseStatus.STORE_ORDER_WAREHOUSE_NOT_FOUND);
-        }
-        return infrastructureRepository.findByCodeAndLocationType(mappedWarehouseCode, LocationType.WAREHOUSE)
+        return storeWarehouseMapRepository.findByStoreAndRole(store, StoreWarehouseRole.PRIMARY)
+                .map(map -> map.getWarehouse())
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.STORE_ORDER_WAREHOUSE_NOT_FOUND));
     }
 
