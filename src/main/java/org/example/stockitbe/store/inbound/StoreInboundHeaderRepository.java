@@ -1,0 +1,16 @@
+package org.example.stockitbe.store.inbound;
+
+import org.example.stockitbe.store.inbound.model.StoreInboundStatus;
+import org.example.stockitbe.store.inbound.model.entity.StoreInboundHeader;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
+import java.util.Optional;
+
+public interface StoreInboundHeaderRepository extends JpaRepository<StoreInboundHeader, Long> {
+    Optional<StoreInboundHeader> findByInboundNo(String inboundNo);
+    Optional<StoreInboundHeader> findBySourceRefNo(String sourceRefNo);
+    List<StoreInboundHeader> findAllByStoreIdOrderByRequestedAtDescIdDesc(Long storeId);
+    List<StoreInboundHeader> findAllByStoreIdAndStatusOrderByRequestedAtDescIdDesc(Long storeId, StoreInboundStatus status);
+}
+
