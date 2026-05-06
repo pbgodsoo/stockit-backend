@@ -1,13 +1,3 @@
-CREATE TABLE IF NOT EXISTS circular_material_price_policy (
-  material_code VARCHAR(32) PRIMARY KEY,
-  material_name_ko VARCHAR(32) NOT NULL,
-  material_group VARCHAR(32) NOT NULL,
-  price_per_kg INT NOT NULL,
-  active TINYINT(1) NOT NULL DEFAULT 1,
-  create_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  update_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
 INSERT INTO circular_material_price_policy
 (material_code, material_name_ko, material_group, price_per_kg, active, create_date, update_date)
 VALUES

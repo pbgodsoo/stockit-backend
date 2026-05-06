@@ -4,11 +4,6 @@
 -- 2) infrastructure_dummy_data.sql
 -- 3) product_master_dummy_data.sql
 
--- 상태 분리(동일 sku+location 에 status 별 행 공존)용 유니크 키
-ALTER TABLE inventory
-DROP INDEX uk_inventory_sku_location,
-ADD CONSTRAINT uk_inventory_sku_location_status UNIQUE (sku_id, location_id, inventory_status);
-
 INSERT INTO inventory
 (sku_id, location_id, inventory_status, quantity, reserved_quantity, in_transit_quantity, available_quantity, status_changed_at, last_movement_at, create_date, update_date)
 SELECT
@@ -84,8 +79,7 @@ WHERE infra.location_type = 'WAREHOUSE'
   AND inv.id > 0
   AND (
     UPPER(TRIM(sku.size)) IN ('XS', 'XL')
-    OR UPPER(TRIM(sku.color)) IN ('BLACK', 'IVORY')
-    OR sku.color IN ('검정', '아이보리')
+    OR UPPER(TRIM(sku.color)) IN ('BLK', 'WHT')
   );
 
 -- ===== 상태 분리 공존 샘플 =====
