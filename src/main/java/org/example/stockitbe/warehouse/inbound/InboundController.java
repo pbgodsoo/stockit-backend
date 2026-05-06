@@ -4,7 +4,9 @@ import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.model.BaseResponse;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderDto;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderStatus;
+import org.example.stockitbe.user.model.AuthUserDetails;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -44,7 +46,9 @@ public class InboundController {
     }
 
     @PostMapping("/{code}/confirm")
-    public BaseResponse<PurchaseOrderDto.DetailRes> confirm(@PathVariable String code) {
-        return BaseResponse.success(service.confirm(code));
+    public BaseResponse<PurchaseOrderDto.DetailRes> confirm(
+            @AuthenticationPrincipal AuthUserDetails me,
+            @PathVariable String code) {
+        return BaseResponse.success(service.confirm(code, me));
     }
 }

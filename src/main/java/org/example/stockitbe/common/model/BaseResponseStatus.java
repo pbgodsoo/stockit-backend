@@ -17,6 +17,7 @@ public enum BaseResponseStatus {
     SIGNUP_INVALID_UUID(false, 3005, "유효하지 않은 인증값"),
     USER_NOT_FOUND(false, 3006, "존재하지 않는 사용자입니다."),
     PASSWORD_WRONG(false, 3007, "비밀번호가 일치하지 않습니다."),
+    NOT_AUTHENTICATED(false, 3008, "인증되지 않은 요청입니다."),
 
     // 4000번대 실패
     REQUEST_ERROR(false, 4001, "입력값이 잘못되었습니다."),
