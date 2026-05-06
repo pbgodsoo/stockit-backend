@@ -23,7 +23,7 @@ public class StoreOrderHeader extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "order_no", nullable = false, length = 40)
+    @Column(name = "order_no", nullable = false, length = 50)
     private String orderNo;
 
     @Column(name = "store_id", nullable = false)
