@@ -13,10 +13,11 @@ import org.example.stockitbe.hq.inventory.model.Inventory;
 import org.example.stockitbe.hq.inventory.model.InventoryCandidateCondition;
 import org.example.stockitbe.hq.inventory.model.InventoryDto;
 import org.example.stockitbe.hq.inventory.model.InventoryStatus;
+import org.example.stockitbe.hq.product.MaterialRepository;
 import org.example.stockitbe.hq.product.ProductMasterRepository;
 import org.example.stockitbe.hq.product.ProductSkuRepository;
 import org.example.stockitbe.hq.product.model.ProductMaterialComposition;
-import org.example.stockitbe.hq.product.model.ProductMaterialSpec;
+import org.example.stockitbe.hq.product.model.Material;
 import org.example.stockitbe.hq.product.model.ProductMaster;
 import org.example.stockitbe.hq.product.model.ProductMaterialType;
 import org.example.stockitbe.hq.product.model.ProductSku;
@@ -36,6 +37,7 @@ public class InventoryService {
     private final CircularMaterialPricePolicyRepository circularMaterialPricePolicyRepository;
     private final ProductSkuRepository productSkuRepository;
     private final ProductMasterRepository productMasterRepository;
+    private final MaterialRepository materialRepository;
     private final CategoryRepository categoryRepository;
     private final InfrastructureRepository infrastructureRepository;
 
@@ -513,6 +515,8 @@ public class InventoryService {
         Set<String> productCodes = skuById.values().stream().map(ProductSku::getProductCode).collect(Collectors.toSet());
         Map<String, ProductMaster> masterByCode = productMasterRepository.findAllByCodeIn(productCodes).stream()
                 .collect(Collectors.toMap(ProductMaster::getCode, Function.identity()));
+        Map<String, Material> materialByCode = materialRepository.findAllByActiveTrueOrderByCodeAsc().stream()
+                .collect(Collectors.toMap(Material::getCode, Function.identity()));
 
         List<Category> categories = categoryRepository.findAllByOrderByIdAsc();
         Map<String, Category> categoryByCode = categories.stream().collect(Collectors.toMap(Category::getCode, Function.identity()));
@@ -535,10 +539,10 @@ public class InventoryService {
                     double unitWeightKg = resolveCategoryUnitWeightKg(child.getName());
                     double totalWeightKg = round3(availableQuantity * unitWeightKg);
 
-                    ProductMaterialSpec materialSpec = master.getMaterialSpec();
-                    String materialType = resolveMaterialTypeLabel(materialSpec);
-                    List<InventoryDto.MaterialCompositionRes> compositions = toMaterialCompositionRes(materialSpec);
-                    int materialKgPrice = resolveMaterialKgPrice(materialSpec, materialPriceByCode);
+                    List<ProductMaterialComposition> materialCompositions = master.getMaterialCompositions();
+                    String materialType = resolveMaterialTypeLabel(materialCompositions, materialByCode);
+                    List<InventoryDto.MaterialCompositionRes> compositions = toMaterialCompositionRes(materialCompositions, materialByCode);
+                    int materialKgPrice = resolveMaterialKgPrice(materialCompositions, materialByCode, materialPriceByCode);
                     long circularSalePrice = Math.round(totalWeightKg * materialKgPrice);
 
                     return InventoryDto.CircularInventoryRes.builder()
@@ -824,44 +828,66 @@ public class InventoryService {
         return CATEGORY_UNIT_WEIGHT_KG.getOrDefault(childCategoryName.trim(), DEFAULT_UNIT_WEIGHT_KG);
     }
 
-    private String resolveMaterialTypeLabel(ProductMaterialSpec materialSpec) {
-        if (materialSpec == null || materialSpec.getMaterialType() == null) return "혼방";
-        ProductMaterialType type = materialSpec.getMaterialType();
+    private String resolveMaterialTypeLabel(List<ProductMaterialComposition> compositions, Map<String, Material> materialByCode) {
+        ProductMaterialType type = deriveMaterialType(compositions, materialByCode);
         if (type == ProductMaterialType.NATURAL_SINGLE) return "천연 단일 섬유";
         if (type == ProductMaterialType.SYNTHETIC) return "합성 섬유";
         return "혼방";
     }
 
-    private List<InventoryDto.MaterialCompositionRes> toMaterialCompositionRes(ProductMaterialSpec materialSpec) {
-        if (materialSpec == null || materialSpec.getCompositions() == null) return List.of();
-        return materialSpec.getCompositions().stream()
-                .filter(comp -> comp.getMaterialCode() != null)
+    private List<InventoryDto.MaterialCompositionRes> toMaterialCompositionRes(List<ProductMaterialComposition> compositions,
+                                                                                Map<String, Material> materialByCode) {
+        if (compositions == null) return List.of();
+        return compositions.stream()
+                .filter(comp -> comp.getMaterial() != null && comp.getMaterial().getCode() != null)
                 .map(comp -> {
-                    String code = comp.getMaterialCode().trim().toUpperCase(Locale.ROOT);
+                    String code = comp.getMaterial().getCode().trim().toUpperCase(Locale.ROOT);
                     return InventoryDto.MaterialCompositionRes.builder()
                             .materialCode(code)
-                            .materialNameKo(MATERIAL_NAME_KO_MAP.getOrDefault(code, code))
+                            .materialNameKo(resolveMaterialName(code, materialByCode))
                             .ratio(comp.getRatio() == null ? 0 : comp.getRatio())
                             .build();
                 })
                 .toList();
     }
 
-    private int resolveMaterialKgPrice(ProductMaterialSpec materialSpec, Map<String, Integer> materialPriceByCode) {
-        if (materialSpec == null || materialSpec.getMaterialType() == null) {
+    private int resolveMaterialKgPrice(List<ProductMaterialComposition> compositions,
+                                       Map<String, Material> materialByCode,
+                                       Map<String, Integer> materialPriceByCode) {
+        ProductMaterialType materialType = deriveMaterialType(compositions, materialByCode);
+        if (materialType == ProductMaterialType.BLEND) {
             return materialPriceByCode.getOrDefault(MAT_BLEND, 1000);
         }
-        if (materialSpec.getMaterialType() == ProductMaterialType.BLEND) {
-            return materialPriceByCode.getOrDefault(MAT_BLEND, 1000);
-        }
-
-        List<ProductMaterialComposition> compositions = materialSpec.getCompositions();
         if (compositions == null || compositions.isEmpty()) {
             return materialPriceByCode.getOrDefault(MAT_BLEND, 1000);
         }
         ProductMaterialComposition single = compositions.get(0);
-        String code = single.getMaterialCode() == null ? "" : single.getMaterialCode().trim().toUpperCase(Locale.ROOT);
+        String code = single.getMaterial() == null ? "" : single.getMaterial().getCode().trim().toUpperCase(Locale.ROOT);
         return materialPriceByCode.getOrDefault(code, materialPriceByCode.getOrDefault(MAT_BLEND, 1000));
+    }
+
+    private ProductMaterialType deriveMaterialType(List<ProductMaterialComposition> compositions, Map<String, Material> materialByCode) {
+        if (compositions == null || compositions.isEmpty()) return ProductMaterialType.BLEND;
+        if (compositions.size() >= 2) return ProductMaterialType.BLEND;
+
+        ProductMaterialComposition single = compositions.get(0);
+        if (single.getMaterial() == null || single.getMaterial().getCode() == null) return ProductMaterialType.BLEND;
+        String code = single.getMaterial().getCode().trim().toUpperCase(Locale.ROOT);
+        Material material = materialByCode.get(code);
+        if (material == null || material.getMaterialGroup() == null) return ProductMaterialType.BLEND;
+
+        String group = material.getMaterialGroup().trim().toUpperCase(Locale.ROOT);
+        if ("NATURAL".equals(group)) return ProductMaterialType.NATURAL_SINGLE;
+        if ("SYNTHETIC".equals(group)) return ProductMaterialType.SYNTHETIC;
+        return ProductMaterialType.BLEND;
+    }
+
+    private String resolveMaterialName(String code, Map<String, Material> materialByCode) {
+        Material material = materialByCode.get(code);
+        if (material == null || material.getNameKo() == null || material.getNameKo().isBlank()) {
+            return MATERIAL_NAME_KO_MAP.getOrDefault(code, code);
+        }
+        return material.getNameKo();
     }
 
     private double round3(double value) {

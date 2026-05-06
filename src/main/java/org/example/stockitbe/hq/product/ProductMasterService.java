@@ -4,11 +4,11 @@ import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.model.BaseResponseStatus;
 import org.example.stockitbe.hq.category.CategoryRepository;
-import org.example.stockitbe.hq.product.model.ProductMaterialComposition;
-import org.example.stockitbe.hq.product.model.ProductMaterialSpec;
-import org.example.stockitbe.hq.product.model.ProductMaterialType;
+import org.example.stockitbe.hq.product.model.Material;
 import org.example.stockitbe.hq.product.model.ProductDto;
 import org.example.stockitbe.hq.product.model.ProductMaster;
+import org.example.stockitbe.hq.product.model.ProductMaterialComposition;
+import org.example.stockitbe.hq.product.model.ProductMaterialType;
 import org.example.stockitbe.hq.product.model.ProductSku;
 import org.example.stockitbe.hq.vendor.VendorRepository;
 import org.example.stockitbe.hq.vendor.model.Vendor;
@@ -17,50 +17,19 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class ProductMasterService {
-    private static final String MAT_COTTON = "COTTON";
-    private static final String MAT_WOOL = "WOOL";
-    private static final String MAT_CASHMERE = "CASHMERE";
-    private static final String MAT_SILK = "SILK";
-    private static final String MAT_LINEN = "LINEN";
-    private static final String MAT_POLYESTER = "POLYESTER";
-    private static final String MAT_ACRYLIC = "ACRYLIC";
-    private static final String MAT_POLYAMIDE = "POLYAMIDE";
-    private static final String MAT_ELASTANE = "ELASTANE";
 
-    private static final Set<String> NATURAL_CODES = Set.of(
-            MAT_COTTON, MAT_WOOL, MAT_CASHMERE, MAT_SILK, MAT_LINEN
-    );
-    private static final Set<String> SYNTHETIC_CODES = Set.of(
-            MAT_POLYESTER, MAT_ACRYLIC, MAT_POLYAMIDE, MAT_ELASTANE
-    );
-    private static final Set<String> ALL_MATERIAL_CODES = Set.of(
-            MAT_COTTON, MAT_WOOL, MAT_CASHMERE, MAT_SILK, MAT_LINEN,
-            MAT_POLYESTER, MAT_ACRYLIC, MAT_POLYAMIDE, MAT_ELASTANE
-    );
-    private static final Map<String, String> MATERIAL_NAME_KO_MAP = Map.of(
-            MAT_COTTON, "면",
-            MAT_WOOL, "울",
-            MAT_CASHMERE, "캐시미어",
-            MAT_SILK, "실크",
-            MAT_LINEN, "린넨",
-            MAT_POLYESTER, "폴리에스터",
-            MAT_ACRYLIC, "아크릴",
-            MAT_POLYAMIDE, "나일론",
-            MAT_ELASTANE, "스판덱스"
-    );
-
+    private static final String MATERIAL_GROUP_NATURAL = "NATURAL";
+    private static final String MATERIAL_GROUP_SYNTHETIC = "SYNTHETIC";
 
     private final ProductMasterRepository productMasterRepository;
     private final ProductSkuRepository productSkuRepository;
+    private final MaterialRepository materialRepository;
     private final CategoryRepository categoryRepository;
     private final VendorRepository vendorRepository;
 
@@ -68,10 +37,17 @@ public class ProductMasterService {
     public List<ProductDto.ProductMasterRes> findProducts(String keyword, String categoryCode) {
         String safeKeyword = keyword == null ? "" : keyword.trim();
         String safeCategoryCode = categoryCode == null ? "" : categoryCode.trim();
+        Map<String, String> materialNameMap = loadMaterialNameMap();
+
         return productMasterRepository
                 .findByNameContainingIgnoreCaseAndCategoryCodeContainingIgnoreCaseOrderByIdDesc(safeKeyword, safeCategoryCode)
                 .stream()
-                .map(p -> ProductDto.ProductMasterRes.from(p, productSkuRepository.countByProductCode(p.getCode()), MATERIAL_NAME_KO_MAP))
+                .map(p -> ProductDto.ProductMasterRes.from(
+                        p,
+                        productSkuRepository.countByProductCode(p.getCode()),
+                        deriveMaterialType(p.getMaterialCompositions()),
+                        materialNameMap
+                ))
                 .toList();
     }
 
@@ -79,14 +55,27 @@ public class ProductMasterService {
     public ProductDto.ProductMasterRes findProductByCode(String code) {
         ProductMaster product = productMasterRepository.findByCode(code)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_MASTER_NOT_FOUND));
-        return ProductDto.ProductMasterRes.from(product, productSkuRepository.countByProductCode(product.getCode()), MATERIAL_NAME_KO_MAP);
+        return ProductDto.ProductMasterRes.from(
+                product,
+                productSkuRepository.countByProductCode(product.getCode()),
+                deriveMaterialType(product.getMaterialCompositions()),
+                loadMaterialNameMap()
+        );
     }
 
     @Transactional
     public ProductDto.ProductMasterRes createProduct(ProductDto.ProductMasterUpsertReq req) {
         validateCreate(req);
         ProductMaster saved = saveWithGeneratedCode(req);
-        return ProductDto.ProductMasterRes.from(saved, 0, MATERIAL_NAME_KO_MAP);
+        List<ProductMaterialComposition> compositions = buildCompositions(req);
+        saved.replaceMaterialCompositions(compositions);
+
+        return ProductDto.ProductMasterRes.from(
+                saved,
+                0,
+                deriveMaterialType(saved.getMaterialCompositions()),
+                loadMaterialNameMap()
+        );
     }
 
     @Transactional
@@ -94,6 +83,7 @@ public class ProductMasterService {
         ProductMaster product = productMasterRepository.findByCode(code)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_MASTER_NOT_FOUND));
         validateUpdate(req, code);
+
         product.update(
                 req.getName().trim(),
                 req.getCategoryCode().trim(),
@@ -102,10 +92,16 @@ public class ProductMasterService {
                 req.getWarehouseSafetyStock(),
                 req.getStoreSafetyStock(),
                 req.getMainVendorCode().trim(),
-                req.toMaterialSpec(),
                 req.getStatus()
         );
-        return ProductDto.ProductMasterRes.from(product, productSkuRepository.countByProductCode(product.getCode()), MATERIAL_NAME_KO_MAP);
+        product.replaceMaterialCompositions(buildCompositions(req));
+
+        return ProductDto.ProductMasterRes.from(
+                product,
+                productSkuRepository.countByProductCode(product.getCode()),
+                deriveMaterialType(product.getMaterialCompositions()),
+                loadMaterialNameMap()
+        );
     }
 
     @Transactional
@@ -238,7 +234,7 @@ public class ProductMasterService {
             throw BaseException.from(BaseResponseStatus.CATEGORY_NOT_FOUND);
         }
         validateMainVendor(req.getMainVendorCode());
-        validateMaterialSpec(req.toMaterialSpec());
+        validateMaterialComposition(req);
         if (productMasterRepository.existsByNameIgnoreCase(req.getName().trim())) {
             throw BaseException.from(BaseResponseStatus.DUPLICATE_PRODUCT_MASTER_NAME);
         }
@@ -249,29 +245,27 @@ public class ProductMasterService {
             throw BaseException.from(BaseResponseStatus.CATEGORY_NOT_FOUND);
         }
         validateMainVendor(req.getMainVendorCode());
-        validateMaterialSpec(req.toMaterialSpec());
+        validateMaterialComposition(req);
         if (productMasterRepository.existsByNameIgnoreCaseAndCodeNot(req.getName().trim(), code)) {
             throw BaseException.from(BaseResponseStatus.DUPLICATE_PRODUCT_MASTER_NAME);
         }
     }
 
-    private void validateMaterialSpec(ProductMaterialSpec materialSpec) {
-        if (materialSpec == null || materialSpec.getMaterialType() == null) {
-            throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
-        }
-        List<ProductMaterialComposition> compositions = materialSpec.getCompositions();
-        if (compositions == null || compositions.isEmpty()) {
+    private void validateMaterialComposition(ProductDto.ProductMasterUpsertReq req) {
+        List<ProductDto.ProductMaterialCompositionReq> compositions = req.getMaterialCompositions();
+        if (req.getMaterialType() == null || compositions == null || compositions.isEmpty()) {
             throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
         }
 
+        Set<String> codes = new LinkedHashSet<>();
         int ratioSum = 0;
-        for (ProductMaterialComposition composition : compositions) {
+        for (ProductDto.ProductMaterialCompositionReq composition : compositions) {
             if (composition == null || composition.getMaterialCode() == null || composition.getMaterialCode().trim().isEmpty()) {
                 throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
             }
-            String materialCode = composition.getMaterialCode().trim().toUpperCase();
+            String code = composition.getMaterialCode().trim().toUpperCase(Locale.ROOT);
             Integer ratio = composition.getRatio();
-            if (!ALL_MATERIAL_CODES.contains(materialCode) || ratio == null || ratio <= 0) {
+            if (ratio == null || ratio <= 0 || !codes.add(code)) {
                 throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
             }
             ratioSum += ratio;
@@ -281,8 +275,13 @@ public class ProductMasterService {
             throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
         }
 
-        ProductMaterialType materialType = materialSpec.getMaterialType();
-        if (materialType == ProductMaterialType.BLEND) {
+        Map<String, Material> materialByCode = materialRepository.findAllByCodeIn(codes).stream()
+                .collect(Collectors.toMap(Material::getCode, m -> m));
+        if (materialByCode.size() != codes.size()) {
+            throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
+        }
+
+        if (req.getMaterialType() == ProductMaterialType.BLEND) {
             if (compositions.size() < 2) {
                 throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
             }
@@ -292,13 +291,68 @@ public class ProductMasterService {
         if (compositions.size() != 1) {
             throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
         }
-        String singleCode = compositions.get(0).getMaterialCode().trim().toUpperCase();
-        if (materialType == ProductMaterialType.NATURAL_SINGLE && !NATURAL_CODES.contains(singleCode)) {
+
+        String singleCode = compositions.get(0).getMaterialCode().trim().toUpperCase(Locale.ROOT);
+        Material single = materialByCode.get(singleCode);
+        if (single == null || single.getMaterialGroup() == null) {
             throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
         }
-        if (materialType == ProductMaterialType.SYNTHETIC && !SYNTHETIC_CODES.contains(singleCode)) {
+        String group = single.getMaterialGroup().trim().toUpperCase(Locale.ROOT);
+        if (req.getMaterialType() == ProductMaterialType.NATURAL_SINGLE && !MATERIAL_GROUP_NATURAL.equals(group)) {
             throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
         }
+        if (req.getMaterialType() == ProductMaterialType.SYNTHETIC && !MATERIAL_GROUP_SYNTHETIC.equals(group)) {
+            throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
+        }
+    }
+
+    private List<ProductMaterialComposition> buildCompositions(ProductDto.ProductMasterUpsertReq req) {
+        List<ProductDto.ProductMaterialCompositionReq> requested = req.getMaterialCompositions();
+        List<String> codes = requested.stream()
+                .map(c -> c.getMaterialCode().trim().toUpperCase(Locale.ROOT))
+                .toList();
+
+        Map<String, Material> materialByCode = materialRepository.findAllByCodeIn(codes).stream()
+                .collect(Collectors.toMap(Material::getCode, m -> m));
+
+        List<ProductMaterialComposition> rows = new ArrayList<>();
+        for (int i = 0; i < requested.size(); i++) {
+            ProductDto.ProductMaterialCompositionReq item = requested.get(i);
+            String code = item.getMaterialCode().trim().toUpperCase(Locale.ROOT);
+            Material material = materialByCode.get(code);
+            if (material == null) {
+                throw BaseException.from(BaseResponseStatus.INVALID_PRODUCT_MATERIAL_SPEC);
+            }
+            rows.add(new ProductMaterialComposition(material, item.getRatio(), i + 1));
+        }
+        return rows;
+    }
+
+    private ProductMaterialType deriveMaterialType(List<ProductMaterialComposition> compositions) {
+        if (compositions == null || compositions.isEmpty()) {
+            return ProductMaterialType.BLEND;
+        }
+        if (compositions.size() >= 2) {
+            return ProductMaterialType.BLEND;
+        }
+
+        Material material = compositions.get(0).getMaterial();
+        if (material == null || material.getMaterialGroup() == null) {
+            return ProductMaterialType.BLEND;
+        }
+        String group = material.getMaterialGroup().trim().toUpperCase(Locale.ROOT);
+        if (MATERIAL_GROUP_NATURAL.equals(group)) {
+            return ProductMaterialType.NATURAL_SINGLE;
+        }
+        if (MATERIAL_GROUP_SYNTHETIC.equals(group)) {
+            return ProductMaterialType.SYNTHETIC;
+        }
+        return ProductMaterialType.BLEND;
+    }
+
+    private Map<String, String> loadMaterialNameMap() {
+        return materialRepository.findAllByActiveTrueOrderByCodeAsc().stream()
+                .collect(Collectors.toMap(Material::getCode, Material::getNameKo));
     }
 
     private void validateMainVendor(String mainVendorCode) {

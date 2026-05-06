@@ -6,8 +6,9 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.example.stockitbe.common.model.BaseEntity;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "product_master", uniqueConstraints = {
@@ -44,9 +45,9 @@ public class ProductMaster extends BaseEntity {
     @Column(name = "main_vendor_code", nullable = false, length = 32)
     private String mainVendorCode;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "material_spec", columnDefinition = "json")
-    private ProductMaterialSpec materialSpec;
+    @OneToMany(mappedBy = "productMaster", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("compositionOrder ASC, id ASC")
+    private List<ProductMaterialComposition> materialCompositions = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)
@@ -55,7 +56,7 @@ public class ProductMaster extends BaseEntity {
     @Builder
     private ProductMaster(String code, String name, String categoryCode, Long basePrice, Integer leadTimeDays,
                           Integer warehouseSafetyStock, Integer storeSafetyStock, String mainVendorCode,
-                          ProductMaterialSpec materialSpec, ProductStatus status) {
+                          ProductStatus status) {
         this.code = code;
         this.name = name;
         this.categoryCode = categoryCode;
@@ -64,12 +65,11 @@ public class ProductMaster extends BaseEntity {
         this.warehouseSafetyStock = warehouseSafetyStock == null ? 0 : warehouseSafetyStock;
         this.storeSafetyStock = storeSafetyStock == null ? 0 : storeSafetyStock;
         this.mainVendorCode = mainVendorCode;
-        this.materialSpec = materialSpec;
         this.status = status == null ? ProductStatus.ACTIVE : status;
     }
 
     public void update(String name, String categoryCode, Long basePrice, Integer leadTimeDays, Integer warehouseSafetyStock,
-                       Integer storeSafetyStock, String mainVendorCode, ProductMaterialSpec materialSpec, ProductStatus status) {
+                       Integer storeSafetyStock, String mainVendorCode, ProductStatus status) {
         this.name = name;
         this.categoryCode = categoryCode;
         this.basePrice = basePrice;
@@ -77,7 +77,17 @@ public class ProductMaster extends BaseEntity {
         this.warehouseSafetyStock = warehouseSafetyStock == null ? 0 : warehouseSafetyStock;
         this.storeSafetyStock = storeSafetyStock == null ? 0 : storeSafetyStock;
         this.mainVendorCode = mainVendorCode;
-        this.materialSpec = materialSpec;
         this.status = status;
+    }
+
+    public void replaceMaterialCompositions(List<ProductMaterialComposition> compositions) {
+        this.materialCompositions.clear();
+        if (compositions == null) {
+            return;
+        }
+        for (ProductMaterialComposition composition : compositions) {
+            composition.assignProductMaster(this);
+            this.materialCompositions.add(composition);
+        }
     }
 }
