@@ -20,9 +20,9 @@ import java.util.List;
 /**
  * WHS-005/007/008 — 창고 관리자 입고 컨트롤러.
  *
- * 권한군 prefix: /api/warehouse/...
- * 인증 미정(ADR-011) 이라 warehouseId 는 query 파라미터로 받음 — 임시 신뢰 모델.
- * 인증 도입 시 @AuthenticationPrincipal 로 me.warehouseId 자동 주입으로 마이그레이션.
+ * 권한군 prefix: /api/warehouse/...  (SecurityConfig 가 hasRole("WAREHOUSE") 자동 차단)
+ * 자기 창고 데이터 격리 — 인증 사용자의 locationCode 만 신뢰. query param 으로 warehouseId
+ * 받지 않음 (위변조 방지). detail 도 @AuthenticationPrincipal 받아 다른 창고 발주 직접 URL 접근 차단.
  */
 @RestController
 @RequestMapping("/api/warehouse/inbound")
@@ -33,16 +33,18 @@ public class InboundController {
 
     @GetMapping
     public BaseResponse<List<PurchaseOrderDto.ListRes>> list(
+            @AuthenticationPrincipal AuthUserDetails me,
             @RequestParam(required = false) PurchaseOrderStatus status,
-            @RequestParam(required = false) Long warehouseId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return BaseResponse.success(service.findAll(status, warehouseId, from, to));
+        return BaseResponse.success(service.findAll(me.getLocationCode(), status, from, to));
     }
 
     @GetMapping("/{code}")
-    public BaseResponse<PurchaseOrderDto.DetailRes> detail(@PathVariable String code) {
-        return BaseResponse.success(service.findByCode(code));
+    public BaseResponse<PurchaseOrderDto.DetailRes> detail(
+            @AuthenticationPrincipal AuthUserDetails me,
+            @PathVariable String code) {
+        return BaseResponse.success(service.findByCode(code, me.getLocationCode()));
     }
 
     @PostMapping("/{code}/confirm")

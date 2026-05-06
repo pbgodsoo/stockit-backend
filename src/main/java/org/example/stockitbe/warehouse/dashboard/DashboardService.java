@@ -2,6 +2,10 @@ package org.example.stockitbe.warehouse.dashboard;
 
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.example.stockitbe.common.exception.BaseException;
+import org.example.stockitbe.common.model.BaseResponseStatus;
+import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
+import org.example.stockitbe.hq.infrastructure.model.LocationType;
 import org.example.stockitbe.hq.purchaseorder.PurchaseOrderRepository;
 import org.example.stockitbe.hq.purchaseorder.PurchaseOrderStatusHistoryRepository;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrder;
@@ -28,7 +32,8 @@ import java.util.stream.Collectors;
  * 집계 대상은 `purchase_order` + `purchase_order_status_history` 단일 진실 원천 (ADR-015).
  * 별 테이블·Entity 신설 없이 read-only 활용만 한다.
  *
- * 인증 미정(ADR-011) 으로 warehouseId 는 옵셔널 query 파라미터.
+ * 인증 사용자의 locationCode 를 받아 자기 창고 row 만 집계. Long warehouseId 는
+ * Infrastructure lookup 한 번에 격리되어 기존 Specification 로직 변경 없음.
  */
 @Service
 @RequiredArgsConstructor
@@ -36,10 +41,15 @@ public class DashboardService {
 
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final PurchaseOrderStatusHistoryRepository historyRepository;
+    private final InfrastructureRepository infrastructureRepository;
 
     @Transactional(readOnly = true)
-    public DashboardDto.InboundProgressRes getInboundProgress(Long warehouseId,
+    public DashboardDto.InboundProgressRes getInboundProgress(String locationCode,
                                                                 LocalDate from, LocalDate to) {
+        Long warehouseId = infrastructureRepository
+                .findByCodeAndLocationType(locationCode, LocationType.WAREHOUSE)
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.WAREHOUSE_NOT_FOUND))
+                .getId();
         Specification<PurchaseOrder> spec = buildSpec(warehouseId, from, to);
         List<PurchaseOrder> orders = purchaseOrderRepository.findAll(spec);
 
