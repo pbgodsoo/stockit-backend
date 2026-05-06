@@ -20,6 +20,7 @@ import org.example.stockitbe.hq.vendor.VendorProductRepository;
 import org.example.stockitbe.hq.vendor.VendorRepository;
 import org.example.stockitbe.hq.vendor.model.Vendor;
 import org.example.stockitbe.hq.vendor.model.VendorProduct;
+import org.example.stockitbe.user.model.AuthUserDetails;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,8 +40,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PurchaseOrderService {
 
-    private static final String HQ_MANAGER_ACTOR = "본사 관리자";
-    private static final String WAREHOUSE_MANAGER_ACTOR = "창고 관리자";
     private static final DateTimeFormatter CODE_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     private final PurchaseOrderRepository purchaseOrderRepository;
@@ -108,7 +107,7 @@ public class PurchaseOrderService {
     }
 
     @Transactional
-    public PurchaseOrderDto.DetailRes create(PurchaseOrderDto.CreateReq req) {
+    public PurchaseOrderDto.DetailRes create(PurchaseOrderDto.CreateReq req, AuthUserDetails me) {
         if (req.getItems() == null || req.getItems().isEmpty()) {
             throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_EMPTY_ITEMS);
         }
@@ -154,7 +153,7 @@ public class PurchaseOrderService {
         }
         itemRepository.saveAll(items);
 
-        appendHistory(saved, null);
+        appendHistory(saved, null, me);
 
         return buildDetailRes(saved);
     }
@@ -215,7 +214,7 @@ public class PurchaseOrderService {
     public PurchaseOrderDto.DetailRes approve(String code) {
         PurchaseOrder po = lookupPurchaseOrder(code);
         po.markApproved();
-        appendHistory(po, null);
+        appendHistory(po, null, null);
         return buildDetailRes(po);
     }
 
@@ -223,7 +222,7 @@ public class PurchaseOrderService {
     public PurchaseOrderDto.DetailRes startShipping(String code) {
         PurchaseOrder po = lookupPurchaseOrder(code);
         po.markShipping();
-        appendHistory(po, null);
+        appendHistory(po, null, null);
         // 발주 ↔ 인벤토리 연결 (이슈 #169) — 가용재고 += 발주 수량 (도착 전 예약)
         itemRepository.findAllByPurchaseOrderId(po.getId())
                 .forEach(it -> inventoryService.increaseAvailable(po.getWarehouseId(), it.getSkuCode(), it.getQuantity()));
@@ -234,15 +233,15 @@ public class PurchaseOrderService {
     public PurchaseOrderDto.DetailRes deliver(String code) {
         PurchaseOrder po = lookupPurchaseOrder(code);
         po.markDelivered();
-        appendHistory(po, null);
+        appendHistory(po, null, null);
         return buildDetailRes(po);
     }
 
     @Transactional
-    public PurchaseOrderDto.DetailRes complete(String code) {
+    public PurchaseOrderDto.DetailRes complete(String code, AuthUserDetails me) {
         PurchaseOrder po = lookupPurchaseOrder(code);
         po.markCompleted();
-        appendHistory(po, null);
+        appendHistory(po, null, me);
         // 발주 ↔ 인벤토리 연결 (이슈 #169) — 가용재고 → 실재고 이동
         itemRepository.findAllByPurchaseOrderId(po.getId())
                 .forEach(it -> inventoryService.markPhysical(po.getWarehouseId(), it.getSkuCode(), it.getQuantity()));
@@ -250,13 +249,13 @@ public class PurchaseOrderService {
     }
 
     @Transactional
-    public PurchaseOrderDto.DetailRes cancel(String code, PurchaseOrderDto.CancelReq req) {
+    public PurchaseOrderDto.DetailRes cancel(String code, PurchaseOrderDto.CancelReq req, AuthUserDetails me) {
         if (req.getCancelReason() == null || req.getCancelReason().isBlank()) {
             throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_CANCEL_REASON_REQUIRED);
         }
         PurchaseOrder po = lookupPurchaseOrder(code);
         po.markRejected(req.getCancelReason());
-        appendHistory(po, req.getCancelReason());
+        appendHistory(po, req.getCancelReason(), me);
         return buildDetailRes(po);
     }
 
@@ -314,15 +313,18 @@ public class PurchaseOrderService {
      *   - APPROVED / SHIPPING / DELIVERED : "담당자명 (회사명)" 형식 — 발주 시점 공급처 스냅샷
      *     (실제 트리거는 SYS-001 배치지만 자동화는 구현 디테일이라 도메인 이력에 노출하지 않음, ADR-013/019)
      *     실무 ERP 표준 — 법적 주체(회사) + 실무 처리자(담당자) 둘 다 노출.
-     *   - COMPLETED            : 입고 확정은 창고 관리자 책임
-     *   - PENDING(생성) / REJECTED(취소) : 본사 관리자
-     * 인증 도입(ADR-011) 후 본사·창고 관리자명은 실제 사용자명으로 교체.
+     *     배치 호출이라 인증 사용자 없음 — me=null 로 들어옴.
+     *   - PENDING / REJECTED / COMPLETED : 인증 사용자(me) 의 실명. me 가 null 이면 NOT_AUTHENTICATED.
      */
-    private void appendHistory(PurchaseOrder po, String note) {
+    private void appendHistory(PurchaseOrder po, String note, AuthUserDetails me) {
         String changedByName = switch (po.getStatus()) {
             case APPROVED, SHIPPING, DELIVERED -> po.getVendorContactName() + " (" + po.getVendorName() + ")";
-            case COMPLETED -> WAREHOUSE_MANAGER_ACTOR;
-            default -> HQ_MANAGER_ACTOR;
+            case PENDING, REJECTED, COMPLETED -> {
+                if (me == null) {
+                    throw BaseException.from(BaseResponseStatus.NOT_AUTHENTICATED);
+                }
+                yield me.getName();
+            }
         };
         PurchaseOrderStatusHistory entry = PurchaseOrderStatusHistory.builder()
                 .purchaseOrderId(po.getId())

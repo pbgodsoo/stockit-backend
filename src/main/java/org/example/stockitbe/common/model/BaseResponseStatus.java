@@ -17,6 +17,7 @@ public enum BaseResponseStatus {
     SIGNUP_INVALID_UUID(false, 3005, "유효하지 않은 인증값"),
     USER_NOT_FOUND(false, 3006, "존재하지 않는 사용자입니다."),
     PASSWORD_WRONG(false, 3007, "비밀번호가 일치하지 않습니다."),
+    NOT_AUTHENTICATED(false, 3008, "인증되지 않은 요청입니다."),
 
     // 4000번대 실패
     REQUEST_ERROR(false, 4001, "입력값이 잘못되었습니다."),
@@ -99,6 +100,13 @@ public enum BaseResponseStatus {
     STORE_ORDER_SKU_NOT_FOUND(false, 4605, "발주 SKU를 찾을 수 없습니다."),
     STORE_ORDER_INVALID_STATUS_TRANSITION(false, 4606, "허용되지 않는 발주 상태 전환입니다."),
     STORE_ORDER_CANCEL_REASON_REQUIRED(false, 4607, "발주 취소 사유는 필수입니다."),
+
+    // 4400번대 회원 관리
+    USER_NOT_PENDING(false, 4400, "대기 상태인 신청만 처리할 수 있습니다."),
+    USER_NOT_APPROVED(false, 4401, "승인된 사용자만 탈퇴 처리할 수 있습니다."),
+    USER_ALREADY_WITHDRAWN(false, 4402, "이미 탈퇴 처리된 사용자입니다."),
+    USER_PASSWORD_SAME(false, 4403, "새 비밀번호가 기존 비밀번호와 동일합니다."),
+
 
     // 5000번대 실패
     FAIL(false, 5000, "요청 실패");
