@@ -10,10 +10,9 @@ import java.util.Optional;
 
 public interface InfrastructureRepository extends JpaRepository<Infrastructure, Long> {
     Optional<Infrastructure> findByCode(String code);
+    List<Infrastructure> findByLocationTypeOrderByIdDesc(LocationType locationType);
     boolean existsByLocationTypeAndNameIgnoreCase(LocationType locationType, String name);
     boolean existsByLocationTypeAndNameIgnoreCaseAndCodeNot(LocationType locationType, String name, String code);
-    boolean existsByCodeAndLocationType(String code, LocationType locationType);
-    long countByMappedWarehouseCode(String mappedWarehouseCode);
     List<Infrastructure> findAllByOrderByIdDesc();
 
     List<Infrastructure> findByLocationTypeAndRegionContainingIgnoreCaseAndStatusAndNameContainingIgnoreCaseOrderByIdDesc(

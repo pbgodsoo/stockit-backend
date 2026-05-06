@@ -8,13 +8,16 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class InfrastructureService {
 
     private final InfrastructureRepository infrastructureRepository;
+    private final StoreWarehouseMapRepository storeWarehouseMapRepository;
 
     @Transactional(readOnly = true)
     public List<InfrastructureDto.Res> findInfrastructures(LocationType type, String keyword, String region, InfraStatus status) {
@@ -44,24 +47,26 @@ public class InfrastructureService {
             }
         }
 
-        return rows.stream().map(this::toRes).toList();
+        Map<Long, Long> mappedStoreCountByWarehouseId = mappedStoreCountByWarehouseId(rows);
+        return rows.stream().map(row -> toRes(row, mappedStoreCountByWarehouseId)).toList();
     }
 
     @Transactional(readOnly = true)
     public InfrastructureDto.Res findInfrastructureByCode(String code) {
         Infrastructure infra = infrastructureRepository.findByCode(code)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.NOT_FOUND_DATA));
-        return toRes(infra);
+        Map<Long, Long> mappedStoreCountByWarehouseId = mappedStoreCountByWarehouseId(List.of(infra));
+        return toRes(infra, mappedStoreCountByWarehouseId);
     }
 
     @Transactional
     public InfrastructureDto.Res createInfrastructure(InfrastructureDto.UpsertReq req) {
-        NormalizedInfra normalized = normalizeAndValidate(req, null);
+        NormalizedInfra normalized = normalizeAndValidate(req);
         if (infrastructureRepository.existsByLocationTypeAndNameIgnoreCase(req.getLocationType(), req.getName().trim())) {
             throw BaseException.from(duplicateNameStatus(req.getLocationType()));
         }
         Infrastructure saved = saveWithGeneratedCode(req, normalized);
-        return toRes(saved);
+        return toRes(saved, Map.of());
     }
 
     @Transactional
@@ -73,7 +78,7 @@ public class InfrastructureService {
             throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
         }
 
-        NormalizedInfra normalized = normalizeAndValidate(req, code);
+        NormalizedInfra normalized = normalizeAndValidate(req);
         if (infrastructureRepository.existsByLocationTypeAndNameIgnoreCaseAndCodeNot(req.getLocationType(), req.getName().trim(), code)) {
             throw BaseException.from(duplicateNameStatus(req.getLocationType()));
         }
@@ -86,10 +91,10 @@ public class InfrastructureService {
                 req.getAddress().trim(),
                 req.getStatus(),
                 normalized.storeType(),
-                normalized.mappedWarehouseCode(),
                 normalized.capacity()
         );
-        return toRes(infra);
+        Map<Long, Long> mappedStoreCountByWarehouseId = mappedStoreCountByWarehouseId(List.of(infra));
+        return toRes(infra, mappedStoreCountByWarehouseId);
     }
 
     private Infrastructure saveWithGeneratedCode(InfrastructureDto.UpsertReq req, NormalizedInfra normalized) {
@@ -97,7 +102,7 @@ public class InfrastructureService {
         for (int i = 0; i < 2; i++) {
             String code = nextCode(infrastructureRepository.findAllByOrderByIdDesc().stream().map(Infrastructure::getCode).toList(), prefix);
             try {
-                return infrastructureRepository.save(req.toEntity(code, normalized.storeType(), normalized.mappedWarehouseCode(), normalized.capacity()));
+                return infrastructureRepository.save(req.toEntity(code, normalized.storeType(), normalized.capacity()));
             } catch (DataIntegrityViolationException e) {
                 if (i == 1) throw e;
             }
@@ -105,31 +110,43 @@ public class InfrastructureService {
         throw BaseException.from(BaseResponseStatus.FAIL);
     }
 
-    private NormalizedInfra normalizeAndValidate(InfrastructureDto.UpsertReq req, String selfCodeForUpdate) {
+    private NormalizedInfra normalizeAndValidate(InfrastructureDto.UpsertReq req) {
         if (req.getLocationType() == LocationType.STORE) {
-            if (req.getStoreType() == null || req.getMappedWarehouseCode() == null || req.getMappedWarehouseCode().isBlank()) {
+            if (req.getStoreType() == null) {
                 throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
             }
-            String mappedCode = req.getMappedWarehouseCode().trim();
-            boolean exists = infrastructureRepository.existsByCodeAndLocationType(mappedCode, LocationType.WAREHOUSE);
-            if (!exists || (selfCodeForUpdate != null && selfCodeForUpdate.equals(mappedCode))) {
-                throw BaseException.from(BaseResponseStatus.WAREHOUSE_NOT_FOUND);
-            }
-            return new NormalizedInfra(req.getStoreType(), mappedCode, null);
+            return new NormalizedInfra(req.getStoreType(), null);
         }
 
         if (req.getCapacity() == null || req.getCapacity().isBlank()) {
             throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
         }
-        return new NormalizedInfra(null, null, req.getCapacity().trim());
+        return new NormalizedInfra(null, req.getCapacity().trim());
     }
 
-    private InfrastructureDto.Res toRes(Infrastructure infra) {
+    private InfrastructureDto.Res toRes(Infrastructure infra, Map<Long, Long> mappedStoreCountByWarehouseId) {
         Long mappedStoreCount = null;
         if (infra.getLocationType() == LocationType.WAREHOUSE) {
-            mappedStoreCount = infrastructureRepository.countByMappedWarehouseCode(infra.getCode());
+            mappedStoreCount = mappedStoreCountByWarehouseId.getOrDefault(infra.getId(), 0L);
         }
         return InfrastructureDto.Res.from(infra, mappedStoreCount);
+    }
+
+    private Map<Long, Long> mappedStoreCountByWarehouseId(List<Infrastructure> rows) {
+        List<Infrastructure> warehouses = rows.stream()
+                .filter(it -> it.getLocationType() == LocationType.WAREHOUSE)
+                .toList();
+        if (warehouses.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, Long> mappedStoreCountByWarehouseId = new HashMap<>();
+        List<StoreWarehouseMap> maps = storeWarehouseMapRepository.findByWarehouseIn(warehouses);
+        for (StoreWarehouseMap map : maps) {
+            Long warehouseId = map.getWarehouse().getId();
+            mappedStoreCountByWarehouseId.put(warehouseId, mappedStoreCountByWarehouseId.getOrDefault(warehouseId, 0L) + 1L);
+        }
+        return mappedStoreCountByWarehouseId;
     }
 
     private BaseResponseStatus duplicateNameStatus(LocationType type) {
@@ -153,6 +170,6 @@ public class InfrastructureService {
         return String.format("%s-%04d", prefix, max + 1);
     }
 
-    private record NormalizedInfra(StoreType storeType, String mappedWarehouseCode, String capacity) {
+    private record NormalizedInfra(StoreType storeType, String capacity) {
     }
 }

@@ -22,11 +22,9 @@ public class InfrastructureDto {
         @NotNull private InfraStatus status;
 
         private StoreType storeType;
-        private String mappedWarehouseCode;
         private String capacity;
 
-        public Infrastructure toEntity(String code, StoreType normalizedStoreType,
-                                       String normalizedMappedWarehouseCode, String normalizedCapacity) {
+        public Infrastructure toEntity(String code, StoreType normalizedStoreType, String normalizedCapacity) {
             return Infrastructure.builder()
                     .code(code)
                     .locationType(locationType)
@@ -37,7 +35,6 @@ public class InfrastructureDto {
                     .address(address.trim())
                     .status(status)
                     .storeType(normalizedStoreType)
-                    .mappedWarehouseCode(normalizedMappedWarehouseCode)
                     .capacity(normalizedCapacity)
                     .build();
         }
@@ -56,7 +53,6 @@ public class InfrastructureDto {
         private String address;
         private InfraStatus status;
         private StoreType storeType;
-        private String mappedWarehouseCode;
         private String capacity;
         private Long mappedStoreCount;
         private Date updatedAt;
@@ -72,7 +68,6 @@ public class InfrastructureDto {
                     .address(infra.getAddress())
                     .status(infra.getStatus())
                     .storeType(infra.getStoreType())
-                    .mappedWarehouseCode(infra.getMappedWarehouseCode())
                     .capacity(infra.getCapacity())
                     .mappedStoreCount(mappedStoreCount)
                     .updatedAt(infra.getUpdatedAt())
