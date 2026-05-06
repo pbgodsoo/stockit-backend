@@ -31,6 +31,7 @@ public class InventoryDto {
         private String skuCode;
         private String color;
         private String size;
+        private Long unitPrice;
         private Integer actualStock;
         private Integer availableStock;
         private Integer safetyStock;
