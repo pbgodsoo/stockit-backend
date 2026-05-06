@@ -84,6 +84,8 @@ public class UserDto {
         private String employeeCode;
         private String name;
         private UserRole role;
+        private String locationCode;
+        private String locationName;
     }
 
     //  마이페이지

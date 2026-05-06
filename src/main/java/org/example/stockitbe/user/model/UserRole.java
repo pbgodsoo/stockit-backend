@@ -8,7 +8,7 @@ import lombok.RequiredArgsConstructor;
 public enum UserRole {
     HQ("hq"),
     STORE("st"),
-    WAREHOUSE("wa");
+    WAREHOUSE("wh");
 
     private final String codePrefix;
 }
