@@ -265,6 +265,26 @@ public class StoreOrderDto {
         }
     }
 
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class ApproveReq {
+        private String approvedByMemberId;
+        private String approvedByName;
+    }
+
+    @Getter
+    @AllArgsConstructor
+    @Builder
+    public static class ApproveRes {
+        private CreateRes order;
+
+        public static ApproveRes from(CreateRes order) {
+            return ApproveRes.builder().order(order).build();
+        }
+    }
+
     // 발주 목록 조회 응답 DTO
     // 목록 조회용 요약 정보와 헤드라인을 반환
     @Getter

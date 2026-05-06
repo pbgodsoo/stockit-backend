@@ -49,6 +49,14 @@ public class StoreOrderController {
         return BaseResponse.success(result);
     }
 
+    // 승인 완료 상태로 변경시 가용 재고에 발주량 반영
+    @PatchMapping("/{orderNo}/approve")
+    public BaseResponse<StoreOrderDto.ApproveRes> approve(@PathVariable String orderNo,
+                                                           @RequestBody(required = false) StoreOrderDto.ApproveReq dto) {
+        StoreOrderDto.ApproveRes result = service.approve(orderNo, dto == null ? StoreOrderDto.ApproveReq.builder().build() : dto);
+        return BaseResponse.success(result);
+    }
+
     // 매장 발주 내역 목록 조회
     @GetMapping
     public BaseResponse<List<StoreOrderDto.ListRes>> list(

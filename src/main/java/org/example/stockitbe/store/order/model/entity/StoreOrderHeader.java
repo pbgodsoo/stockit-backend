@@ -100,6 +100,11 @@ public class StoreOrderHeader extends BaseEntity {
         this.fulfillmentStatus = null;
     }
 
+    public void markApproved() {
+        validateRequestedOnly();
+        this.status = StoreOrderStatus.APPROVED;
+    }
+
     public void markFulfillment(StoreOrderFulfillmentStatus fulfillmentStatus) {
         this.fulfillmentStatus = fulfillmentStatus;
     }

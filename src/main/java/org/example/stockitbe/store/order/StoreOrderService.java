@@ -9,11 +9,13 @@ import org.example.stockitbe.hq.category.model.Category;
 import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
+import org.example.stockitbe.hq.inventory.InventoryService;
 import org.example.stockitbe.hq.product.ProductMasterRepository;
 import org.example.stockitbe.hq.product.ProductSkuRepository;
 import org.example.stockitbe.hq.product.model.ProductMaster;
 import org.example.stockitbe.hq.product.model.ProductSku;
 import org.example.stockitbe.hq.product.model.ProductStatus;
+import org.example.stockitbe.store.order.model.StoreOrderFulfillmentStatus;
 import org.example.stockitbe.store.order.model.StoreOrderHistoryType;
 import org.example.stockitbe.store.order.model.StoreOrderStatus;
 import org.example.stockitbe.store.order.model.dto.StoreOrderDto;
@@ -41,6 +43,7 @@ public class StoreOrderService {
     private final StoreOrderItemRepository itemRepository;
     private final StoreOrderStatusHistoryRepository historyRepository;
     private final InfrastructureRepository infrastructureRepository;
+    private final InventoryService inventoryService;
     private final ProductSkuRepository productSkuRepository;
     private final ProductMasterRepository productMasterRepository;
     private final CategoryRepository categoryRepository;
@@ -102,6 +105,29 @@ public class StoreOrderService {
                 safe(dto.getCancelledByMemberId()), blankTo(dto.getCancelledByName(), header.getRequestedByName()),
                 cancelReason);
         return StoreOrderDto.CancelRes.from(buildCreateRes(header));
+    }
+
+    @Transactional
+    public StoreOrderDto.ApproveRes approve(String orderNo, StoreOrderDto.ApproveReq dto) {
+        StoreOrderHeader header = getOrderByOrderNo(orderNo);
+        Date now = new Date();
+
+        header.markApproved();
+        header.markFulfillment(StoreOrderFulfillmentStatus.READY_TO_SHIP);
+
+        List<StoreOrderItem> items = itemRepository.findAllByOrderHeaderIdOrderByIdAsc(header.getId());
+        for (StoreOrderItem item : items) {
+            inventoryService.increaseAvailable(header.getStoreId(), item.getSkuCode(), item.getRequestedQuantity());
+        }
+
+        String actorMemberId = safe(dto == null ? null : dto.getApprovedByMemberId());
+        String actorName = blankTo(dto == null ? null : dto.getApprovedByName(), "시스템");
+        appendOrderStatusHistory(header.getId(), StoreOrderStatus.APPROVED.name(), now,
+                actorMemberId, actorName, "발주 승인 처리");
+        appendFulfillmentStatusHistory(header.getId(), StoreOrderFulfillmentStatus.READY_TO_SHIP.name(), now,
+                actorMemberId, actorName, "가용재고 반영");
+
+        return StoreOrderDto.ApproveRes.from(buildCreateRes(header));
     }
 
     // 매장 발주 내역 목록 조회
@@ -374,6 +400,21 @@ public class StoreOrderService {
                 StoreOrderStatusHistory.builder()
                         .orderHeaderId(headerId)
                         .historyType(StoreOrderHistoryType.ORDER_STATUS)
+                        .status(status)
+                        .changedAt(changedAt)
+                        .changedByMemberId(changedByMemberId)
+                        .changedByName(changedByName)
+                        .reason(reason)
+                        .build()
+        );
+    }
+
+    private void appendFulfillmentStatusHistory(Long headerId, String status, Date changedAt,
+                                                String changedByMemberId, String changedByName, String reason) {
+        historyRepository.save(
+                StoreOrderStatusHistory.builder()
+                        .orderHeaderId(headerId)
+                        .historyType(StoreOrderHistoryType.FULFILLMENT_STATUS)
                         .status(status)
                         .changedAt(changedAt)
                         .changedByMemberId(changedByMemberId)
