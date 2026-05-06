@@ -165,7 +165,7 @@ public class PurchaseOrderService {
         }
 
         PurchaseOrder po = lookupPurchaseOrder(code);
-        if (po.getStatus() != PurchaseOrderStatus.PENDING) {
+        if (po.getStatus() != PurchaseOrderStatus.REQUESTED) {
             throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_INVALID_STATUS_TRANSITION);
         }
 
@@ -219,9 +219,17 @@ public class PurchaseOrderService {
     }
 
     @Transactional
-    public PurchaseOrderDto.DetailRes startShipping(String code) {
+    public PurchaseOrderDto.DetailRes readyToShip(String code) {
         PurchaseOrder po = lookupPurchaseOrder(code);
-        po.markShipping();
+        po.markReadyToShip();
+        appendHistory(po, null, null);
+        return buildDetailRes(po);
+    }
+
+    @Transactional
+    public PurchaseOrderDto.DetailRes startInTransit(String code) {
+        PurchaseOrder po = lookupPurchaseOrder(code);
+        po.markInTransit();
         appendHistory(po, null, null);
         // 발주 ↔ 인벤토리 연결 (이슈 #169) — 가용재고 += 발주 수량 (도착 전 예약)
         itemRepository.findAllByPurchaseOrderId(po.getId())
@@ -230,9 +238,9 @@ public class PurchaseOrderService {
     }
 
     @Transactional
-    public PurchaseOrderDto.DetailRes deliver(String code) {
+    public PurchaseOrderDto.DetailRes arrive(String code) {
         PurchaseOrder po = lookupPurchaseOrder(code);
-        po.markDelivered();
+        po.markArrived();
         appendHistory(po, null, null);
         return buildDetailRes(po);
     }
@@ -254,7 +262,7 @@ public class PurchaseOrderService {
             throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_CANCEL_REASON_REQUIRED);
         }
         PurchaseOrder po = lookupPurchaseOrder(code);
-        po.markRejected(req.getCancelReason());
+        po.markCancelled(req.getCancelReason());
         appendHistory(po, req.getCancelReason(), me);
         return buildDetailRes(po);
     }
@@ -298,28 +306,29 @@ public class PurchaseOrderService {
     }
 
     /**
-     * 코드 자동 생성 — PO-{YYYYMMDD}-{NNN}.
-     * NNN 은 같은 날 prefix count + 1 (3자리 zero-pad).
+     * 코드 자동 생성 — PO-{YYYYMMDD}-{NNNNN}.
+     * NNNNN 은 같은 날 prefix count + 1 (5자리 zero-pad).
      */
     private String generateCode() {
         String today = LocalDate.now().format(CODE_DATE_FORMAT);
         String prefix = "PO-" + today + "-";
         long seq = purchaseOrderRepository.countByCodeStartingWith(prefix) + 1;
-        return String.format("%s%03d", prefix, seq);
+        return String.format("%s%05d", prefix, seq);
     }
 
     /**
      * 진행 이력 한 행 추가. changedByName 은 도메인 책임자 기준 분기:
-     *   - APPROVED / SHIPPING / DELIVERED : "담당자명 (회사명)" 형식 — 발주 시점 공급처 스냅샷
-     *     (실제 트리거는 SYS-001 배치지만 자동화는 구현 디테일이라 도메인 이력에 노출하지 않음, ADR-013/019)
-     *     실무 ERP 표준 — 법적 주체(회사) + 실무 처리자(담당자) 둘 다 노출.
-     *     배치 호출이라 인증 사용자 없음 — me=null 로 들어옴.
-     *   - PENDING / REJECTED / COMPLETED : 인증 사용자(me) 의 실명. me 가 null 이면 NOT_AUTHENTICATED.
+     *   - APPROVED / READY_TO_SHIP / IN_TRANSIT / ARRIVED : "담당자명 (회사명)" 형식 — 발주 시점 공급처 스냅샷.
+     *     실제 트리거는 SYS-001 배치(거래처 책임 단계 자동화) — 자동화는 구현 디테일이라 도메인 이력에 노출하지 않음 (ADR-013/019).
+     *     실무 ERP 표준 — 법적 주체(회사) + 실무 처리자(담당자) 둘 다 노출. 배치 호출이라 인증 사용자 없음 (me=null).
+     *   - REQUESTED / COMPLETED / CANCELLED : 인증 사용자(me) 의 실명. me 가 null 이면 NOT_AUTHENTICATED.
+     *     본사 작성/창고 입고 확정/본사 취소 — 인증된 담당자의 책임 단계.
      */
     private void appendHistory(PurchaseOrder po, String note, AuthUserDetails me) {
         String changedByName = switch (po.getStatus()) {
-            case APPROVED, SHIPPING, DELIVERED -> po.getVendorContactName() + " (" + po.getVendorName() + ")";
-            case PENDING, REJECTED, COMPLETED -> {
+            case APPROVED, READY_TO_SHIP, IN_TRANSIT, ARRIVED ->
+                    po.getVendorContactName() + " (" + po.getVendorName() + ")";
+            case REQUESTED, COMPLETED, CANCELLED -> {
                 if (me == null) {
                     throw BaseException.from(BaseResponseStatus.NOT_AUTHENTICATED);
                 }

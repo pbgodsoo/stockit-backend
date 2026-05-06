@@ -330,8 +330,8 @@ public class InventoryService {
     }
 
     /**
-     * 발주 SHIPPING 진입 시 해당 창고 SKU 의 가용재고 증가 (이슈 #169 — 발주 ↔ 인벤토리 연결 룰).
-     * row 부재 시 신규 INSERT 분기. 동일 트랜잭션에서 호출자(PurchaseOrderService.startShipping)
+     * 발주 IN_TRANSIT 진입 시 해당 창고 SKU 의 가용재고 증가 (이슈 #169 — 발주 ↔ 인벤토리 연결 룰).
+     * row 부재 시 신규 INSERT 분기. 동일 트랜잭션에서 호출자(PurchaseOrderService.startInTransit)
      * 가 실패하면 함께 롤백된다.
      */
     @Transactional

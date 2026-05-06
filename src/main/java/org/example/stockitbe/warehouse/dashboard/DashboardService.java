@@ -45,10 +45,14 @@ public class DashboardService {
 
         Map<PurchaseOrderStatus, Long> statusBreakdown = buildStatusBreakdown(orders);
 
-        long scheduledCount = statusBreakdown.get(PurchaseOrderStatus.SHIPPING);
+        // scheduledCount 의미 — 입고 예정(미완료 거래처 단계 합산): READY_TO_SHIP + IN_TRANSIT + ARRIVED.
+        // 단일 SHIPPING 상태가 사라지고 거래처 단계가 4단계로 늘어났으므로 합산이 자연.
+        long scheduledCount = statusBreakdown.get(PurchaseOrderStatus.READY_TO_SHIP)
+                + statusBreakdown.get(PurchaseOrderStatus.IN_TRANSIT)
+                + statusBreakdown.get(PurchaseOrderStatus.ARRIVED);
         long completedCount = statusBreakdown.get(PurchaseOrderStatus.COMPLETED);
-        long rejectedCount = statusBreakdown.get(PurchaseOrderStatus.REJECTED);
-        long totalCount = orders.size() - rejectedCount;
+        long cancelledCount = statusBreakdown.get(PurchaseOrderStatus.CANCELLED);
+        long totalCount = orders.size() - cancelledCount;
         double progressRate = totalCount == 0 ? 0.0 : (double) completedCount / totalCount;
 
         Double avgProcessingHours = computeAvgProcessingHours(orders);
