@@ -38,9 +38,9 @@ public enum BaseResponseStatus {
     PAYMENT_DEFAULT_BILLING_REQUIRED(false, 4106, "기본 결제 수단이 존재하지 않습니다."),
 
     // 4200번대~ 공급처별 제품 (CEN-027~031, 033)
-    VENDOR_NOT_FOUND(false, 4200, "거래처를 찾을 수 없습니다."),
+    VENDOR_NOT_FOUND(false, 4200, "공급처를 찾을 수 없습니다."),
     VENDOR_PRODUCT_NOT_FOUND(false, 4201, "공급처별 제품 계약을 찾을 수 없습니다."),
-    DUPLICATE_VENDOR_PRODUCT_CODE(false, 4202, "이미 등록된 거래처-제품 코드 조합입니다."),
+    DUPLICATE_VENDOR_PRODUCT_CODE(false, 4202, "이미 등록된 공급처-제품 코드 조합입니다."),
     CATEGORY_NOT_FOUND(false, 4203, "카테고리를 찾을 수 없습니다."),
     DUPLICATE_CATEGORY_NAME(false, 4204, "동일한 범위에 같은 카테고리명이 이미 존재합니다."),
     CATEGORY_PARENT_REQUIRED(false, 4205, "소분류 등록 시 상위 카테고리가 필요합니다."),
@@ -48,13 +48,57 @@ public enum BaseResponseStatus {
     CATEGORY_PARENT_NOT_ROOT(false, 4207, "상위 카테고리는 대분류만 지정할 수 있습니다."),
     CATEGORY_ROOT_PARENT_DISALLOWED(false, 4208, "대분류는 상위 카테고리를 가질 수 없습니다."),
     CATEGORY_DELETE_HAS_CHILDREN(false, 4209, "하위 카테고리가 존재하여 삭제할 수 없습니다."),
+    STORE_NOT_FOUND(false, 4210, "매장을 찾을 수 없습니다."),
+    WAREHOUSE_NOT_FOUND(false, 4211, "창고를 찾을 수 없습니다."),
+    DUPLICATE_STORE_NAME(false, 4212, "이미 등록된 매장명입니다."),
+    DUPLICATE_WAREHOUSE_NAME(false, 4213, "이미 등록된 창고명입니다."),
+    STORE_WAREHOUSE_MAPPING_INVALID_ROLE(false, 4230, "매장-창고 매핑 역할이 올바르지 않습니다."),
+    STORE_WAREHOUSE_MAPPING_DUPLICATE_ROLE(false, 4231, "매장별 동일 역할의 매핑이 이미 존재합니다."),
+    STORE_WAREHOUSE_MAPPING_DUPLICATE_WAREHOUSE(false, 4232, "동일 매장에 같은 창고를 중복 매핑할 수 없습니다."),
+    STORE_WAREHOUSE_MAPPING_PRIMARY_REQUIRED(false, 4233, "주 창고는 필수입니다."),
+    STORE_WAREHOUSE_MAPPING_PRIMARY_BACKUP_SAME(false, 4234, "주 창고와 예비 창고는 같을 수 없습니다."),
+    PRODUCT_MASTER_NOT_FOUND(false, 4214, "제품 마스터를 찾을 수 없습니다."),
+    PRODUCT_SKU_NOT_FOUND(false, 4215, "SKU를 찾을 수 없습니다."),
+    DUPLICATE_PRODUCT_MASTER_NAME(false, 4216, "이미 등록된 제품명입니다."),
+    DUPLICATE_PRODUCT_SKU_OPTION(false, 4217, "이미 등록된 SKU 옵션입니다."),
+    INVALID_SKU_PRICE(false, 4218, "SKU 가격은 0 이상이어야 합니다."),
+    VENDOR_PRODUCT_VENDOR_MISMATCH(false, 4219, "이 제품의 메인 공급처가 아닙니다."),
+    VENDOR_INACTIVE(false, 4220, "비활성 공급처는 선택할 수 없습니다."),
+    INVALID_PRODUCT_MATERIAL_SPEC(false, 4221, "제품 소재 정보가 올바르지 않습니다."),
 
     // 4300번대~ 본사 발주 (CEN-035~040)
     PURCHASE_ORDER_NOT_FOUND(false, 4300, "본사 발주를 찾을 수 없습니다."),
     PURCHASE_ORDER_INVALID_STATUS_TRANSITION(false, 4301, "허용되지 않는 발주 상태 전환입니다."),
     PURCHASE_ORDER_EMPTY_ITEMS(false, 4302, "발주 품목이 비어 있습니다."),
-    PURCHASE_ORDER_VENDOR_PRODUCT_MISMATCH(false, 4303, "발주 거래처와 품목의 거래처가 일치하지 않습니다."),
+    PURCHASE_ORDER_VENDOR_PRODUCT_MISMATCH(false, 4303, "발주 공급처와 품목의 공급처가 일치하지 않습니다."),
     PURCHASE_ORDER_CANCEL_REASON_REQUIRED(false, 4304, "발주 취소 사유는 필수입니다."),
+    PURCHASE_ORDER_SKU_PRODUCT_MISMATCH(false, 4305, "발주 품목의 SKU가 공급처 계약 제품의 옵션이 아닙니다."),
+
+    // 4400번대~ 순환재고 거래처 (ADR-020 / ADR-021)
+    CIRCULAR_BUYER_NOT_FOUND(false, 4400, "순환재고 거래처를 찾을 수 없습니다."),
+    DUPLICATE_CIRCULAR_BUYER_CODE(false, 4401, "이미 등록된 순환재고 거래처 코드입니다."),
+    INVALID_MATERIAL_FIT(false, 4402, "유효하지 않은 소재 적합도입니다."),
+    CIRCULAR_BUYER_CODE_EXHAUSTED(false, 4403, "순환재고 거래처 코드(RCV-999)가 모두 소진되었습니다."),
+    CONCURRENT_CIRCULAR_BUYER_REGISTRATION(false, 4404, "동시 등록 충돌이 발생했습니다. 다시 시도해주세요."),
+    INVALID_PARTNER_TYPE(false, 4405, "유효하지 않은 파트너 유형입니다."),
+
+    // 4500번대~ 매장 판매
+    STORE_SALE_NOT_FOUND(false, 4500, "판매 내역을 찾을 수 없습니다."),
+    STORE_SALE_EMPTY_ITEMS(false, 4501, "판매 항목이 비어 있습니다."),
+    STORE_SALE_INVALID_QUANTITY(false, 4502, "판매 수량이 올바르지 않습니다."),
+    STORE_SALE_STORE_NOT_FOUND(false, 4503, "매장 정보를 찾을 수 없습니다."),
+    STORE_SALE_SKU_NOT_FOUND(false, 4504, "판매 SKU를 찾을 수 없습니다."),
+    STORE_SALE_INSUFFICIENT_STOCK(false, 4505, "재고가 부족하여 판매를 확정할 수 없습니다."),
+
+    // 4600번대~ 매장 발주
+    STORE_ORDER_NOT_FOUND(false, 4600, "매장 발주를 찾을 수 없습니다."),
+    STORE_ORDER_EMPTY_ITEMS(false, 4601, "발주 품목이 비어 있습니다."),
+    STORE_ORDER_INVALID_QUANTITY(false, 4602, "요청 수량이 올바르지 않습니다."),
+    STORE_ORDER_STORE_NOT_FOUND(false, 4603, "매장 정보를 찾을 수 없습니다."),
+    STORE_ORDER_WAREHOUSE_NOT_FOUND(false, 4604, "창고 정보를 찾을 수 없습니다."),
+    STORE_ORDER_SKU_NOT_FOUND(false, 4605, "발주 SKU를 찾을 수 없습니다."),
+    STORE_ORDER_INVALID_STATUS_TRANSITION(false, 4606, "허용되지 않는 발주 상태 전환입니다."),
+    STORE_ORDER_CANCEL_REASON_REQUIRED(false, 4607, "발주 취소 사유는 필수입니다."),
 
     // 4400번대 회원 관리
     USER_NOT_PENDING(false, 4400, "대기 상태인 신청만 처리할 수 있습니다."),

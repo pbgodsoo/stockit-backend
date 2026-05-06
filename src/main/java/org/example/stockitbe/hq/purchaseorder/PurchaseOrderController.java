@@ -43,16 +43,6 @@ public class PurchaseOrderController {
         return BaseResponse.success(service.update(code, req));
     }
 
-    @PostMapping("/{code}/approve")
-    public BaseResponse<PurchaseOrderDto.DetailRes> approve(@PathVariable String code) {
-        return BaseResponse.success(service.approve(code));
-    }
-
-    @PostMapping("/{code}/start-shipping")
-    public BaseResponse<PurchaseOrderDto.DetailRes> startShipping(@PathVariable String code) {
-        return BaseResponse.success(service.startShipping(code));
-    }
-
     @PostMapping("/{code}/complete")
     public BaseResponse<PurchaseOrderDto.DetailRes> complete(@PathVariable String code) {
         return BaseResponse.success(service.complete(code));

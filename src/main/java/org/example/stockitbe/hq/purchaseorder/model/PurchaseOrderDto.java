@@ -9,6 +9,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
+import org.example.stockitbe.hq.product.model.ProductSku;
 import org.example.stockitbe.hq.vendor.model.Vendor;
 import org.example.stockitbe.hq.vendor.model.VendorProduct;
 
@@ -25,8 +27,9 @@ public class PurchaseOrderDto {
     public static class CreateReq {
         @NotBlank
         private String vendorCode;
-        private String warehouseId;
-        private String warehouseName;
+        @NotBlank
+        private String warehouseCode;
+        // warehouseName 필드 폐기 — 서버가 lookupWarehouse 후 name 박음 (vendor 패턴 일관)
         // 인증 미정 — placeholder OK
         private String memberId;
         private String memberName;
@@ -34,12 +37,14 @@ public class PurchaseOrderDto {
         @NotEmpty
         private List<ItemReq> items;
 
-        public PurchaseOrder toEntity(Vendor vendor, String code, Long totalAmount) {
+        public PurchaseOrder toEntity(Vendor vendor, Infrastructure warehouse, String code, Long totalAmount) {
             return PurchaseOrder.builder()
                     .code(code)
                     .vendorId(vendor.getId())
-                    .warehouseId(this.warehouseId)
-                    .warehouseName(this.warehouseName)
+                    .vendorName(vendor.getName())
+                    .vendorContactName(vendor.getContactName())
+                    .warehouseId(warehouse.getId())
+                    .warehouseName(warehouse.getName())
                     .memberId(this.memberId)
                     .memberName(this.memberName)
                     .totalAmount(totalAmount)
@@ -54,17 +59,22 @@ public class PurchaseOrderDto {
     public static class ItemReq {
         @NotBlank
         private String vendorProductCode;
+        @NotBlank
+        private String skuCode;
         @NotNull
         @Min(1)
         private Integer quantity;
 
-        public PurchaseOrderItem toEntity(Long purchaseOrderId, VendorProduct vp) {
+        public PurchaseOrderItem toEntity(Long purchaseOrderId, VendorProduct vp, ProductSku sku) {
             return PurchaseOrderItem.builder()
                     .purchaseOrderId(purchaseOrderId)
                     .vendorProductId(vp.getId())
                     .productCode(vp.getProductCode())
                     .productName(vp.getProductName())
-                    .unitPrice(vp.getUnitPrice())
+                    .skuCode(sku.getSkuCode())
+                    .color(sku.getColor())
+                    .size(sku.getSize())
+                    .unitPrice(sku.getUnitPrice())  // sku 단가 우선 (옵션별 차등 가능)
                     .quantity(this.quantity)
                     .build();
         }
@@ -75,8 +85,9 @@ public class PurchaseOrderDto {
     @AllArgsConstructor
     @Builder
     public static class UpdateReq {
-        private String warehouseId;
-        private String warehouseName;
+        @NotBlank
+        private String warehouseCode;
+        // warehouseName 필드 폐기 — 서버가 lookupWarehouse 후 name 박음
         @Valid
         @NotEmpty
         private List<ItemReq> items;
@@ -98,26 +109,32 @@ public class PurchaseOrderDto {
         private String code;
         private String vendorCode;
         private String vendorName;
-        private String warehouseId;
+        private Long warehouseId;
+        private String warehouseCode;
         private String warehouseName;
         private String memberName;
         private PurchaseOrderStatus status;
         private Long totalAmount;
         private Integer itemCount;
+        // 발주의 모든 품목명 (입력 순서). FE 가 첫 품목명 + "외 N건" 표시 + 품목명 검색 매칭에 활용.
+        private List<String> productNames;
         private Date createdAt;
         private Date updatedAt;
 
-        public static ListRes from(PurchaseOrder po, Vendor vendor, int itemCount) {
+        public static ListRes from(PurchaseOrder po, Vendor vendor, String warehouseCode,
+                                   int itemCount, List<String> productNames) {
             return ListRes.builder()
                     .code(po.getCode())
                     .vendorCode(vendor.getCode())
-                    .vendorName(vendor.getName())
+                    .vendorName(po.getVendorName())
                     .warehouseId(po.getWarehouseId())
+                    .warehouseCode(warehouseCode)
                     .warehouseName(po.getWarehouseName())
                     .memberName(po.getMemberName())
                     .status(po.getStatus())
                     .totalAmount(po.getTotalAmount())
                     .itemCount(itemCount)
+                    .productNames(productNames)
                     .createdAt(po.getCreatedAt())
                     .updatedAt(po.getUpdatedAt())
                     .build();
@@ -131,7 +148,8 @@ public class PurchaseOrderDto {
         private String code;
         private String vendorCode;
         private String vendorName;
-        private String warehouseId;
+        private Long warehouseId;
+        private String warehouseCode;
         private String warehouseName;
         private String memberId;
         private String memberName;
@@ -143,10 +161,10 @@ public class PurchaseOrderDto {
         private List<ItemRes> items;
         private List<HistoryRes> statusHistory;
 
-        public static DetailRes from(PurchaseOrder po, Vendor vendor,
-                                      List<PurchaseOrderItem> items,
-                                      List<PurchaseOrderStatusHistory> history,
-                                      Map<Long, String> vendorProductCodeById) {
+        public static DetailRes from(PurchaseOrder po, Vendor vendor, String warehouseCode,
+                                     List<PurchaseOrderItem> items,
+                                     List<PurchaseOrderStatusHistory> history,
+                                     Map<Long, String> vendorProductCodeById) {
             List<ItemRes> itemRes = items.stream()
                     .map(item -> ItemRes.from(item, vendorProductCodeById.get(item.getVendorProductId())))
                     .toList();
@@ -156,8 +174,9 @@ public class PurchaseOrderDto {
             return DetailRes.builder()
                     .code(po.getCode())
                     .vendorCode(vendor.getCode())
-                    .vendorName(vendor.getName())
+                    .vendorName(po.getVendorName())
                     .warehouseId(po.getWarehouseId())
+                    .warehouseCode(warehouseCode)
                     .warehouseName(po.getWarehouseName())
                     .memberId(po.getMemberId())
                     .memberName(po.getMemberName())
@@ -180,6 +199,10 @@ public class PurchaseOrderDto {
         private String vendorProductCode;
         private String productCode;
         private String productName;
+        private String skuCode;
+        private String color;
+        private String size;
+        private String displayOption;
         private Long unitPrice;
         private Integer quantity;
         private Long subtotal;
@@ -190,6 +213,10 @@ public class PurchaseOrderDto {
                     .vendorProductCode(vendorProductCode)
                     .productCode(item.getProductCode())
                     .productName(item.getProductName())
+                    .skuCode(item.getSkuCode())
+                    .color(item.getColor())
+                    .size(item.getSize())
+                    .displayOption(item.getColor() + "/" + item.getSize())
                     .unitPrice(item.getUnitPrice())
                     .quantity(item.getQuantity())
                     .subtotal(item.getSubtotal())
