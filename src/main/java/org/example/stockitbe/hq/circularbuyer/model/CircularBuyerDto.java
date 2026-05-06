@@ -17,8 +17,6 @@ public class CircularBuyerDto {
     @Builder
     public static class CreateReq {
         @NotBlank
-        private String code;
-        @NotBlank
         private String companyName;
         @NotBlank
         private String industryGroup;
@@ -32,9 +30,9 @@ public class CircularBuyerDto {
         @NotBlank
         private String phone;
 
-        public CircularBuyer toEntity() {
+        public CircularBuyer toEntity(String code) {
             return CircularBuyer.builder()
-                    .code(this.code)
+                    .code(code)
                     .companyName(this.companyName)
                     .industryGroup(this.industryGroup)
                     .productTypes(this.productTypes)
