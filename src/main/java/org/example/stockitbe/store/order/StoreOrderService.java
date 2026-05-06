@@ -1,4 +1,4 @@
-package org.example.stockitbe.store.order;
+﻿package org.example.stockitbe.store.order;
 
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +17,6 @@ import org.example.stockitbe.hq.product.ProductSkuRepository;
 import org.example.stockitbe.hq.product.model.ProductMaster;
 import org.example.stockitbe.hq.product.model.ProductSku;
 import org.example.stockitbe.hq.product.model.ProductStatus;
-import org.example.stockitbe.store.order.model.StoreOrderFulfillmentStatus;
 import org.example.stockitbe.store.order.model.StoreOrderHistoryType;
 import org.example.stockitbe.store.order.model.StoreOrderStatus;
 import org.example.stockitbe.store.order.model.dto.StoreOrderDto;
@@ -120,7 +119,6 @@ public class StoreOrderService {
         Date now = new Date();
 
         header.markApproved();
-        header.markFulfillment(StoreOrderFulfillmentStatus.READY_TO_SHIP);
 
         List<StoreOrderItem> items = itemRepository.findAllByOrderHeaderIdOrderByIdAsc(header.getId());
         for (StoreOrderItem item : items) {
@@ -131,9 +129,6 @@ public class StoreOrderService {
         String actorName = blankTo(dto == null ? null : dto.getApprovedByName(), "시스템");
         appendOrderStatusHistory(header.getId(), StoreOrderStatus.APPROVED.name(), now,
                 actorMemberId, actorName, "발주 승인 처리");
-        appendFulfillmentStatusHistory(header.getId(), StoreOrderFulfillmentStatus.READY_TO_SHIP.name(), now,
-                actorMemberId, actorName, "가용재고 반영");
-
         return StoreOrderDto.ApproveRes.from(buildCreateRes(header));
     }
 
@@ -416,21 +411,6 @@ public class StoreOrderService {
                 StoreOrderStatusHistory.builder()
                         .orderHeaderId(headerId)
                         .historyType(StoreOrderHistoryType.ORDER_STATUS)
-                        .status(status)
-                        .changedAt(changedAt)
-                        .changedByMemberId(changedByMemberId)
-                        .changedByName(changedByName)
-                        .reason(reason)
-                        .build()
-        );
-    }
-
-    private void appendFulfillmentStatusHistory(Long headerId, String status, Date changedAt,
-                                                String changedByMemberId, String changedByName, String reason) {
-        historyRepository.save(
-                StoreOrderStatusHistory.builder()
-                        .orderHeaderId(headerId)
-                        .historyType(StoreOrderHistoryType.FULFILLMENT_STATUS)
                         .status(status)
                         .changedAt(changedAt)
                         .changedByMemberId(changedByMemberId)
