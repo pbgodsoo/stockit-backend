@@ -5,7 +5,9 @@ import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.model.BaseResponse;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderDto;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderStatus;
+import org.example.stockitbe.user.model.AuthUserDetails;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -33,8 +35,10 @@ public class PurchaseOrderController {
     }
 
     @PostMapping
-    public BaseResponse<PurchaseOrderDto.DetailRes> create(@Valid @RequestBody PurchaseOrderDto.CreateReq req) {
-        return BaseResponse.success(service.create(req));
+    public BaseResponse<PurchaseOrderDto.DetailRes> create(
+            @AuthenticationPrincipal AuthUserDetails me,
+            @Valid @RequestBody PurchaseOrderDto.CreateReq req) {
+        return BaseResponse.success(service.create(req, me));
     }
 
     @PatchMapping("/{code}")
@@ -44,13 +48,17 @@ public class PurchaseOrderController {
     }
 
     @PostMapping("/{code}/complete")
-    public BaseResponse<PurchaseOrderDto.DetailRes> complete(@PathVariable String code) {
-        return BaseResponse.success(service.complete(code));
+    public BaseResponse<PurchaseOrderDto.DetailRes> complete(
+            @AuthenticationPrincipal AuthUserDetails me,
+            @PathVariable String code) {
+        return BaseResponse.success(service.complete(code, me));
     }
 
     @PostMapping("/{code}/cancel")
-    public BaseResponse<PurchaseOrderDto.DetailRes> cancel(@PathVariable String code,
-                                                             @Valid @RequestBody PurchaseOrderDto.CancelReq req) {
-        return BaseResponse.success(service.cancel(code, req));
+    public BaseResponse<PurchaseOrderDto.DetailRes> cancel(
+            @AuthenticationPrincipal AuthUserDetails me,
+            @PathVariable String code,
+            @Valid @RequestBody PurchaseOrderDto.CancelReq req) {
+        return BaseResponse.success(service.cancel(code, req, me));
     }
 }

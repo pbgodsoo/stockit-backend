@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.hq.purchaseorder.PurchaseOrderService;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderDto;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderStatus;
+import org.example.stockitbe.user.model.AuthUserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,9 +49,10 @@ public class InboundService {
     /**
      * 입고 확정 (WHS-007) — DELIVERED → COMPLETED.
      * 상태 검증·전환·history append 는 PurchaseOrder.markCompleted + Service.appendHistory 가 처리.
+     * me 는 인증된 창고 관리자 — 진행 이력 changedByName 에 사용자 실명 박는 데 사용.
      */
-    public PurchaseOrderDto.DetailRes confirm(String code) {
-        return purchaseOrderService.complete(code);
+    public PurchaseOrderDto.DetailRes confirm(String code, AuthUserDetails me) {
+        return purchaseOrderService.complete(code, me);
     }
 
     private static boolean isInboundStatus(PurchaseOrderStatus s) {
