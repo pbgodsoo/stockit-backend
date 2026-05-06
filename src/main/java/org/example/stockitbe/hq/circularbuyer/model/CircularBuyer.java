@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.example.stockitbe.common.model.BaseEntity;
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -53,6 +54,11 @@ public class CircularBuyer extends BaseEntity {
     @Column(name = "phone", nullable = false, length = 32)
     private String phone;
 
+    // 파트너 유형 — local_small / social_enterprise / general. 점수 가산 룰은 사이클 3 (거래 이력 합류 후) 에서.
+    @Column(name = "partner_type", nullable = false, length = 32)
+    @ColumnDefault("'general'")
+    private String partnerType;
+
     // 임베딩 1536차원 — AI 추천 phase 에서 채움. NULL 허용 (ADR-021).
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "embedding", columnDefinition = "json")
@@ -62,7 +68,7 @@ public class CircularBuyer extends BaseEntity {
     private CircularBuyer(String code, String companyName, String industryGroup,
                            List<String> productTypes, String productNote, String description,
                            String primaryMaterialFit, String managerName, String phone,
-                           List<Double> embedding) {
+                           String partnerType, List<Double> embedding) {
         this.code = code;
         this.companyName = companyName;
         this.industryGroup = industryGroup;
@@ -72,16 +78,18 @@ public class CircularBuyer extends BaseEntity {
         this.primaryMaterialFit = primaryMaterialFit;
         this.managerName = managerName;
         this.phone = phone;
+        this.partnerType = partnerType;
         this.embedding = embedding;
     }
 
     /**
      * 거래처 정보 수정. embedding 은 별도 메소드.
      * 의미 필드(companyName/industryGroup/productTypes/productNote/description/primaryMaterialFit) 변경 시 임베딩 재생성 룰은 Service 책임.
+     * partnerType 은 의미 필드가 아님 — 임베딩 재생성 트리거 X.
      */
     public void updateProfile(String companyName, String industryGroup, List<String> productTypes,
                                String productNote, String description, String primaryMaterialFit,
-                               String managerName, String phone) {
+                               String managerName, String phone, String partnerType) {
         if (companyName != null) this.companyName = companyName;
         if (industryGroup != null) this.industryGroup = industryGroup;
         if (productTypes != null) this.productTypes = productTypes;
@@ -90,6 +98,7 @@ public class CircularBuyer extends BaseEntity {
         if (primaryMaterialFit != null) this.primaryMaterialFit = primaryMaterialFit;
         if (managerName != null) this.managerName = managerName;
         if (phone != null) this.phone = phone;
+        if (partnerType != null) this.partnerType = partnerType;
     }
 
     public void updateEmbedding(List<Double> embedding) {

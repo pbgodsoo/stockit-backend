@@ -73,6 +73,7 @@ public class CircularBuyerRecommendService {
                         .companyName(b.getCompanyName())
                         .primaryMaterialFit(b.getPrimaryMaterialFit())
                         .industryGroup(b.getIndustryGroup())
+                        .partnerType(b.getPartnerType())
                         .rationale(rationales.getOrDefault(b.getCode(), fallbackRationale()))
                         .build())
                 .toList();

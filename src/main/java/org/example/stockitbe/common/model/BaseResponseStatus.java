@@ -75,6 +75,7 @@ public enum BaseResponseStatus {
     INVALID_MATERIAL_FIT(false, 4402, "유효하지 않은 소재 적합도입니다."),
     CIRCULAR_BUYER_CODE_EXHAUSTED(false, 4403, "순환재고 거래처 코드(RCV-999)가 모두 소진되었습니다."),
     CONCURRENT_CIRCULAR_BUYER_REGISTRATION(false, 4404, "동시 등록 충돌이 발생했습니다. 다시 시도해주세요."),
+    INVALID_PARTNER_TYPE(false, 4405, "유효하지 않은 파트너 유형입니다."),
 
     // 4500번대~ 매장 판매
     STORE_SALE_NOT_FOUND(false, 4500, "판매 내역을 찾을 수 없습니다."),
