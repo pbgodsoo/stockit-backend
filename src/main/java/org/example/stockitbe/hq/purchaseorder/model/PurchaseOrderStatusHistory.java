@@ -18,8 +18,10 @@ public class PurchaseOrderStatusHistory {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "purchase_order_id", nullable = false)
-    private Long purchaseOrderId;
+    // 부모-자식 컴포지션 — @ManyToOne 매핑 (append-only, cascade=PERSIST 만으로 충분).
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "purchase_order_id", nullable = false)
+    private PurchaseOrder purchaseOrder;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)
@@ -28,7 +30,6 @@ public class PurchaseOrderStatusHistory {
     @Column(name = "changed_at", nullable = false)
     private Date changedAt;
 
-    // 인증 미정 — placeholder, 추후 실제 사용자명
     @Column(name = "changed_by_name", length = 64)
     private String changedByName;
 
@@ -36,12 +37,16 @@ public class PurchaseOrderStatusHistory {
     private String note;
 
     @Builder
-    private PurchaseOrderStatusHistory(Long purchaseOrderId, PurchaseOrderStatus status,
+    private PurchaseOrderStatusHistory(PurchaseOrder purchaseOrder, PurchaseOrderStatus status,
                                         String changedByName, String note) {
-        this.purchaseOrderId = purchaseOrderId;
+        this.purchaseOrder = purchaseOrder;
         this.status = status;
         this.changedAt = new Date();
         this.changedByName = changedByName;
         this.note = note;
+    }
+
+    void linkToParent(PurchaseOrder parent) {
+        this.purchaseOrder = parent;
     }
 }
