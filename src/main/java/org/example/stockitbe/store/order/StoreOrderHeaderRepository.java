@@ -11,6 +11,8 @@ import java.util.Optional;
 public interface StoreOrderHeaderRepository extends JpaRepository<StoreOrderHeader, Long> {
     Optional<StoreOrderHeader> findByOrderNo(String orderNo);
     List<StoreOrderHeader> findAllByOrderByRequestedAtDescIdDesc();
+    List<StoreOrderHeader> findAllByStatusOrderByRequestedAtAscIdAsc(StoreOrderStatus status);
+    List<StoreOrderHeader> findAllByStatusAndStoreIdOrderByRequestedAtAscIdAsc(StoreOrderStatus status, Long storeId);
     List<StoreOrderHeader> findAllByStatusAndRequestedAtBetweenOrderByRequestedAtDescIdDesc(
             StoreOrderStatus status, Date from, Date to
     );

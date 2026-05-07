@@ -116,20 +116,18 @@ public class StoreOrderService {
     public StoreOrderDto.ApproveRes approve(String orderNo, StoreOrderDto.ApproveReq dto, AuthUserDetails me) {
         Infrastructure store = resolveStore(me);
         StoreOrderHeader header = getOwnedOrderByOrderNo(orderNo, store.getId());
-        Date now = new Date();
+        return approveInternal(
+                header,
+                safe(dto == null ? null : dto.getApprovedByMemberId()),
+                blankTo(dto == null ? null : dto.getApprovedByName(), "SYSTEM"),
+                "STORE_ORDER_APPROVE"
+        );
+    }
 
-        header.markApproved();
-
-        List<StoreOrderItem> items = itemRepository.findAllByOrderHeaderIdOrderByIdAsc(header.getId());
-        for (StoreOrderItem item : items) {
-            inventoryService.increaseAvailable(header.getStoreId(), item.getSkuCode(), item.getRequestedQuantity());
-        }
-
-        String actorMemberId = safe(dto == null ? null : dto.getApprovedByMemberId());
-        String actorName = blankTo(dto == null ? null : dto.getApprovedByName(), "시스템");
-        appendOrderStatusHistory(header.getId(), StoreOrderStatus.APPROVED.name(), now,
-                actorMemberId, actorName, "발주 승인 처리");
-        return StoreOrderDto.ApproveRes.from(buildCreateRes(header));
+    @Transactional
+    public StoreOrderDto.ApproveRes approveByBatch(String orderNo, String actorMemberId, String actorName, String reason) {
+        StoreOrderHeader header = getOrderByOrderNo(orderNo);
+        return approveInternal(header, safe(actorMemberId), blankTo(actorName, "SYSTEM"), blankTo(reason, "AUTO_BATCH_APPROVE"));
     }
 
     // 매장 발주 내역 목록 조회
@@ -418,6 +416,21 @@ public class StoreOrderService {
                         .reason(reason)
                         .build()
         );
+    }
+
+
+    private StoreOrderDto.ApproveRes approveInternal(StoreOrderHeader header, String actorMemberId, String actorName, String reason) {
+        Date now = new Date();
+        header.markApproved();
+
+        List<StoreOrderItem> items = itemRepository.findAllByOrderHeaderIdOrderByIdAsc(header.getId());
+        for (StoreOrderItem item : items) {
+            inventoryService.increaseAvailable(header.getStoreId(), item.getSkuCode(), item.getRequestedQuantity());
+        }
+
+        appendOrderStatusHistory(header.getId(), StoreOrderStatus.APPROVED.name(), now,
+                actorMemberId, actorName, reason);
+        return StoreOrderDto.ApproveRes.from(buildCreateRes(header));
     }
 
     // 사용하는 메서드: detail, create, update, cancel
