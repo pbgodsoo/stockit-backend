@@ -67,11 +67,11 @@ public class InfrastructureService {
 
     @Transactional
     public InfrastructureDto.Res createInfrastructure(InfrastructureDto.UpsertReq req) {
-        NormalizedInfra normalized = normalizeAndValidate(req);
+        normalizeAndValidate(req);
         if (infrastructureRepository.existsByLocationTypeAndNameIgnoreCase(req.getLocationType(), req.getName().trim())) {
             throw BaseException.from(duplicateNameStatus(req.getLocationType()));
         }
-        Infrastructure saved = saveWithGeneratedCode(req, normalized);
+        Infrastructure saved = saveWithGeneratedCode(req);
         return toRes(saved, Map.of());
     }
 
@@ -84,7 +84,7 @@ public class InfrastructureService {
             throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
         }
 
-        NormalizedInfra normalized = normalizeAndValidate(req);
+        normalizeAndValidate(req);
         if (infrastructureRepository.existsByLocationTypeAndNameIgnoreCaseAndCodeNot(req.getLocationType(), req.getName().trim(), code)) {
             throw BaseException.from(duplicateNameStatus(req.getLocationType()));
         }
@@ -95,20 +95,19 @@ public class InfrastructureService {
                 req.getManagerName().trim(),
                 req.getContact().trim(),
                 req.getAddress().trim(),
-                req.getStatus(),
-                normalized.capacity()
+                req.getStatus()
         );
         Map<Long, Long> mappedStoreCountByWarehouseId = mappedStoreCountByWarehouseId(List.of(infra));
         return toRes(infra, mappedStoreCountByWarehouseId);
     }
 
-    private Infrastructure saveWithGeneratedCode(InfrastructureDto.UpsertReq req, NormalizedInfra normalized) {
+    private Infrastructure saveWithGeneratedCode(InfrastructureDto.UpsertReq req) {
         String typePrefix = req.getLocationType() == LocationType.STORE ? "ST" : "WH";
         String regionCode = resolveRegionCode(req.getRegion());
         for (int i = 0; i < 2; i++) {
             String code = nextCode(typePrefix, regionCode);
             try {
-                return infrastructureRepository.save(req.toEntity(code, normalized.capacity()));
+                return infrastructureRepository.save(req.toEntity(code));
             } catch (DataIntegrityViolationException e) {
                 if (i == 1) throw e;
             }
@@ -116,17 +115,8 @@ public class InfrastructureService {
         throw BaseException.from(BaseResponseStatus.FAIL);
     }
 
-    private NormalizedInfra normalizeAndValidate(InfrastructureDto.UpsertReq req) {
+    private void normalizeAndValidate(InfrastructureDto.UpsertReq req) {
         resolveRegionCode(req.getRegion());
-
-        if (req.getLocationType() == LocationType.STORE) {
-            return new NormalizedInfra(null);
-        }
-
-        if (req.getCapacity() == null || req.getCapacity().isBlank()) {
-            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
-        }
-        return new NormalizedInfra(req.getCapacity().trim());
     }
 
     private InfrastructureDto.Res toRes(Infrastructure infra, Map<Long, Long> mappedStoreCountByWarehouseId) {
@@ -219,8 +209,5 @@ public class InfrastructureService {
         map.put("영남", "YN");
         map.put("호남", "HN");
         return Map.copyOf(map);
-    }
-
-    private record NormalizedInfra(String capacity) {
     }
 }

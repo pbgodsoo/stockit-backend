@@ -45,12 +45,9 @@ public class Infrastructure extends BaseEntity {
     @Column(name = "status", nullable = false, length = 16)
     private InfraStatus status;
 
-    @Column(name = "capacity", length = 64)
-    private String capacity;
-
     @Builder
     private Infrastructure(String code, LocationType locationType, String name, String region, String managerName,
-                           String contact, String address, InfraStatus status, String capacity) {
+                           String contact, String address, InfraStatus status) {
         this.code = code;
         this.locationType = locationType;
         this.name = name;
@@ -59,17 +56,15 @@ public class Infrastructure extends BaseEntity {
         this.contact = contact;
         this.address = address;
         this.status = status == null ? InfraStatus.ACTIVE : status;
-        this.capacity = capacity;
     }
 
     public void update(String name, String region, String managerName, String contact, String address,
-                       InfraStatus status, String capacity) {
+                       InfraStatus status) {
         this.name = name;
         this.region = region;
         this.managerName = managerName;
         this.contact = contact;
         this.address = address;
         this.status = status;
-        this.capacity = capacity;
     }
 }
