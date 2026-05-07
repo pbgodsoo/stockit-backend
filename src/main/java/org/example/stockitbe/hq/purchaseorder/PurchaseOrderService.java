@@ -231,9 +231,7 @@ public class PurchaseOrderService {
         PurchaseOrder po = lookupPurchaseOrder(code);
         po.markInTransit();
         appendHistory(po, null, null);
-        // 발주 ↔ 인벤토리 연결 (이슈 #169) — 가용재고 += 발주 수량 (도착 전 예약)
-        itemRepository.findAllByPurchaseOrderId(po.getId())
-                .forEach(it -> inventoryService.increaseAvailable(po.getWarehouseId(), it.getSkuCode(), it.getQuantity()));
+        // 인벤토리 hook 제거 — WhInboundService.markInTransit 가 책임 (PR #173 위치 이동, 2026-05-07 inbound 도메인 신설).
         return buildDetailRes(po);
     }
 
@@ -250,10 +248,21 @@ public class PurchaseOrderService {
         PurchaseOrder po = lookupPurchaseOrder(code);
         po.markCompleted();
         appendHistory(po, null, me);
-        // 발주 ↔ 인벤토리 연결 (이슈 #169) — 가용재고 → 실재고 이동
-        itemRepository.findAllByPurchaseOrderId(po.getId())
-                .forEach(it -> inventoryService.markPhysical(po.getWarehouseId(), it.getSkuCode(), it.getQuantity()));
+        // 인벤토리 hook 제거 — WhInboundService.confirmInbound 가 책임 (PR #173 위치 이동).
+        // 이 메소드의 외부 호출처는 step 4 에서 WhInboundController 로 갈아끼워질 때 사라짐.
         return buildDetailRes(po);
+    }
+
+    /**
+     * inbound.confirmInbound 가 호출하는 PO mirror entry point.
+     * inbound 가 진실 원천이 되는 입고 확정 시점에 PO 도 COMPLETED 박음 (본사 리스트 "종료" 표시).
+     */
+    @Transactional
+    public void completeFromInbound(String code, AuthUserDetails me) {
+        PurchaseOrder po = lookupPurchaseOrder(code);
+        po.markCompleted();
+        appendHistory(po, null, me);
+        // 인벤토리 갱신 X — inbound 가 책임
     }
 
     @Transactional

@@ -109,6 +109,13 @@ public enum BaseResponseStatus {
     USER_ALREADY_WITHDRAWN(false, 4402, "이미 탈퇴 처리된 사용자입니다."),
     USER_PASSWORD_SAME(false, 4403, "새 비밀번호가 기존 비밀번호와 동일합니다."),
 
+    // 4700번대~ 창고 입고 (WHS-005/007/008 + ADR-013/015/019 정정)
+    INBOUND_NOT_FOUND(false, 4700, "해당 입고 정보를 찾을 수 없습니다."),
+    DUPLICATE_INBOUND_CODE(false, 4701, "이미 존재하는 입고번호입니다."),
+    INVALID_INBOUND_STATUS_TRANSITION(false, 4702, "허용되지 않은 입고 상태 전환입니다."),
+    INBOUND_ALREADY_EXISTS_FOR_SOURCE(false, 4703, "해당 발주/이동에 대한 입고가 이미 존재합니다."),
+    INBOUND_NOT_CONFIRMABLE(false, 4704, "입고 확정 가능한 상태가 아닙니다."),
+
 
     // 5000번대 실패
     FAIL(false, 5000, "요청 실패");
