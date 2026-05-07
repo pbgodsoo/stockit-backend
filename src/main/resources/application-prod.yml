@@ -37,3 +37,9 @@ purchase-order:
   batch:
     delay-ms: 300000      # 스케줄러 fixedDelay (5분)
     wait-minutes: 30      # PENDING/APPROVED 30분 경과 시 자동 전환
+
+
+jwt:
+  secret: ${JWT_SECRET}
+  access-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS}
+  refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS}
