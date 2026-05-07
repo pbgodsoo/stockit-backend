@@ -12,6 +12,7 @@ import java.util.List;
 
 public class StoreOrderBatchDto {
 
+    // 매장 발주 수동 배치 처리 요청 DTO
     @Getter
     @NoArgsConstructor
     @AllArgsConstructor
@@ -27,6 +28,7 @@ public class StoreOrderBatchDto {
         }
     }
 
+    // 매장 발주 수동 배치 처리 응답 DTO
     @Getter
     @AllArgsConstructor
     @Builder
@@ -49,5 +51,16 @@ public class StoreOrderBatchDto {
         private String result;
         private Integer code;
         private String message;
+    }
+
+    // 승인 대기 발주건이 있는 매장 조회 응답 DTO
+    @Getter
+    @AllArgsConstructor
+    @Builder
+    public static class PendingStoreRes {
+        private String storeCode;
+        private String storeName;
+        private String region;
+        private Integer requestedCount;
     }
 }

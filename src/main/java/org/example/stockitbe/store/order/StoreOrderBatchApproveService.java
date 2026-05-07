@@ -20,8 +20,11 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -67,7 +70,7 @@ public class StoreOrderBatchApproveService {
                         header.getOrderNo(),
                         actorId,
                         actorName,
-                        "MANUAL_BATCH_APPROVE"
+                        "본사 수동 배치 처리"
                 );
                 success++;
                 itemResults.add(StoreOrderBatchDto.ItemRes.builder()
@@ -161,6 +164,36 @@ public class StoreOrderBatchApproveService {
                 .failCount(fail)
                 .results(itemResults)
                 .build();
+    }
+
+    // 승인 대기 발주건이 있는 매장 조회
+    @Transactional(readOnly = true)
+    public List<StoreOrderBatchDto.PendingStoreRes> listPendingStores() {
+        List<StoreOrderHeaderRepository.PendingStoreProjection> rows =
+                headerRepository.countPendingByStore(StoreOrderStatus.REQUESTED);
+        if (rows.isEmpty()) return List.of();
+
+        List<Long> storeIds = rows.stream().map(StoreOrderHeaderRepository.PendingStoreProjection::getStoreId).toList();
+        Map<Long, Infrastructure> infraById = new HashMap<>();
+        for (Infrastructure infra : infrastructureRepository.findAllById(storeIds)) {
+            infraById.put(infra.getId(), infra);
+        }
+
+        List<StoreOrderBatchDto.PendingStoreRes> result = new ArrayList<>();
+        for (StoreOrderHeaderRepository.PendingStoreProjection row : rows) {
+            Infrastructure store = infraById.get(row.getStoreId());
+            if (store == null) continue;
+            result.add(StoreOrderBatchDto.PendingStoreRes.builder()
+                    .storeCode(store.getCode())
+                    .storeName(store.getName())
+                    .region(store.getRegion())
+                    .requestedCount(row.getRequestedCount() == null ? 0 : row.getRequestedCount().intValue())
+                    .build());
+        }
+
+        result.sort(Comparator.comparing(StoreOrderBatchDto.PendingStoreRes::getRequestedCount).reversed()
+                .thenComparing(StoreOrderBatchDto.PendingStoreRes::getStoreName));
+        return result;
     }
 
     // ---------------------------- 내부 메서드 --------------------------------
