@@ -49,14 +49,15 @@ public class PurchaseOrderBatchService {
      * 인벤토리 hook 은 inbound 도메인 안에서 처리 (PR #173 위치 이동).
      */
     public BatchResult run(boolean force) {
+        // ERP 표준 — inbound mirror 는 INSERT 한 곳만 (READY_TO_SHIP 시점). 진행 단계는 PO 가 진실 원천.
         int approved     = autoTransition(PurchaseOrderStatus.REQUESTED,     force,
                 code -> service.approve(code), null);
         int readyToShip  = autoTransition(PurchaseOrderStatus.APPROVED,      force,
                 code -> service.readyToShip(code), whInboundService::createFromPurchaseOrder);
         int inTransit    = autoTransition(PurchaseOrderStatus.READY_TO_SHIP, force,
-                code -> service.startInTransit(code), whInboundService::markInTransit);
+                code -> service.startInTransit(code), null);
         int arrived      = autoTransition(PurchaseOrderStatus.IN_TRANSIT,    force,
-                code -> service.arrive(code), whInboundService::markArrived);
+                code -> service.arrive(code), null);
         return new BatchResult(approved, readyToShip, inTransit, arrived);
     }
 

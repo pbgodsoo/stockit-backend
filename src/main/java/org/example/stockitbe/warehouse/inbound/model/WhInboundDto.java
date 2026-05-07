@@ -6,7 +6,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.example.stockitbe.warehouse.inbound.model.entity.WhInboundHeader;
 import org.example.stockitbe.warehouse.inbound.model.entity.WhInboundItem;
-import org.example.stockitbe.warehouse.inbound.model.entity.WhInboundStatusHistory;
 
 import java.util.Date;
 import java.util.List;
@@ -22,6 +21,11 @@ public class WhInboundDto {
         private String memo;
     }
 
+    /**
+     * 입고 목록 응답. status 필드는 source 도메인의 진실 원천 join 결과 —
+     * inbound.completedAt!=null 면 "COMPLETED", else PO.status 그대로.
+     * 산출은 Service.findAll 의 resolveEffectiveStatus 가 책임.
+     */
     @Getter
     @NoArgsConstructor
     @AllArgsConstructor
@@ -32,15 +36,14 @@ public class WhInboundDto {
         private String sourceRefNo;
         private String sourceName;
         private String warehouseName;
-        private String status;
+        private String status;            // ← join 결과 (inbound 자체 컬럼 X)
         private Long totalQuantity;
         private Long totalAmount;
         private List<String> productNames;
         private Date createdAt;
-        private Date arrivedAt;
         private Date completedAt;
 
-        public static ListRes from(WhInboundHeader header, List<WhInboundItem> items) {
+        public static ListRes from(WhInboundHeader header, List<WhInboundItem> items, String status) {
             List<String> names = items.stream()
                     .map(WhInboundItem::getProductName)
                     .distinct()
@@ -52,12 +55,11 @@ public class WhInboundDto {
                     .sourceRefNo(header.getSourceRefNo())
                     .sourceName(header.getSourceName())
                     .warehouseName(header.getWarehouseName())
-                    .status(header.getStatus().name())
+                    .status(status)
                     .totalQuantity(header.getTotalQuantity())
                     .totalAmount(header.getTotalAmount())
                     .productNames(names)
                     .createdAt(header.getCreatedAt())
-                    .arrivedAt(header.getArrivedAt())
                     .completedAt(header.getCompletedAt())
                     .build();
         }
@@ -73,7 +75,7 @@ public class WhInboundDto {
         private String skuCode;
         private String color;
         private String size;
-        private String displayOption;   // color + "/" + size 합성 (둘 다 비어있으면 빈 문자열)
+        private String displayOption;
         private Integer quantity;
         private Long unitPrice;
         private Long subtotal;
@@ -100,26 +102,12 @@ public class WhInboundDto {
         }
     }
 
-    @Getter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class StatusHistoryRes {
-        private String status;
-        private Date at;            // FE 호환 — changedAt → at
-        private String byName;      // FE 호환 — changedByName → byName
-        private String note;
-
-        public static StatusHistoryRes from(WhInboundStatusHistory h) {
-            return StatusHistoryRes.builder()
-                    .status(h.getStatus().name())
-                    .at(h.getChangedAt())
-                    .byName(h.getChangedByName())
-                    .note(h.getNote())
-                    .build();
-        }
-    }
-
+    /**
+     * 입고 상세 응답. status 필드는 ListRes 와 동일 룰 (source join).
+     * statusHistory 는 폐기 — 진행 단계 history 는 PO.statusHistory 가 진실 원천이라
+     * 이번 사이클에선 빈 배열 노출 (FE 의 v-if 가드로 자동 hidden).
+     * 후속 사이클에서 PO.statusHistory 매핑 추가 가능.
+     */
     @Getter
     @NoArgsConstructor
     @AllArgsConstructor
@@ -131,20 +119,17 @@ public class WhInboundDto {
         private String sourceName;
         private Long warehouseId;
         private String warehouseName;
-        private String status;
+        private String status;            // ← join 결과
         private Long totalQuantity;
         private Long totalAmount;
         private Date createdAt;
-        private Date arrivedAt;
         private Date completedAt;
         private String confirmedByName;
         private String memo;
         private List<ItemRes> items;
         private List<StatusHistoryRes> statusHistory;
 
-        public static DetailRes from(WhInboundHeader header,
-                                     List<WhInboundItem> items,
-                                     List<WhInboundStatusHistory> history) {
+        public static DetailRes from(WhInboundHeader header, List<WhInboundItem> items, String status) {
             return DetailRes.builder()
                     .inboundCode(header.getInboundCode())
                     .inboundType(header.getInboundType().name())
@@ -152,18 +137,32 @@ public class WhInboundDto {
                     .sourceName(header.getSourceName())
                     .warehouseId(header.getWarehouseId())
                     .warehouseName(header.getWarehouseName())
-                    .status(header.getStatus().name())
+                    .status(status)
                     .totalQuantity(header.getTotalQuantity())
                     .totalAmount(header.getTotalAmount())
                     .createdAt(header.getCreatedAt())
-                    .arrivedAt(header.getArrivedAt())
                     .completedAt(header.getCompletedAt())
                     .confirmedByName(header.getConfirmedByName())
                     .memo(header.getMemo())
                     .items(items.stream().map(ItemRes::from).collect(Collectors.toList()))
-                    .statusHistory(history.stream().map(StatusHistoryRes::from).collect(Collectors.toList()))
+                    .statusHistory(List.of())
                     .build();
         }
+    }
+
+    /**
+     * statusHistory 응답 형태 — 후속 사이클에서 PO.statusHistory 매핑할 때 사용.
+     * 이번 사이클은 DetailRes 에서 빈 배열만 노출.
+     */
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class StatusHistoryRes {
+        private String status;
+        private Date at;
+        private String byName;
+        private String note;
     }
 
     @Getter

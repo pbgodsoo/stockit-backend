@@ -10,8 +10,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.Date;
 
 /**
- * 입고번호 자동 생성기 — `IB-{YYYYMMDD}-{NNNNN}` 5자리 zero-pad.
- * PO 의 PO-{YYYYMMDD}-{NNNNN} 패턴 일관 (PR #188).
+ * 입고번호 자동 생성기 — `WIB-{YYYYMMDD}-{NNNNN}` 5자리 zero-pad.
+ * PO 의 PO-{YYYYMMDD}-{NNNNN} 패턴 일관 (PR #188). WIB = Warehouse InBound.
  *
  * 호출자 (Service) 에서 unique 충돌 시 retry 책임. nextCode() 자체는 단순히 다음 시퀀스 반환.
  */
@@ -20,7 +20,7 @@ import java.util.Date;
 public class InboundCodeGenerator {
 
     private static final DateTimeFormatter DAY_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
-    private static final String PREFIX = "IB-";
+    private static final String PREFIX = "WIB-";
 
     private final WhInboundHeaderRepository repository;
 
@@ -35,6 +35,7 @@ public class InboundCodeGenerator {
     }
 
     private int parseSeq(String inboundCode) {
+        // WIB-20260507-00001 의 마지막 '-' 뒤 5자리 parse
         try {
             int dash = inboundCode.lastIndexOf('-');
             if (dash < 0 || dash + 1 >= inboundCode.length()) return 0;

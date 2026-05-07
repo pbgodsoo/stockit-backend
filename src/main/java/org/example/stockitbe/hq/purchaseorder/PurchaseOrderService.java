@@ -231,7 +231,10 @@ public class PurchaseOrderService {
         PurchaseOrder po = lookupPurchaseOrder(code);
         po.markInTransit();
         appendHistory(po, null, null);
-        // 인벤토리 hook 제거 — WhInboundService.markInTransit 가 책임 (PR #173 위치 이동, 2026-05-07 inbound 도메인 신설).
+        // 발주 ↔ 인벤토리 연결 — 가용재고 += 발주 수량 (도착 전 예약). PR #173 위치로 복귀
+        // (이전 사이클에서 inbound 로 잠시 이동했다가 ERP 표준 정정으로 다시 PO 책임으로).
+        itemRepository.findAllByPurchaseOrderId(po.getId())
+                .forEach(it -> inventoryService.increaseAvailable(po.getWarehouseId(), it.getSkuCode(), it.getQuantity()));
         return buildDetailRes(po);
     }
 

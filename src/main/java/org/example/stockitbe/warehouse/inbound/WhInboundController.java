@@ -3,7 +3,6 @@ package org.example.stockitbe.warehouse.inbound;
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.model.BaseResponse;
 import org.example.stockitbe.user.model.AuthUserDetails;
-import org.example.stockitbe.warehouse.inbound.model.InboundStatus;
 import org.example.stockitbe.warehouse.inbound.model.WhInboundDto;
 import org.example.stockitbe.warehouse.inbound.model.entity.WhInboundHeader;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -20,10 +19,10 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * WHS-005/007/008 — 창고 관리자 입고 컨트롤러 (inbound 도메인 신설).
+ * WHS-005/007/008 — 창고 관리자 입고 컨트롤러 (ERP 표준 모델).
  *
- * 권한군 prefix: /api/warehouse/...  (SecurityConfig 가 hasRole("WAREHOUSE") 자동 차단)
- * 자기 창고 격리 — 인증 사용자의 locationCode 만 신뢰 (PR #190 패턴).
+ * status 파라미터는 String — inbound 자체 status enum 이 없고 PO/outbound 의 status 를
+ * join 결과로 받기 때문 (READY_TO_SHIP/IN_TRANSIT/ARRIVED/COMPLETED 문자열).
  */
 @RestController
 @RequestMapping("/api/warehouse/inbound")
@@ -35,7 +34,7 @@ public class WhInboundController {
     @GetMapping
     public BaseResponse<List<WhInboundDto.ListRes>> list(
             @AuthenticationPrincipal AuthUserDetails me,
-            @RequestParam(required = false) InboundStatus status,
+            @RequestParam(required = false) String status,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return BaseResponse.success(whInboundService.findAll(me, status, from, to));
@@ -57,10 +56,6 @@ public class WhInboundController {
         return BaseResponse.success(whInboundService.findByCode(me, saved.getInboundCode()));
     }
 
-    /**
-     * 기존 PO 입고 데이터 일괄 backfill (dev/시연 1회성, admin 권한).
-     * 멱등 — 이미 inbound row 있는 PO 는 skip.
-     */
     @PostMapping("/backfill")
     public BaseResponse<WhInboundDto.BackfillRes> backfill() {
         return BaseResponse.success(whInboundService.backfillFromPurchaseOrders());
