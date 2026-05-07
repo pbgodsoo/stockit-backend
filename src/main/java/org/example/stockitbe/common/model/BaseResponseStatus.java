@@ -120,7 +120,12 @@ public enum BaseResponseStatus {
 
 
     // 5000번대 실패
-    FAIL(false, 5000, "요청 실패");
+    FAIL(false, 5000, "요청 실패"),
+
+
+    // 5100번대 외부 API 관련 (시스템 에러)
+    EXTERNAL_API_ERROR(false, 5100, "외부 API 호출 중 오류가 발생했습니다."),
+    CARBON_PRICE_UNAVAILABLE(false, 5101, "배출권 시세 정보를 불러올 수 없습니다.");
 
     private final boolean success;
     private final int code;
