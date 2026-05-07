@@ -1,4 +1,4 @@
-﻿package org.example.stockitbe.store.order;
+package org.example.stockitbe.store.order;
 
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
