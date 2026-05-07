@@ -8,11 +8,19 @@ import lombok.NoArgsConstructor;
 import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.model.BaseEntity;
 import org.example.stockitbe.common.model.BaseResponseStatus;
-import org.example.stockitbe.warehouse.inbound.model.InboundStatus;
 import org.example.stockitbe.warehouse.inbound.model.InboundType;
 
 import java.util.Date;
 
+/**
+ * 창고 입고 헤더 (ERP 표준 — Goods Receipt Note 패턴).
+ *
+ * inbound 자체는 status 컬럼을 가지지 않는다. 진행 단계 (READY_TO_SHIP/IN_TRANSIT/ARRIVED) 의
+ * 진실 원천은 source 도메인 (PURCHASE_ORDER 면 PurchaseOrder, WAREHOUSE_TRANSFER 면 WhOutbound) —
+ * Service.findAll/findByCode 가 LEFT JOIN 해서 응답 status 필드 채움.
+ *
+ * inbound 의 책임은 "도착 후 자산 확정 시점·확정자 기록" 만. completedAt + confirmedBy* 가 그 책임.
+ */
 @Entity
 @Table(name = "wh_inbound_header", uniqueConstraints = {
         @UniqueConstraint(name = "uk_wh_inbound_code", columnNames = "inbound_code")
@@ -32,7 +40,6 @@ public class WhInboundHeader extends BaseEntity {
     @Column(name = "inbound_type", nullable = false, length = 30)
     private InboundType inboundType;
 
-    // PO-... 또는 STF-... 등 source 도메인의 비즈니스 코드 시점 복사 (결합 차단 4패턴 #1).
     @Column(name = "source_ref_no", nullable = false, length = 50)
     private String sourceRefNo;
 
@@ -45,23 +52,14 @@ public class WhInboundHeader extends BaseEntity {
     @Column(name = "warehouse_name", nullable = false, length = 128)
     private String warehouseName;
 
-    // 공급처명(발주) 또는 출발창고명(이동) — inboundType 별 의미 다름, 시점 복사.
     @Column(name = "source_name", nullable = false, length = 200)
     private String sourceName;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
-    private InboundStatus status;
 
     @Column(name = "total_quantity", nullable = false)
     private Long totalQuantity;
 
-    // 발주 입고만 채움. 이동 입고는 사내 이동이라 null.
     @Column(name = "total_amount")
     private Long totalAmount;
-
-    @Column(name = "arrived_at")
-    private Date arrivedAt;
 
     @Column(name = "completed_at")
     private Date completedAt;
@@ -78,8 +76,8 @@ public class WhInboundHeader extends BaseEntity {
     @Builder
     private WhInboundHeader(String inboundCode, InboundType inboundType, String sourceRefNo, Long sourceRefId,
                             Long warehouseId, String warehouseName, String sourceName,
-                            InboundStatus status, Long totalQuantity, Long totalAmount, String memo,
-                            Date arrivedAt, Date completedAt) {
+                            Long totalQuantity, Long totalAmount, String memo,
+                            Date completedAt, String confirmedByMemberId, String confirmedByName) {
         this.inboundCode = inboundCode;
         this.inboundType = inboundType;
         this.sourceRefNo = sourceRefNo;
@@ -87,38 +85,23 @@ public class WhInboundHeader extends BaseEntity {
         this.warehouseId = warehouseId;
         this.warehouseName = warehouseName;
         this.sourceName = sourceName;
-        this.status = status == null ? InboundStatus.READY_TO_SHIP : status;
         this.totalQuantity = totalQuantity == null ? 0L : totalQuantity;
         this.totalAmount = totalAmount;
         this.memo = memo;
-        // arrivedAt/completedAt 은 backfill 전용 — 일반 흐름엔 markArrived/markCompleted 도메인 메소드만 사용.
-        this.arrivedAt = arrivedAt;
+        // backfill 전용 인자 — 일반 생성 시 null
         this.completedAt = completedAt;
+        this.confirmedByMemberId = confirmedByMemberId;
+        this.confirmedByName = confirmedByName;
     }
 
-    /** READY_TO_SHIP → IN_TRANSIT. PO mirror — 인벤토리 가용재고+ 시점은 Service 책임. */
-    public void markInTransit() {
-        if (this.status != InboundStatus.READY_TO_SHIP) {
-            throw BaseException.from(BaseResponseStatus.INVALID_INBOUND_STATUS_TRANSITION);
+    /**
+     * 입고 확정 — 창고 [입고 확정] 매뉴얼 트리거.
+     * completedAt!=null 이면 이미 확정된 상태 → 중복 차단.
+     */
+    public void markConfirmed(Date now, String byMemberId, String byName) {
+        if (this.completedAt != null) {
+            throw BaseException.from(BaseResponseStatus.INBOUND_NOT_CONFIRMABLE);
         }
-        this.status = InboundStatus.IN_TRANSIT;
-    }
-
-    /** IN_TRANSIT → ARRIVED. PO mirror — 도착 시점 박힘. */
-    public void markArrived(Date now) {
-        if (this.status != InboundStatus.IN_TRANSIT) {
-            throw BaseException.from(BaseResponseStatus.INVALID_INBOUND_STATUS_TRANSITION);
-        }
-        this.status = InboundStatus.ARRIVED;
-        this.arrivedAt = now == null ? new Date() : now;
-    }
-
-    /** ARRIVED → COMPLETED. 창고 [입고 확정] 매뉴얼. inbound 가 PO 도 mirror 갱신. */
-    public void markCompleted(Date now, String byMemberId, String byName) {
-        if (this.status != InboundStatus.ARRIVED) {
-            throw BaseException.from(BaseResponseStatus.INVALID_INBOUND_STATUS_TRANSITION);
-        }
-        this.status = InboundStatus.COMPLETED;
         this.completedAt = now == null ? new Date() : now;
         this.confirmedByMemberId = byMemberId;
         this.confirmedByName = byName;
