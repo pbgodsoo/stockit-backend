@@ -11,7 +11,7 @@ import java.util.Date;
 
 @Entity
 @Table(name = "inventory", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_inventory_sku_location", columnNames = {"sku_id", "location_id"})
+        @UniqueConstraint(name = "uk_inventory_sku_location_status", columnNames = {"sku_id", "location_id", "inventory_status"})
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

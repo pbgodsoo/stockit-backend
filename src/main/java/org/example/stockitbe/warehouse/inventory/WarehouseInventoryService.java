@@ -11,6 +11,7 @@ import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
 import org.example.stockitbe.hq.inventory.InventoryRepository;
 import org.example.stockitbe.hq.inventory.model.Inventory;
+import org.example.stockitbe.hq.inventory.model.InventoryStatusPolicy;
 import org.example.stockitbe.hq.product.ProductMasterRepository;
 import org.example.stockitbe.hq.product.ProductSkuRepository;
 import org.example.stockitbe.hq.product.model.ProductMaster;
@@ -44,6 +45,7 @@ public class WarehouseInventoryService {
         Map<String, ItemAccumulator> grouped = new HashMap<>();
 
         for (Inventory inventory : inventories) {
+            if (!InventoryStatusPolicy.QUERY_ALLOWED_STATUSES.contains(inventory.getInventoryStatus())) continue;
             ProductSku sku = context.skuById.get(inventory.getSkuId());
             if (sku == null) continue;
 
@@ -71,11 +73,13 @@ public class WarehouseInventoryService {
 
             acc.actualStock += n(inventory.getQuantity());
             acc.availableStock += n(inventory.getAvailableQuantity());
-            acc.safetyStock += n(master.getWarehouseSafetyStock());
+            acc.skuIds.add(sku.getId());
             if (acc.updatedAt == null || (inventory.getUpdatedAt() != null && inventory.getUpdatedAt().after(acc.updatedAt))) {
                 acc.updatedAt = inventory.getUpdatedAt();
             }
         }
+
+        grouped.values().forEach(acc -> acc.safetyStock = acc.skuIds.size() * n(context.masterByCode.get(acc.itemCode).getWarehouseSafetyStock()));
 
         return grouped.values().stream()
                 .map(acc -> WarehouseInventoryDto.ItemRes.builder()
@@ -106,9 +110,30 @@ public class WarehouseInventoryService {
 
         Context context = buildContext(inventories);
 
-        return inventories.stream()
-                .map(inventory -> toSkuRes(inventory, itemCode, context))
-                .filter(Objects::nonNull)
+        Map<String, SkuAccumulator> grouped = new HashMap<>();
+        for (Inventory inventory : inventories) {
+            if (!InventoryStatusPolicy.QUERY_ALLOWED_STATUSES.contains(inventory.getInventoryStatus())) continue;
+            WarehouseInventoryDto.SkuRes row = toSkuRes(inventory, itemCode, context);
+            if (row == null) continue;
+            SkuAccumulator acc = grouped.computeIfAbsent(row.getSkuCode(), ignored -> new SkuAccumulator(row.getSkuCode(), row.getColor(), row.getSize(), row.getSafetyStock(), row.getUpdatedAt()));
+            acc.actualStock += row.getActualStock();
+            acc.availableStock += row.getAvailableStock();
+            if (acc.updatedAt == null || (row.getUpdatedAt() != null && row.getUpdatedAt().after(acc.updatedAt))) {
+                acc.updatedAt = row.getUpdatedAt();
+            }
+        }
+
+        return grouped.values().stream()
+                .map(acc -> WarehouseInventoryDto.SkuRes.builder()
+                        .skuCode(acc.skuCode)
+                        .color(acc.color)
+                        .size(acc.size)
+                        .actualStock(acc.actualStock)
+                        .availableStock(acc.availableStock)
+                        .safetyStock(acc.safetyStock)
+                        .status(resolveStatus(acc.availableStock, acc.safetyStock))
+                        .updatedAt(acc.updatedAt)
+                        .build())
                 .sorted(Comparator
                         .comparing(WarehouseInventoryDto.SkuRes::getColor, Comparator.nullsLast(String::compareTo))
                         .thenComparing(WarehouseInventoryDto.SkuRes::getSize, Comparator.nullsLast(String::compareTo)))
@@ -199,5 +224,25 @@ public class WarehouseInventoryService {
         private int availableStock;
         private int safetyStock;
         private Date updatedAt;
+        @Builder.Default
+        private Set<Long> skuIds = new HashSet<>();
+    }
+
+    private static class SkuAccumulator {
+        private final String skuCode;
+        private final String color;
+        private final String size;
+        private final int safetyStock;
+        private int actualStock = 0;
+        private int availableStock = 0;
+        private Date updatedAt;
+
+        private SkuAccumulator(String skuCode, String color, String size, int safetyStock, Date updatedAt) {
+            this.skuCode = skuCode;
+            this.color = color;
+            this.size = size;
+            this.safetyStock = safetyStock;
+            this.updatedAt = updatedAt;
+        }
     }
 }

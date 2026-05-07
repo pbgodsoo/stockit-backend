@@ -24,6 +24,7 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
     Optional<Inventory> findWithLockBySkuIdAndLocationIdAndInventoryStatus(Long skuId, Long locationId, InventoryStatus inventoryStatus);
 
     Optional<Inventory> findBySkuIdAndLocationId(Long skuId, Long locationId);
+    List<Inventory> findAllBySkuIdAndLocationId(Long skuId, Long locationId);
 
     // 매장 판매 처리 시 동일 SKU 동시 차감을 제어하기 위한 락 조회
     @Lock(LockModeType.PESSIMISTIC_WRITE)

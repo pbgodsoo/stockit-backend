@@ -13,6 +13,7 @@ import org.example.stockitbe.hq.inventory.model.Inventory;
 import org.example.stockitbe.hq.inventory.model.InventoryCandidateCondition;
 import org.example.stockitbe.hq.inventory.model.InventoryDto;
 import org.example.stockitbe.hq.inventory.model.InventoryStatus;
+import org.example.stockitbe.hq.inventory.model.InventoryStatusPolicy;
 import org.example.stockitbe.hq.product.MaterialRepository;
 import org.example.stockitbe.hq.product.ProductMasterRepository;
 import org.example.stockitbe.hq.product.ProductSkuRepository;
@@ -107,6 +108,7 @@ public class InventoryService {
         Map<String, Aggregate> aggregateMap = new LinkedHashMap<>();
 
         for (Inventory inv : inventories) {
+            if (!InventoryStatusPolicy.QUERY_ALLOWED_STATUSES.contains(inv.getInventoryStatus())) continue;
             ProductSku sku = skuById.get(inv.getSkuId());
             if (sku == null) continue;
             ProductMaster master = productByCode.get(sku.getProductCode());
@@ -141,9 +143,12 @@ public class InventoryService {
             Aggregate agg = aggregateMap.computeIfAbsent(master.getCode(), k -> new Aggregate(master, parentName, childName));
             agg.actualStock += n(inv.getQuantity());
             agg.availableStock += n(inv.getAvailableQuantity());
-            agg.safetyStock += location.getLocationType() == LocationType.WAREHOUSE
-                    ? n(master.getWarehouseSafetyStock())
-                    : n(master.getStoreSafetyStock());
+            String safetyKey = inv.getSkuId() + ":" + inv.getLocationId();
+            if (agg.safetyKeys.add(safetyKey)) {
+                agg.safetyStock += location.getLocationType() == LocationType.WAREHOUSE
+                        ? n(master.getWarehouseSafetyStock())
+                        : n(master.getStoreSafetyStock());
+            }
             if (agg.updatedAt == null || inv.getUpdatedAt().after(agg.updatedAt)) {
                 agg.updatedAt = inv.getUpdatedAt();
             }
@@ -202,6 +207,7 @@ public class InventoryService {
         }
 
         for (Inventory inv : inventories) {
+            if (!InventoryStatusPolicy.QUERY_ALLOWED_STATUSES.contains(inv.getInventoryStatus())) continue;
             Infrastructure location = locationById.get(inv.getLocationId());
             if (location == null) continue;
             if (locationType != null && location.getLocationType() != locationType) continue;
@@ -219,7 +225,12 @@ public class InventoryService {
             if (agg == null) continue;
             agg.actualStock += n(inv.getQuantity());
             agg.availableStock += n(inv.getAvailableQuantity());
-            if (agg.locationType == null) agg.locationType = location.getLocationType();
+            String safetyKey = inv.getSkuId() + ":" + inv.getLocationId();
+            if (agg.safetyKeys.add(safetyKey)) {
+                agg.safetyStock += location.getLocationType() == LocationType.WAREHOUSE
+                        ? warehouseSafety
+                        : storeSafety;
+            }
             if (agg.updatedAt == null || inv.getUpdatedAt().after(agg.updatedAt)) {
                 agg.updatedAt = inv.getUpdatedAt();
             }
@@ -228,7 +239,6 @@ public class InventoryService {
         return skuMap.values().stream()
                 .filter(agg -> agg.actualStock > 0 || agg.availableStock > 0)
                 .map(agg -> {
-                    int safetyStock = agg.locationType == LocationType.WAREHOUSE ? warehouseSafety : storeSafety;
                     return InventoryDto.CompanyWideSkuDetailRes.builder()
                             .skuCode(agg.sku.getSkuCode())
                             .color(agg.sku.getColor())
@@ -236,8 +246,8 @@ public class InventoryService {
                             .unitPrice(agg.sku.getUnitPrice())
                             .actualStock(agg.actualStock)
                             .availableStock(agg.availableStock)
-                            .safetyStock(safetyStock)
-                            .status(toUiStatus(agg.availableStock, safetyStock))
+                            .safetyStock(agg.safetyStock)
+                            .status(toUiStatus(agg.availableStock, agg.safetyStock))
                             .updatedAt(agg.updatedAt)
                             .build();
                 })
@@ -275,26 +285,31 @@ public class InventoryService {
         Map<String, Category> categoryByCode = categories.stream().collect(Collectors.toMap(Category::getCode, Function.identity()));
         Map<Long, Category> categoryById = categories.stream().collect(Collectors.toMap(Category::getId, Function.identity()));
 
-        Map<Long, ImbalancedSkuAggregate> aggregateBySkuId = new HashMap<>();
+        Map<String, WarehouseSkuStock> stockByWarehouseSkuKey = new HashMap<>();
         for (Inventory inventory : inventories) {
             if (!warehouseById.containsKey(inventory.getLocationId())) continue;
+            String key = inventory.getSkuId() + ":" + inventory.getLocationId();
+            WarehouseSkuStock stock = stockByWarehouseSkuKey.computeIfAbsent(key, ignored -> new WarehouseSkuStock(inventory.getSkuId()));
+            stock.totalOnHand += Math.max(0, n(inventory.getQuantity()));
+            stock.totalAvailable += Math.max(0, n(inventory.getAvailableQuantity()));
+        }
 
-            ProductSku sku = skuById.get(inventory.getSkuId());
+        Map<Long, ImbalancedSkuAggregate> aggregateBySkuId = new HashMap<>();
+        for (WarehouseSkuStock stock : stockByWarehouseSkuKey.values()) {
+            ProductSku sku = skuById.get(stock.skuId);
             if (sku == null) continue;
             ProductMaster master = masterByCode.get(sku.getProductCode());
             if (master == null) continue;
 
             ImbalancedSkuAggregate agg = aggregateBySkuId.computeIfAbsent(sku.getId(), key -> new ImbalancedSkuAggregate(sku, master));
-            int quantity = Math.max(0, n(inventory.getQuantity()));
-            int available = Math.max(0, n(inventory.getAvailableQuantity()));
             int safetyStock = Math.max(0, n(master.getWarehouseSafetyStock()));
 
-            agg.totalOnHand += quantity;
-            agg.totalAvailable += available;
+            agg.totalOnHand += stock.totalOnHand;
+            agg.totalAvailable += stock.totalAvailable;
 
-            if (available < safetyStock) {
+            if (stock.totalAvailable < safetyStock) {
                 agg.shortageWarehouseCount += 1;
-                agg.totalShortageQty += (safetyStock - available);
+                agg.totalShortageQty += (safetyStock - stock.totalAvailable);
             }
         }
 
@@ -409,6 +424,7 @@ public class InventoryService {
         private int safetyStock = 0;
         private Date updatedAt;
         private final Set<InventoryStatus> statuses = new HashSet<>();
+        private final Set<String> safetyKeys = new HashSet<>();
 
         private Aggregate(ProductMaster master, String parentCategory, String childCategory) {
             this.master = master;
@@ -421,8 +437,9 @@ public class InventoryService {
         private final ProductSku sku;
         private int actualStock = 0;
         private int availableStock = 0;
+        private int safetyStock = 0;
         private Date updatedAt;
-        private LocationType locationType;
+        private final Set<String> safetyKeys = new HashSet<>();
 
         private SkuAggregate(ProductSku sku) {
             this.sku = sku;
@@ -440,6 +457,16 @@ public class InventoryService {
         private ImbalancedSkuAggregate(ProductSku sku, ProductMaster master) {
             this.sku = sku;
             this.master = master;
+        }
+    }
+
+    private static class WarehouseSkuStock {
+        private final Long skuId;
+        private int totalOnHand = 0;
+        private int totalAvailable = 0;
+
+        private WarehouseSkuStock(Long skuId) {
+            this.skuId = skuId;
         }
     }
 
