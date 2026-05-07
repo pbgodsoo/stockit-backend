@@ -40,6 +40,26 @@ spec:
                 secretKeyRef:
                   name: stockit-be-secret
                   key: db-pass
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: stockit-be-secret
+                  key: jwt-secret
+            - name: JWT_ACCESS_EXPIRATION_MS
+              valueFrom:
+                configMapKeyRef:
+                  name: stockit-be-config
+                  key: jwt-access-expiration-ms
+            - name: JWT_REFRESH_EXPIRATION_MS
+              valueFrom:
+                configMapKeyRef:
+                  name: stockit-be-config
+                  key: jwt-refresh-expiration-ms
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stockit-be-secret
+                  key: openai-api-key
           readinessProbe:
             tcpSocket:
               port: http

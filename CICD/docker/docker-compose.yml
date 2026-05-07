@@ -34,6 +34,12 @@ services:
       DB_URL: jdbc:mariadb://mariadb:3306/stockit
       DB_USER: stockit
       DB_PASS: change-me
+      # HS256 은 32 byte 이상 필요. 배포 전 반드시 교체.
+      JWT_SECRET: change-me-stockit-jwt-secret-please-replace-with-64-byte-random-string
+      JWT_ACCESS_EXPIRATION_MS: "3600000"
+      JWT_REFRESH_EXPIRATION_MS: "604800000"
+      # 미설정 시 AI 거래처 추천 호출만 401 (BE 부팅은 OK)
+      OPENAI_API_KEY: ""
     ports:
       - "8080:8080"
 
