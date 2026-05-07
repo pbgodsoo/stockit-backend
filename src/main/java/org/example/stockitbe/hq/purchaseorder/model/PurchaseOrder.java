@@ -8,7 +8,10 @@ import lombok.NoArgsConstructor;
 import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.model.BaseEntity;
 import org.example.stockitbe.common.model.BaseResponseStatus;
+import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
+import org.example.stockitbe.hq.vendor.model.Vendor;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -26,27 +29,31 @@ public class PurchaseOrder extends BaseEntity {
     @Column(name = "code", nullable = false, length = 32)
     private String code;
 
-    @Column(name = "vendor_id", nullable = false)
-    private Long vendorId;
+    // 외부 도메인 — JPA 정석 매핑. N+1 은 조회 시점 @EntityGraph / join fetch 로 통제.
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "vendor_id", nullable = false)
+    private Vendor vendor;
 
-    // vendor.name 시점 복사 — 발주 시점의 공급처명 스냅샷 (warehouseName/memberName 패턴과 동일).
+    // vendor.name 시점 박제 스냅샷 — 거래처 개명에 영향 안 받게 발주 시점 라벨 보존 (ERP 정석).
     @Column(name = "vendor_name", nullable = false, length = 128)
     private String vendorName;
 
-    // vendor.contactName 시점 복사 — 공급처 담당자명. statusHistory.changedByName 에
-    // APPROVED/SHIPPING/DELIVERED 단계 주체로 박힘 (회사명보다 사람 이름이 자연).
+    // vendor.contactName 시점 박제 — 공급처 담당자명. statusHistory.changedByName 의
+    // 거래처 책임 단계(APPROVED/READY_TO_SHIP/IN_TRANSIT/ARRIVED) 주체로 박힘.
     @Column(name = "vendor_contact_name", nullable = false, length = 64)
     private String vendorContactName;
 
-    // warehouse FK — Long ID 참조 + name 시점 복사 스냅샷 (vendor 패턴 일관, 결합 차단 4패턴 #1).
-    // @ManyToOne 박지 않음 — N+1/lazy 함정 회피, 패키지 결합 차단. DB FK 제약은 별 마이그레이션 SQL.
-    @Column(name = "warehouse_id", nullable = false)
-    private Long warehouseId;
+    // 외부 도메인 — Infrastructure 가 창고 마스터 (LocationType=WAREHOUSE).
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "warehouse_id", nullable = false)
+    private Infrastructure warehouse;
 
+    // warehouse.name 시점 박제 스냅샷.
     @Column(name = "warehouse_name", nullable = false, length = 128)
     private String warehouseName;
 
-    // 회원 BE 미구현, 인증 미정 — logical reference
+    // 회원 logical reference — User.employeeCode 자연 키 String 스냅샷.
+    // Long PK 매핑 전환은 데이터 마이그레이션 동반 별 사이클 (이슈 #205 범위 외).
     @Column(name = "member_id", length = 32)
     private String memberId;
 
@@ -63,15 +70,25 @@ public class PurchaseOrder extends BaseEntity {
     @Column(name = "cancel_reason", length = 256)
     private String cancelReason;
 
+    // 부모-자식 컴포지션 — cascade 자동화 대상.
+    // items: 라이프사이클 동일, REQUESTED 시 교체 빈번 → orphanRemoval 필수.
+    @OneToMany(mappedBy = "purchaseOrder", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<PurchaseOrderItem> items = new ArrayList<>();
+
+    // statusHistory: append-only — cascade=PERSIST 만으로 충분 (수정/삭제 X).
+    @OneToMany(mappedBy = "purchaseOrder", cascade = CascadeType.PERSIST)
+    @OrderBy("changedAt ASC")
+    private List<PurchaseOrderStatusHistory> statusHistory = new ArrayList<>();
+
     @Builder
-    private PurchaseOrder(String code, Long vendorId, String vendorName, String vendorContactName,
-                          Long warehouseId, String warehouseName,
+    private PurchaseOrder(String code, Vendor vendor, String vendorName, String vendorContactName,
+                          Infrastructure warehouse, String warehouseName,
                           String memberId, String memberName, Long totalAmount) {
         this.code = code;
-        this.vendorId = vendorId;
+        this.vendor = vendor;
         this.vendorName = vendorName;
         this.vendorContactName = vendorContactName;
-        this.warehouseId = warehouseId;
+        this.warehouse = warehouse;
         this.warehouseName = warehouseName;
         this.memberId = memberId;
         this.memberName = memberName;
@@ -130,21 +147,39 @@ public class PurchaseOrder extends BaseEntity {
 
     /**
      * items 교체 + totalAmount 재계산. REQUESTED 만 허용.
-     * Service 가 기존 items 를 별도로 삭제하고 신규 items 를 save 한 뒤 호출.
+     * orphanRemoval=true 가 기존 자식 row 자동 DELETE, cascade=ALL 이 신규 자식 row 자동 INSERT.
      */
-    public void recalculateTotalAmount(List<PurchaseOrderItem> items) {
+    public void replaceItems(List<PurchaseOrderItem> newItems) {
         if (this.status != PurchaseOrderStatus.REQUESTED) {
             throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_INVALID_STATUS_TRANSITION);
         }
-        long sum = items.stream().mapToLong(PurchaseOrderItem::getSubtotal).sum();
-        this.totalAmount = sum;
+        this.items.clear();
+        newItems.forEach(it -> {
+            it.linkToParent(this);
+            this.items.add(it);
+        });
+        this.totalAmount = this.items.stream().mapToLong(PurchaseOrderItem::getSubtotal).sum();
     }
 
-    public void updateLogistics(Long warehouseId, String warehouseName) {
+    /**
+     * 진행 이력 한 행 추가 (append-only). cascade=PERSIST 가 자동 INSERT.
+     * changedByName 분기 책임은 Service — 인증/배치 호출 컨텍스트에 따라 다르므로.
+     */
+    public void appendHistory(String changedByName, String note) {
+        PurchaseOrderStatusHistory entry = PurchaseOrderStatusHistory.builder()
+                .purchaseOrder(this)
+                .status(this.status)
+                .changedByName(changedByName)
+                .note(note)
+                .build();
+        this.statusHistory.add(entry);
+    }
+
+    public void updateLogistics(Infrastructure warehouse, String warehouseName) {
         if (this.status != PurchaseOrderStatus.REQUESTED) {
             throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_INVALID_STATUS_TRANSITION);
         }
-        if (warehouseId != null) this.warehouseId = warehouseId;
+        if (warehouse != null) this.warehouse = warehouse;
         if (warehouseName != null) this.warehouseName = warehouseName;
     }
 }

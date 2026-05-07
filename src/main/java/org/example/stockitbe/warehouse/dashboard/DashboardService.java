@@ -117,7 +117,7 @@ public class DashboardService {
                 .findAllByPurchaseOrderIdInAndStatus(completedIds, PurchaseOrderStatus.COMPLETED)
                 .stream()
                 .collect(Collectors.toMap(
-                        PurchaseOrderStatusHistory::getPurchaseOrderId,
+                        h -> h.getPurchaseOrder().getId(),
                         PurchaseOrderStatusHistory::getChangedAt,
                         (a, b) -> a));
 
