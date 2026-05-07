@@ -17,16 +17,19 @@ public class WhInboundItem extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // header FK Long ID (결합 차단 4패턴 #1 — @ManyToOne 안 박음, PurchaseOrderItem 패턴 일관)
-    @Column(name = "inbound_header_id", nullable = false)
-    private Long inboundHeaderId;
+    // 부모-자식 컴포지션 — 라이프사이클 동일, cascade 자동화 대상.
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "inbound_header_id", nullable = false)
+    private WhInboundHeader inboundHeader;
 
+    // 마스터 제품 자연 키 + 시점 박제 — ProductMaster.productCode (String 자연 키, 매핑 안 박음).
     @Column(name = "product_code", nullable = false, length = 64)
     private String productCode;
 
     @Column(name = "product_name", nullable = false, length = 256)
     private String productName;
 
+    // SKU 자연 키 + 옵션 시점 박제 — ProductSku.skuCode (String 자연 키, 매핑 안 박음).
     @Column(name = "sku_code", nullable = false, length = 32)
     private String skuCode;
 
@@ -47,10 +50,10 @@ public class WhInboundItem extends BaseEntity {
     private Long subtotal;
 
     @Builder
-    private WhInboundItem(Long inboundHeaderId, String productCode, String productName,
+    private WhInboundItem(WhInboundHeader inboundHeader, String productCode, String productName,
                           String skuCode, String color, String size,
                           Integer quantity, Long unitPrice, Long subtotal) {
-        this.inboundHeaderId = inboundHeaderId;
+        this.inboundHeader = inboundHeader;
         this.productCode = productCode;
         this.productName = productName;
         this.skuCode = skuCode;
@@ -61,7 +64,7 @@ public class WhInboundItem extends BaseEntity {
         this.subtotal = subtotal;
     }
 
-    public void linkToHeader(Long inboundHeaderId) {
-        this.inboundHeaderId = inboundHeaderId;
+    void linkToParent(WhInboundHeader parent) {
+        this.inboundHeader = parent;
     }
 }

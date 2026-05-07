@@ -135,7 +135,7 @@ public class WhInboundDto {
                     .inboundType(header.getInboundType().name())
                     .sourceRefNo(header.getSourceRefNo())
                     .sourceName(header.getSourceName())
-                    .warehouseId(header.getWarehouseId())
+                    .warehouseId(header.getWarehouse().getId())
                     .warehouseName(header.getWarehouseName())
                     .status(status)
                     .totalQuantity(header.getTotalQuantity())
