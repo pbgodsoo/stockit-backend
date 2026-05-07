@@ -8,7 +8,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.example.stockitbe.store.order.model.StoreOrderFulfillmentStatus;
 import org.example.stockitbe.store.order.model.StoreOrderHistoryType;
 import org.example.stockitbe.store.order.model.StoreOrderStatus;
 import org.example.stockitbe.store.order.model.entity.StoreOrderHeader;
@@ -27,9 +26,6 @@ public class StoreOrderDto {
     @AllArgsConstructor
     @Builder
     public static class CreateReq {
-        @NotBlank
-        private String storeCode;
-        private String storeLocationId;
         private String requestedByMemberId;
         @NotBlank
         private String requestedByName;
@@ -68,7 +64,6 @@ public class StoreOrderDto {
         private String requestedByMemberId;
         private String requestedBy;
         private StoreOrderStatus status;
-        private StoreOrderFulfillmentStatus inboundStatus;
         private Integer totalSkuCount;
         private Integer totalRequestedQuantity;
         private String memo;
@@ -86,7 +81,6 @@ public class StoreOrderDto {
                     .requestedByMemberId(header.getRequestedByMemberId())
                     .requestedBy(header.getRequestedByName())
                     .status(header.getStatus())
-                    .inboundStatus(header.getFulfillmentStatus())
                     .totalSkuCount(header.getTotalSkuCount())
                     .totalRequestedQuantity(header.getTotalRequestedQuantity())
                     .memo(header.getMemo())
@@ -297,7 +291,6 @@ public class StoreOrderDto {
         private Date requestedAt;
         private String requestedBy;
         private StoreOrderStatus status;
-        private StoreOrderFulfillmentStatus inboundStatus;
         private Integer totalSkuCount;
         private Integer totalRequestedQuantity;
         private String memo;
@@ -312,7 +305,6 @@ public class StoreOrderDto {
                     .requestedAt(header.getRequestedAt())
                     .requestedBy(header.getRequestedByName())
                     .status(header.getStatus())
-                    .inboundStatus(header.getFulfillmentStatus())
                     .totalSkuCount(header.getTotalSkuCount())
                     .totalRequestedQuantity(header.getTotalRequestedQuantity())
                     .memo(header.getMemo())

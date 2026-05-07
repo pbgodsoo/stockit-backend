@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrder;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderStatus;
+import org.example.stockitbe.warehouse.inbound.WhInboundService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -34,6 +35,7 @@ public class PurchaseOrderBatchService {
 
     private final PurchaseOrderRepository repo;
     private final PurchaseOrderService service;
+    private final WhInboundService whInboundService;
 
     @Value("${purchase-order.batch.wait-minutes:30}")
     private long waitMinutes;
@@ -41,16 +43,27 @@ public class PurchaseOrderBatchService {
     /**
      * @param force true 면 시간 조건 무시 (시연·QA·장애 대응) — 거래처 책임 4단계 모두 즉시 처리.
      *              false 면 {@code updatedAt < now - waitMinutes} 인 건만.
+     *
+     * inbound mirror — APPROVED→READY_TO_SHIP 시점에 inbound row INSERT (createFromPurchaseOrder),
+     * READY_TO_SHIP→IN_TRANSIT/IN_TRANSIT→ARRIVED 시점에 inbound mirror UPDATE.
+     * 인벤토리 hook 은 inbound 도메인 안에서 처리 (PR #173 위치 이동).
      */
     public BatchResult run(boolean force) {
-        int approved     = autoTransition(PurchaseOrderStatus.REQUESTED,     force, code -> service.approve(code));
-        int readyToShip  = autoTransition(PurchaseOrderStatus.APPROVED,      force, code -> service.readyToShip(code));
-        int inTransit    = autoTransition(PurchaseOrderStatus.READY_TO_SHIP, force, code -> service.startInTransit(code));
-        int arrived      = autoTransition(PurchaseOrderStatus.IN_TRANSIT,    force, code -> service.arrive(code));
+        // ERP 표준 — inbound mirror 는 INSERT 한 곳만 (READY_TO_SHIP 시점). 진행 단계는 PO 가 진실 원천.
+        int approved     = autoTransition(PurchaseOrderStatus.REQUESTED,     force,
+                code -> service.approve(code), null);
+        int readyToShip  = autoTransition(PurchaseOrderStatus.APPROVED,      force,
+                code -> service.readyToShip(code), whInboundService::createFromPurchaseOrder);
+        int inTransit    = autoTransition(PurchaseOrderStatus.READY_TO_SHIP, force,
+                code -> service.startInTransit(code), null);
+        int arrived      = autoTransition(PurchaseOrderStatus.IN_TRANSIT,    force,
+                code -> service.arrive(code), null);
         return new BatchResult(approved, readyToShip, inTransit, arrived);
     }
 
-    private int autoTransition(PurchaseOrderStatus from, boolean force, Consumer<String> action) {
+    private int autoTransition(PurchaseOrderStatus from, boolean force,
+                                Consumer<String> action,
+                                Consumer<PurchaseOrder> mirror) {
         List<PurchaseOrder> targets = force
                 ? repo.findAllByStatus(from)
                 : repo.findAllByStatusAndUpdatedAtBefore(
@@ -60,6 +73,9 @@ public class PurchaseOrderBatchService {
         for (PurchaseOrder po : targets) {
             try {
                 action.accept(po.getCode());
+                if (mirror != null) {
+                    mirror.accept(po);
+                }
                 success++;
             } catch (Exception e) {
                 log.warn("[SYS-001] 자동 전환 실패 from={} code={}", from, po.getCode(), e);

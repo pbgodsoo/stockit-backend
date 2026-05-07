@@ -8,7 +8,6 @@ import lombok.NoArgsConstructor;
 import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.model.BaseEntity;
 import org.example.stockitbe.common.model.BaseResponseStatus;
-import org.example.stockitbe.store.order.model.StoreOrderFulfillmentStatus;
 import org.example.stockitbe.store.order.model.StoreOrderStatus;
 
 import java.util.Date;
@@ -45,10 +44,6 @@ public class StoreOrderHeader extends BaseEntity {
     @Column(name = "status", nullable = false, length = 20)
     private StoreOrderStatus status;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "fulfillment_status", length = 20)
-    private StoreOrderFulfillmentStatus fulfillmentStatus;
-
     @Column(name = "total_sku_count", nullable = false)
     private Integer totalSkuCount;
 
@@ -64,7 +59,6 @@ public class StoreOrderHeader extends BaseEntity {
     @Builder
     private StoreOrderHeader(String orderNo, Long storeId, Long warehouseId, String requestedByMemberId,
                              String requestedByName, Date requestedAt, StoreOrderStatus status,
-                             StoreOrderFulfillmentStatus fulfillmentStatus,
                              Integer totalSkuCount, Integer totalRequestedQuantity,
                              String memo, String cancelReason) {
         this.orderNo = orderNo;
@@ -74,7 +68,6 @@ public class StoreOrderHeader extends BaseEntity {
         this.requestedByName = requestedByName;
         this.requestedAt = requestedAt;
         this.status = status == null ? StoreOrderStatus.REQUESTED : status;
-        this.fulfillmentStatus = fulfillmentStatus;
         this.totalSkuCount = totalSkuCount == null ? 0 : totalSkuCount;
         this.totalRequestedQuantity = totalRequestedQuantity == null ? 0 : totalRequestedQuantity;
         this.memo = memo;
@@ -97,16 +90,11 @@ public class StoreOrderHeader extends BaseEntity {
         validateRequestedOnly();
         this.status = StoreOrderStatus.CANCELLED;
         this.cancelReason = cancelReason;
-        this.fulfillmentStatus = null;
     }
 
     public void markApproved() {
         validateRequestedOnly();
         this.status = StoreOrderStatus.APPROVED;
-    }
-
-    public void markFulfillment(StoreOrderFulfillmentStatus fulfillmentStatus) {
-        this.fulfillmentStatus = fulfillmentStatus;
     }
 
     private void validateRequestedOnly() {

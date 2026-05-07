@@ -90,6 +90,7 @@ public enum BaseResponseStatus {
     STORE_SALE_STORE_NOT_FOUND(false, 4503, "매장 정보를 찾을 수 없습니다."),
     STORE_SALE_SKU_NOT_FOUND(false, 4504, "판매 SKU를 찾을 수 없습니다."),
     STORE_SALE_INSUFFICIENT_STOCK(false, 4505, "재고가 부족하여 판매를 확정할 수 없습니다."),
+    STORE_SALE_SCOPE_FORBIDDEN(false, 4506, "로그인한 매장 범위를 벗어난 요청입니다."),
 
     // 4600번대~ 매장 발주
     STORE_ORDER_NOT_FOUND(false, 4600, "매장 발주를 찾을 수 없습니다."),
@@ -100,12 +101,20 @@ public enum BaseResponseStatus {
     STORE_ORDER_SKU_NOT_FOUND(false, 4605, "발주 SKU를 찾을 수 없습니다."),
     STORE_ORDER_INVALID_STATUS_TRANSITION(false, 4606, "허용되지 않는 발주 상태 전환입니다."),
     STORE_ORDER_CANCEL_REASON_REQUIRED(false, 4607, "발주 취소 사유는 필수입니다."),
+    STORE_ORDER_SCOPE_FORBIDDEN(false, 4608, "로그인한 매장 범위를 벗어난 요청입니다."),
 
     // 4400번대 회원 관리
     USER_NOT_PENDING(false, 4400, "대기 상태인 신청만 처리할 수 있습니다."),
     USER_NOT_APPROVED(false, 4401, "승인된 사용자만 탈퇴 처리할 수 있습니다."),
     USER_ALREADY_WITHDRAWN(false, 4402, "이미 탈퇴 처리된 사용자입니다."),
     USER_PASSWORD_SAME(false, 4403, "새 비밀번호가 기존 비밀번호와 동일합니다."),
+
+    // 4700번대~ 창고 입고 (WHS-005/007/008 + ADR-013/015/019 정정)
+    INBOUND_NOT_FOUND(false, 4700, "해당 입고 정보를 찾을 수 없습니다."),
+    DUPLICATE_INBOUND_CODE(false, 4701, "이미 존재하는 입고번호입니다."),
+    INVALID_INBOUND_STATUS_TRANSITION(false, 4702, "허용되지 않은 입고 상태 전환입니다."),
+    INBOUND_ALREADY_EXISTS_FOR_SOURCE(false, 4703, "해당 발주/이동에 대한 입고가 이미 존재합니다."),
+    INBOUND_NOT_CONFIRMABLE(false, 4704, "입고 확정 가능한 상태가 아닙니다."),
 
 
     // 5000번대 실패

@@ -8,7 +8,7 @@
 
 ## 2. DB/DDL 설계
 적용 파일:
-- `src/main/resources/sql/migration/V20260505_01__store_sales.sql`
+- `src/main/resources/sql/migration/store_sales_schema.sql`
 
 핵심 테이블:
 - `store_sale_header`
