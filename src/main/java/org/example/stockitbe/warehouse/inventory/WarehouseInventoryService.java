@@ -1,4 +1,4 @@
-package org.example.stockitbe.store.inventory;
+package org.example.stockitbe.warehouse.inventory;
 
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +16,7 @@ import org.example.stockitbe.hq.product.ProductMasterRepository;
 import org.example.stockitbe.hq.product.ProductSkuRepository;
 import org.example.stockitbe.hq.product.model.ProductMaster;
 import org.example.stockitbe.hq.product.model.ProductSku;
-import org.example.stockitbe.store.inventory.model.StoreInventoryDto;
+import org.example.stockitbe.warehouse.inventory.model.WarehouseInventoryDto;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class StoreInventoryService {
+public class WarehouseInventoryService {
 
     private final InfrastructureRepository infrastructureRepository;
     private final InventoryRepository inventoryRepository;
@@ -34,9 +34,9 @@ public class StoreInventoryService {
     private final CategoryRepository categoryRepository;
 
     @Transactional(readOnly = true)
-    public List<StoreInventoryDto.ItemRes> getItems(String locationCode) {
-        Infrastructure store = resolveStore(locationCode);
-        List<Inventory> inventories = inventoryRepository.findAllByLocationId(store.getId());
+    public List<WarehouseInventoryDto.ItemRes> getItems(String locationCode) {
+        Infrastructure warehouse = resolveWarehouse(locationCode);
+        List<Inventory> inventories = inventoryRepository.findAllByLocationId(warehouse.getId());
         if (inventories.isEmpty()) {
             return List.of();
         }
@@ -79,10 +79,10 @@ public class StoreInventoryService {
             }
         }
 
-        grouped.values().forEach(acc -> acc.safetyStock = acc.skuIds.size() * n(context.masterByCode.get(acc.itemCode).getStoreSafetyStock()));
+        grouped.values().forEach(acc -> acc.safetyStock = acc.skuIds.size() * n(context.masterByCode.get(acc.itemCode).getWarehouseSafetyStock()));
 
         return grouped.values().stream()
-                .map(acc -> StoreInventoryDto.ItemRes.builder()
+                .map(acc -> WarehouseInventoryDto.ItemRes.builder()
                         .itemCode(acc.itemCode)
                         .parentCategory(acc.parentCategory)
                         .childCategory(acc.childCategory)
@@ -90,20 +90,20 @@ public class StoreInventoryService {
                         .actualStock(acc.actualStock)
                         .availableStock(acc.availableStock)
                         .safetyStock(acc.safetyStock)
-                        .status(resolveStatus(acc.actualStock, acc.safetyStock))
+                        .status(resolveStatus(acc.availableStock, acc.safetyStock))
                         .updatedAt(acc.updatedAt)
                         .build())
                 .sorted(Comparator
-                        .comparing(StoreInventoryDto.ItemRes::getParentCategory, this::compareMainCategory)
-                        .thenComparing(StoreInventoryDto.ItemRes::getChildCategory, Comparator.nullsLast(String::compareTo))
-                        .thenComparing(StoreInventoryDto.ItemRes::getItemName, Comparator.nullsLast(String::compareTo)))
+                        .comparing(WarehouseInventoryDto.ItemRes::getParentCategory, this::compareMainCategory)
+                        .thenComparing(WarehouseInventoryDto.ItemRes::getChildCategory, Comparator.nullsLast(String::compareTo))
+                        .thenComparing(WarehouseInventoryDto.ItemRes::getItemName, Comparator.nullsLast(String::compareTo)))
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public List<StoreInventoryDto.SkuRes> getItemSkus(String locationCode, String itemCode) {
-        Infrastructure store = resolveStore(locationCode);
-        List<Inventory> inventories = inventoryRepository.findAllByLocationId(store.getId());
+    public List<WarehouseInventoryDto.SkuRes> getItemSkus(String locationCode, String itemCode) {
+        Infrastructure warehouse = resolveWarehouse(locationCode);
+        List<Inventory> inventories = inventoryRepository.findAllByLocationId(warehouse.getId());
         if (inventories.isEmpty()) {
             return List.of();
         }
@@ -113,7 +113,7 @@ public class StoreInventoryService {
         Map<String, SkuAccumulator> grouped = new HashMap<>();
         for (Inventory inventory : inventories) {
             if (!InventoryStatusPolicy.QUERY_ALLOWED_STATUSES.contains(inventory.getInventoryStatus())) continue;
-            StoreInventoryDto.SkuRes row = toSkuRes(inventory, itemCode, context);
+            WarehouseInventoryDto.SkuRes row = toSkuRes(inventory, itemCode, context);
             if (row == null) continue;
             SkuAccumulator acc = grouped.computeIfAbsent(row.getSkuCode(), ignored -> new SkuAccumulator(row.getSkuCode(), row.getColor(), row.getSize(), row.getSafetyStock(), row.getUpdatedAt()));
             acc.actualStock += row.getActualStock();
@@ -124,49 +124,43 @@ public class StoreInventoryService {
         }
 
         return grouped.values().stream()
-                .map(acc -> StoreInventoryDto.SkuRes.builder()
+                .map(acc -> WarehouseInventoryDto.SkuRes.builder()
                         .skuCode(acc.skuCode)
                         .color(acc.color)
                         .size(acc.size)
                         .actualStock(acc.actualStock)
                         .availableStock(acc.availableStock)
                         .safetyStock(acc.safetyStock)
-                        .status(resolveStatus(acc.actualStock, acc.safetyStock))
+                        .status(resolveStatus(acc.availableStock, acc.safetyStock))
                         .updatedAt(acc.updatedAt)
                         .build())
                 .sorted(Comparator
-                        .comparing(StoreInventoryDto.SkuRes::getColor, Comparator.nullsLast(String::compareTo))
-                        .thenComparing(StoreInventoryDto.SkuRes::getSize, Comparator.nullsLast(String::compareTo)))
+                        .comparing(WarehouseInventoryDto.SkuRes::getColor, Comparator.nullsLast(String::compareTo))
+                        .thenComparing(WarehouseInventoryDto.SkuRes::getSize, Comparator.nullsLast(String::compareTo)))
                 .toList();
     }
 
-    private StoreInventoryDto.SkuRes toSkuRes(Inventory inventory, String itemCode, Context context) {
+    private WarehouseInventoryDto.SkuRes toSkuRes(Inventory inventory, String itemCode, Context context) {
         ProductSku sku = context.skuById.get(inventory.getSkuId());
         if (sku == null) return null;
 
         ProductMaster master = context.masterByCode.get(sku.getProductCode());
         if (master == null) return null;
 
-        Category child = context.categoryByCode.get(master.getCategoryCode());
-        if (child == null) return null;
-
-        Category parent = child.getParentId() == null ? child : context.categoryById.get(child.getParentId());
-        String resolvedItemCode = master.getCode();
-
-        if (!Objects.equals(resolvedItemCode, itemCode)) {
+        if (!Objects.equals(master.getCode(), itemCode)) {
             return null;
         }
 
-        int actual = n(inventory.getQuantity());
-        int safety = n(master.getStoreSafetyStock());
-        return StoreInventoryDto.SkuRes.builder()
+        int available = n(inventory.getAvailableQuantity());
+        int safety = n(master.getWarehouseSafetyStock());
+        return WarehouseInventoryDto.SkuRes.builder()
                 .skuCode(sku.getSkuCode())
                 .color(sku.getColor())
                 .size(sku.getSize())
-                .actualStock(actual)
-                .availableStock(n(inventory.getAvailableQuantity()))
+                .actualStock(n(inventory.getQuantity()))
+                .availableStock(available)
                 .safetyStock(safety)
-                .status(resolveStatus(actual, safety))
+                .status(resolveStatus(available, safety))
                 .updatedAt(inventory.getUpdatedAt())
                 .build();
     }
@@ -187,14 +181,14 @@ public class StoreInventoryService {
         return new Context(skuById, masterByCode, categoryById, categoryByCode);
     }
 
-    private Infrastructure resolveStore(String locationCode) {
-        return infrastructureRepository.findByCodeAndLocationType(locationCode, LocationType.STORE)
-                .orElseThrow(() -> BaseException.from(BaseResponseStatus.STORE_SALE_STORE_NOT_FOUND));
+    private Infrastructure resolveWarehouse(String locationCode) {
+        return infrastructureRepository.findByCodeAndLocationType(locationCode, LocationType.WAREHOUSE)
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.WAREHOUSE_NOT_FOUND));
     }
 
-    private String resolveStatus(int actual, int safety) {
-        if (actual == 0) return "품절";
-        if (actual <= safety) return "부족";
+    private String resolveStatus(int available, int safety) {
+        if (available <= 0) return "품절";
+        if (available < safety) return "부족";
         return "정상";
     }
 
