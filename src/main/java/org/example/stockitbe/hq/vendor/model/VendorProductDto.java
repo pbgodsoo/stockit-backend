@@ -38,7 +38,7 @@ public class VendorProductDto {
         public VendorProduct toEntity(Vendor vendor, String code, String productName) {
             return VendorProduct.builder()
                     .code(code)
-                    .vendorId(vendor.getId())
+                    .vendor(vendor)
                     .productCode(this.productCode)
                     .productName(productName)
                     .unitPrice(this.unitPrice)

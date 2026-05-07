@@ -60,17 +60,17 @@ class PurchaseOrderCatalogServiceTest {
                 .status(VendorStatus.ACTIVE).build();
         ReflectionTestUtils.setField(vendorB, "id", 2L);
 
-        vpA1 = VendorProduct.builder().code("VP-A-001").vendorId(1L)
+        vpA1 = VendorProduct.builder().code("VP-A-001").vendor(vendorA)
                 .productCode("PM-A").productName("티셔츠").unitPrice(6800L)
                 .status(VendorProductStatus.ACTIVE).build();
         ReflectionTestUtils.setField(vpA1, "id", 11L);
 
-        vpB1 = VendorProduct.builder().code("VP-B-001").vendorId(2L)
+        vpB1 = VendorProduct.builder().code("VP-B-001").vendor(vendorB)
                 .productCode("PM-B").productName("니트").unitPrice(15000L)
                 .status(VendorProductStatus.ACTIVE).build();
         ReflectionTestUtils.setField(vpB1, "id", 21L);
 
-        vpA2 = VendorProduct.builder().code("VP-A-002").vendorId(1L)
+        vpA2 = VendorProduct.builder().code("VP-A-002").vendor(vendorA)
                 .productCode("PM-EMPTY").productName("빈제품").unitPrice(9000L)
                 .status(VendorProductStatus.ACTIVE).build();
         ReflectionTestUtils.setField(vpA2, "id", 12L);

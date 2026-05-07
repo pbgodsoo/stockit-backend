@@ -68,7 +68,7 @@ public class PurchaseOrderCatalogService {
 
         // 2) Vendor 일괄 조회 + ACTIVE 만 통과
         Set<Long> vendorIds = vendorProducts.stream()
-                .map(VendorProduct::getVendorId)
+                .map(vp -> vp.getVendor().getId())
                 .collect(Collectors.toSet());
         Map<Long, Vendor> vendorMap = vendorRepository.findAllById(vendorIds).stream()
                 .filter(v -> v.getStatus() == VendorStatus.ACTIVE)
@@ -91,7 +91,7 @@ public class PurchaseOrderCatalogService {
         // 5) MasterRes 빌드 (SKU 0건 마스터 제외)
         List<PurchaseOrderCatalogDto.MasterRes> masters = new ArrayList<>();
         for (VendorProduct vp : vendorProducts) {
-            Vendor vendor = vendorMap.get(vp.getVendorId());
+            Vendor vendor = vendorMap.get(vp.getVendor().getId());
             if (vendor == null) continue; // vendor 비ACTIVE
             ProductMaster master = productMap.get(vp.getProductCode());
             if (master == null) continue; // master 비ACTIVE 또는 없음
