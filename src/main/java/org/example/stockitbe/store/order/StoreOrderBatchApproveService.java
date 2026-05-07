@@ -47,12 +47,13 @@ public class StoreOrderBatchApproveService {
             case ALL -> headerRepository.findAllByStatusOrderByRequestedAtAscIdAsc(StoreOrderStatus.REQUESTED);
             case STORE -> {
                 String storeCode = trimToNull(req == null ? null : req.getStoreCode());
-                if (storeCode == null) throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+                if (storeCode == null) throw BaseException.from(BaseResponseStatus.STORE_ORDER_BATCH_STORE_CODE_REQUIRED);
                 Long storeId = infrastructureRepository.findByCodeAndLocationType(storeCode, LocationType.STORE)
                         .map(Infrastructure::getId)
                         .orElseThrow(() -> BaseException.from(BaseResponseStatus.STORE_ORDER_STORE_NOT_FOUND));
                 yield headerRepository.findAllByStatusAndStoreIdOrderByRequestedAtAscIdAsc(StoreOrderStatus.REQUESTED, storeId);
             }
+            default -> throw BaseException.from(BaseResponseStatus.STORE_ORDER_BATCH_SCOPE_INVALID);
         };
 
         log.info("[STORE-ORDER-BATCH] start runId={} trigger=MANUAL scope={} storeCode={} requested={}",
@@ -186,4 +187,3 @@ public class StoreOrderBatchApproveService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 }
-

@@ -102,6 +102,8 @@ public enum BaseResponseStatus {
     STORE_ORDER_INVALID_STATUS_TRANSITION(false, 4606, "허용되지 않는 발주 상태 전환입니다."),
     STORE_ORDER_CANCEL_REASON_REQUIRED(false, 4607, "발주 취소 사유는 필수입니다."),
     STORE_ORDER_SCOPE_FORBIDDEN(false, 4608, "로그인한 매장 범위를 벗어난 요청입니다."),
+    STORE_ORDER_BATCH_STORE_CODE_REQUIRED(false, 4609, "배치 승인 STORE 모드에서는 storeCode가 필수입니다."),
+    STORE_ORDER_BATCH_SCOPE_INVALID(false, 4610, "유효하지 않은 배치 승인 범위입니다."),
 
     // 4400번대 회원 관리
     USER_NOT_PENDING(false, 4400, "대기 상태인 신청만 처리할 수 있습니다."),
