@@ -121,7 +121,7 @@ public class PurchaseOrderService {
         List<VendorProduct> vendorProducts = req.getItems().stream()
                 .map(itemReq -> {
                     VendorProduct vp = lookupVendorProduct(itemReq.getVendorProductCode());
-                    if (!vp.getVendorId().equals(vendor.getId())) {
+                    if (!vp.getVendor().getId().equals(vendor.getId())) {
                         throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_VENDOR_PRODUCT_MISMATCH);
                     }
                     return vp;
@@ -178,7 +178,7 @@ public class PurchaseOrderService {
         List<VendorProduct> vendorProducts = req.getItems().stream()
                 .map(itemReq -> {
                     VendorProduct vp = lookupVendorProduct(itemReq.getVendorProductCode());
-                    if (!vp.getVendorId().equals(po.getVendor().getId())) {
+                    if (!vp.getVendor().getId().equals(po.getVendor().getId())) {
                         throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_VENDOR_PRODUCT_MISMATCH);
                     }
                     return vp;
