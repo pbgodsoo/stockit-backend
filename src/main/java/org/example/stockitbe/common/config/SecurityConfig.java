@@ -41,6 +41,7 @@ public class SecurityConfig {
         // 권한별 접근 제어
         http.authorizeHttpRequests((auth) -> auth
                 .requestMatchers("/api/user/signup", "/api/user/login", "/api/user/logout", "/api/user/refresh").permitAll()        // 회원가입/로그인
+                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll() // k8s probe/기본 상태 확인
                 .requestMatchers("/api/hq/**").hasRole("HQ")                  // 본사
                 .requestMatchers("/api/store/**").hasRole("STORE")            // 매장
                 .requestMatchers("/api/warehouse/**").hasRole("WAREHOUSE")    // 창고

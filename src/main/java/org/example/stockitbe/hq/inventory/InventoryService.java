@@ -504,39 +504,62 @@ public class InventoryService {
         Map<String, GroupAvailabilityAggregate> groupAvailability = buildGroupAvailability(normalInventories, skuById);
 
         Date now = new Date();
-        List<Inventory> converted = new ArrayList<>();
-        Map<Long, List<Integer>> matchedByInventoryId = new HashMap<>();
+        int convertedCount = 0;
+        Map<Long, Set<Integer>> matchedByFinalInventoryId = new HashMap<>();
 
-        for (Inventory inventory : normalInventories) {
-            ProductSku sku = skuById.get(inventory.getSkuId());
+        for (Inventory snapshot : normalInventories) {
+            ProductSku sku = skuById.get(snapshot.getSkuId());
             if (sku == null) continue;
             ProductMaster productMaster = productMasterByCode.get(sku.getProductCode());
-            List<Integer> matchedCodes = evaluateCandidateConditions(inventory, sku, productMaster, groupAvailability);
+            List<Integer> matchedCodes = evaluateCandidateConditions(snapshot, sku, productMaster, groupAvailability);
             if (matchedCodes.isEmpty()) continue;
 
-            inventory.markCircularCandidate(now);
-            converted.add(inventory);
-            matchedByInventoryId.put(inventory.getId(), matchedCodes);
+            Inventory source = inventoryRepository.findWithLockById(snapshot.getId()).orElse(null);
+            if (source == null || source.getInventoryStatus() != InventoryStatus.NORMAL) continue;
+
+            Inventory target = inventoryRepository
+                    .findWithLockBySkuIdAndLocationIdAndInventoryStatus(
+                            source.getSkuId(),
+                            source.getLocationId(),
+                            InventoryStatus.CIRCULAR_CANDIDATE
+                    )
+                    .orElse(null);
+
+            Long finalInventoryId;
+            if (target != null) {
+                target.absorbAsCircularCandidate(source, now);
+                inventoryRepository.save(target);
+                inventoryCandidateConditionRepository.deleteByInventoryIdIn(List.of(source.getId()));
+                inventoryRepository.delete(source);
+                finalInventoryId = target.getId();
+            } else {
+                source.markCircularCandidate(now);
+                inventoryRepository.save(source);
+                finalInventoryId = source.getId();
+            }
+
+            matchedByFinalInventoryId
+                    .computeIfAbsent(finalInventoryId, ignored -> new HashSet<>())
+                    .addAll(matchedCodes);
+            convertedCount += 1;
         }
 
-        if (converted.isEmpty()) {
+        if (matchedByFinalInventoryId.isEmpty()) {
             return InventoryDto.CircularCandidateRefreshRes.builder()
                     .scannedCount(normalInventories.size())
                     .convertedCount(0)
                     .build();
         }
 
-        inventoryRepository.saveAll(converted);
-
-        List<Long> convertedIds = converted.stream().map(Inventory::getId).toList();
+        List<Long> convertedIds = new ArrayList<>(matchedByFinalInventoryId.keySet());
         inventoryCandidateConditionRepository.deleteByInventoryIdIn(convertedIds);
 
         List<InventoryCandidateCondition> conditions = new ArrayList<>();
-        for (Inventory inventory : converted) {
-            List<Integer> codes = matchedByInventoryId.getOrDefault(inventory.getId(), List.of());
-            for (Integer code : codes) {
+        for (Map.Entry<Long, Set<Integer>> entry : matchedByFinalInventoryId.entrySet()) {
+            Long inventoryId = entry.getKey();
+            for (Integer code : entry.getValue()) {
                 conditions.add(InventoryCandidateCondition.builder()
-                        .inventoryId(inventory.getId())
+                        .inventoryId(inventoryId)
                         .conditionCode(code)
                         .conditionLabel(conditionLabel(code))
                         .matchedAt(now)
@@ -547,7 +570,7 @@ public class InventoryService {
 
         return InventoryDto.CircularCandidateRefreshRes.builder()
                 .scannedCount(normalInventories.size())
-                .convertedCount(converted.size())
+                .convertedCount(convertedCount)
                 .build();
     }
 
