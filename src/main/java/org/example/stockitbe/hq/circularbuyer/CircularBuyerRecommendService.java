@@ -9,6 +9,10 @@ import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.model.BaseResponseStatus;
 import org.example.stockitbe.hq.circularbuyer.model.CircularBuyer;
 import org.example.stockitbe.hq.circularbuyer.model.CircularBuyerDto;
+import org.example.stockitbe.hq.product.ProductMasterRepository;
+import org.example.stockitbe.hq.product.model.Material;
+import org.example.stockitbe.hq.product.model.ProductMaster;
+import org.example.stockitbe.hq.product.model.ProductMaterialComposition;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.data.jpa.domain.Specification;
@@ -43,7 +47,22 @@ public class CircularBuyerRecommendService {
     private static final int TOP_K = 5;
     private static final Pattern JSON_ARRAY = Pattern.compile("\\[.*]", Pattern.DOTALL);
 
+    /**
+     * 이슈 #218 — 소재 그룹별 자연어 일반론. 임베딩 input 에 추가하여 거래처의 처리 도메인 어휘
+     * (단일 소재 회수 / 화학 재활용 / 혼방 분리 처리 등) 와 매칭 신호 강화.
+     * material.description 의 단순 합으로 표현되지 않는 그룹 고유 특성(특히 혼방의 분리 어려움) 을 박는다.
+     */
+    private static final Map<String, String> GROUP_DESCRIPTION = Map.of(
+            "natural-single",
+            "천연 단일 섬유. 단일 소재로 회수 분류 깨끗. 셀룰로오스 단백질 펄프 솜 자연 원료 회수 재활용 적합. 자연 분해성 친환경 처리.",
+            "synthetic",
+            "합성 단일 섬유. 화학 재활용 가능 단일 소재 분류 처리. PET 페트병 원사 회수 순환 경제 핵심.",
+            "blended",
+            "혼방 직물. 단일 소재 한계 보완 시너지 활동복 일상복. 재활용 시 소재 분리가 어려워 혼방 전문 처리 거래처가 필요. 다중 소재 폐기물 화학 처리 분류 까다로움."
+    );
+
     private final CircularBuyerRepository circularBuyerRepository;
+    private final ProductMasterRepository productMasterRepository;
     private final EmbeddingModel embeddingModel;
     private final ChatModel chatModel;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -100,13 +119,46 @@ public class CircularBuyerRecommendService {
 
     // ─── 2층 ─────────────────────────────────────────────────────────────────
 
+    /**
+     * 이슈 #218 — 임베딩 input 풍부화.
+     * 1) 사용자 입력 4필드 (그룹 라벨 + 품목명 + 설명 + 수량힌트)
+     * 2) productCode 가 박혔으면 ProductMaster → composition → Material join 으로 소재별 자연어 합침
+     *    (혼방의 경우 두 번째 소재까지 정확 표현 — 면 70% 폴리 30% → 면 description + 폴리 description 둘 다)
+     * 3) materialFit 그룹 일반론 — 단일/합성/혼방 도메인 어휘 (특히 혼방의 분리 어려움)
+     *
+     * productCode 미입력 또는 미존재 시 자유 텍스트 fallback. ReadOnly 트랜잭션 안에서 EntityGraph
+     * 가 composition + material 한 번에 fetch.
+     */
     private String buildQueryText(CircularBuyerDto.RecommendReq req) {
-        return String.join(" ",
-                materialFitLabel(req.getMaterialFit()),
-                safe(req.getProductName()),
-                safe(req.getDescription()),
-                safe(req.getQuantityHint())
-        ).trim();
+        StringBuilder sb = new StringBuilder();
+        sb.append(materialFitLabel(req.getMaterialFit())).append(' ');
+        sb.append(safe(req.getProductName())).append(' ');
+        sb.append(safe(req.getDescription())).append(' ');
+        sb.append(safe(req.getQuantityHint())).append(' ');
+
+        appendProductMaterialContext(sb, req.getProductCode());
+
+        String groupDesc = GROUP_DESCRIPTION.get(req.getMaterialFit());
+        if (groupDesc != null) sb.append(groupDesc);
+
+        return sb.toString().trim();
+    }
+
+    private void appendProductMaterialContext(StringBuilder sb, String productCode) {
+        if (productCode == null || productCode.isBlank()) return;
+        productMasterRepository.findByCode(productCode).ifPresent(pm -> {
+            sb.append(safe(pm.getName())).append(' ');
+            sb.append(safe(pm.getCategoryCode())).append(' ');
+            for (ProductMaterialComposition comp : pm.getMaterialCompositions()) {
+                Material material = comp.getMaterial();
+                if (material == null) continue;
+                sb.append(safe(material.getNameKo()))
+                        .append(comp.getRatio() == null ? "" : (comp.getRatio() + "% "));
+                if (material.getDescription() != null && !material.getDescription().isBlank()) {
+                    sb.append(material.getDescription()).append(' ');
+                }
+            }
+        });
     }
 
     private List<CircularBuyer> rankByCosine(List<CircularBuyer> candidates, String queryText) {

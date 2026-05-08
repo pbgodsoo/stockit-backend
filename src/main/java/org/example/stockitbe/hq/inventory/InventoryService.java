@@ -355,7 +355,8 @@ public class InventoryService {
         ProductSku sku = productSkuRepository.findBySkuCode(skuCode)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_SKU_NOT_FOUND));
 
-        inventoryRepository.findBySkuIdAndLocationId(sku.getId(), locationId)
+        // 발주 hook 은 NORMAL 재고에만 반영 — (sku, location) 에 status 3행이 있을 수 있어 단일 보장 위해 status 까지 좁힌다.
+        inventoryRepository.findBySkuIdAndLocationIdAndInventoryStatus(sku.getId(), locationId, InventoryStatus.NORMAL)
                 .ifPresentOrElse(
                         inv -> inv.increaseAvailable(quantity),
                         () -> inventoryRepository.save(Inventory.builder()
@@ -379,7 +380,8 @@ public class InventoryService {
         ProductSku sku = productSkuRepository.findBySkuCode(skuCode)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_SKU_NOT_FOUND));
 
-        inventoryRepository.findBySkuIdAndLocationId(sku.getId(), locationId)
+        // 입고 확정 hook 도 NORMAL 한정 — increaseAvailable 과 동일한 status 분리 룰.
+        inventoryRepository.findBySkuIdAndLocationIdAndInventoryStatus(sku.getId(), locationId, InventoryStatus.NORMAL)
                 .ifPresentOrElse(
                         inv -> inv.moveAvailableToPhysical(quantity),
                         () -> inventoryRepository.save(Inventory.builder()
