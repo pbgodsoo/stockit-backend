@@ -26,6 +26,10 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
     Optional<Inventory> findBySkuIdAndLocationId(Long skuId, Long locationId);
     List<Inventory> findAllBySkuIdAndLocationId(Long skuId, Long locationId);
 
+    // 같은 (sku, location) 에 status 별로 최대 3행 (NORMAL/CIRCULAR_CANDIDATE/CIRCULAR) 가 있을 수 있어
+    // 발주 hook 처럼 NORMAL 만 다뤄야 하는 경우 status 까지 좁혀 단일 결과를 보장.
+    Optional<Inventory> findBySkuIdAndLocationIdAndInventoryStatus(Long skuId, Long locationId, InventoryStatus inventoryStatus);
+
     // 매장 판매 처리 시 동일 SKU 동시 차감을 제어하기 위한 락 조회
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select i from Inventory i where i.skuId = :skuId and i.locationId = :locationId")

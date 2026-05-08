@@ -101,6 +101,9 @@ public class CircularBuyerDto {
      * ADR-021 추천 입력 — 옵션 B (사용자 결정 2026-04-30):
      *   materialFit (필수, 1층 SQL 룰 키) + productName + description + quantityHint.
      * 추천 호출 시점 = 판매 등록 페이지 Step 1 → Step 2 [다음] 클릭 1회.
+     *
+     * productCode (이슈 #218, 임베딩 풍부화) — 선택 입력. 박히면 BE 가 ProductMaster → composition →
+     * Material join 으로 소재 자연어를 자동 합쳐 임베딩 input 풍부화. 미박힘 시 자유 텍스트 fallback.
      */
     @Getter
     @NoArgsConstructor
@@ -112,6 +115,7 @@ public class CircularBuyerDto {
         private String productName;
         private String description;
         private String quantityHint;
+        private String productCode;
     }
 
     /**
