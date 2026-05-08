@@ -63,6 +63,11 @@ spec:
                 secretKeyRef:
                   name: stockit-be-secret
                   key: openai-api-key
+            - name: PUBLIC_DATA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stockit-be-secret
+                  key: public-data-api-key
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
