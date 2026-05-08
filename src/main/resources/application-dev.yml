@@ -7,6 +7,9 @@ spring:
     url: ${DB_URL}
     username: ${DB_USER}
     password: ${DB_PASS}
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 1
 
   jpa:
     database-platform: org.hibernate.dialect.MariaDBDialect
