@@ -61,26 +61,15 @@ public class PurchaseOrderService {
         }
 
         Specification<PurchaseOrder> spec = buildSpec(vendorIdFilter, status, from, to);
+        // @EntityGraph(vendor, warehouse) — 단일 LEFT JOIN 으로 fetch.
         List<PurchaseOrder> orders = purchaseOrderRepository.findAll(spec);
         if (orders.isEmpty()) {
             return List.of();
         }
 
-        // vendor / warehouse / itemCount 매핑.
-        // LAZY proxy 의 getId() 는 추가 쿼리 X — proxy 안에 id 미리 채워져 있음.
-        Set<Long> vendorIds = orders.stream().map(po -> po.getVendor().getId()).collect(Collectors.toSet());
-        Map<Long, Vendor> vendorMap = vendorRepository.findAllById(vendorIds).stream()
-                .collect(Collectors.toMap(Vendor::getId, v -> v));
-
-        Set<Long> warehouseIds = orders.stream().map(po -> po.getWarehouse().getId()).collect(Collectors.toSet());
-        Map<Long, String> warehouseCodeById = infrastructureRepository.findAllById(warehouseIds).stream()
-                .filter(infra -> infra.getLocationType() == LocationType.WAREHOUSE)
-                .collect(Collectors.toMap(Infrastructure::getId, Infrastructure::getCode));
-
         Set<Long> orderIds = orders.stream().map(PurchaseOrder::getId).collect(Collectors.toSet());
         // batch 1회 조회 결과를 itemCountMap + productNamesMap 두 가지로 활용 (쿼리 0추가)
         List<PurchaseOrderItem> allItems = itemRepository.findAllByPurchaseOrderIdIn(orderIds);
-        // LAZY proxy 의 getId() 는 추가 쿼리 X — proxy 안에 id 미리 채워져 있음.
         Map<Long, Long> itemCountMap = allItems.stream()
                 .collect(Collectors.groupingBy(it -> it.getPurchaseOrder().getId(), Collectors.counting()));
         Map<Long, List<String>> productNamesMap = allItems.stream()
@@ -90,14 +79,9 @@ public class PurchaseOrderService {
 
         return orders.stream()
                 .map(po -> {
-                    Vendor vendor = vendorMap.get(po.getVendor().getId());
-                    if (vendor == null) {
-                        throw BaseException.from(BaseResponseStatus.VENDOR_NOT_FOUND);
-                    }
                     int count = itemCountMap.getOrDefault(po.getId(), 0L).intValue();
                     List<String> names = productNamesMap.getOrDefault(po.getId(), List.of());
-                    String warehouseCode = warehouseCodeById.getOrDefault(po.getWarehouse().getId(), "");
-                    return PurchaseOrderDto.ListRes.from(po, vendor, warehouseCode, count, names);
+                    return PurchaseOrderDto.ListRes.from(po, po.getVendor(), po.getWarehouse().getCode(), count, names);
                 })
                 .toList();
     }
@@ -351,14 +335,9 @@ public class PurchaseOrderService {
     }
 
     private PurchaseOrderDto.DetailRes buildDetailRes(PurchaseOrder po) {
-        Vendor vendor = vendorRepository.findById(po.getVendor().getId())
-                .orElseThrow(() -> BaseException.from(BaseResponseStatus.VENDOR_NOT_FOUND));
-
-        // warehouse code lookup (응답용 — id → code 변환)
-        String warehouseCode = infrastructureRepository.findById(po.getWarehouse().getId())
-                .filter(infra -> infra.getLocationType() == LocationType.WAREHOUSE)
-                .map(Infrastructure::getCode)
-                .orElse("");
+        // @EntityGraph(vendor, warehouse) on findByCode — proxy 가 아닌 실 entity. 추가 lookup 불필요.
+        Vendor vendor = po.getVendor();
+        String warehouseCode = po.getWarehouse().getCode();
 
         List<PurchaseOrderItem> items = itemRepository.findAllByPurchaseOrderId(po.getId());
         List<PurchaseOrderStatusHistory> history = historyRepository.findAllByPurchaseOrderIdOrderByChangedAtAsc(po.getId());
