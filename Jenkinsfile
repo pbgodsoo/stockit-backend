@@ -46,8 +46,6 @@ spec:
         IMAGE_NAME = 'sunyeoplee/stockit-backend'
         IMAGE_TAG = "${env.BUILD_NUMBER}"
         K8S_NAMESPACE = 'default'
-        ACTIVE_COLOR = ''
-        TARGET_COLOR = ''
     }
 
     stages {
@@ -91,44 +89,42 @@ spec:
         stage('Deploy to k8s') {
             steps {
                 container('gradle') {
-                    script {
-                        def rawActiveColor = sh(
-                            script: """
-                                set -e
-                                if [ ! -x ./kubectl ]; then
-                                  curl -L -o ./kubectl "https://dl.k8s.io/release/\$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-                                  chmod +x ./kubectl
-                                fi
-                                ./kubectl get svc stockit-be -n ${env.K8S_NAMESPACE} -o jsonpath='{.spec.selector.color}'
-                            """,
-                            returnStdout: true
-                        ).trim()
-
-                        env.ACTIVE_COLOR = rawActiveColor
-                        if (!env.ACTIVE_COLOR?.trim() || env.ACTIVE_COLOR == 'null') {
-                            env.ACTIVE_COLOR = 'blue'
-                        }
-                        env.TARGET_COLOR = (env.ACTIVE_COLOR == 'blue') ? 'green' : 'blue'
-                        if (!(env.TARGET_COLOR in ['blue', 'green'])) {
-                            error("Invalid target color computed: ${env.TARGET_COLOR}")
-                        }
-
-                        echo "[BlueGreen] active=${env.ACTIVE_COLOR}, target=${env.TARGET_COLOR}"
-                    }
-
                     sh """
-                        set -eux
-                        ./kubectl set image deployment/stockit-be-${env.TARGET_COLOR} \
-                          stockit-be=${env.IMAGE_NAME}:${env.IMAGE_TAG} \
-                          --namespace=${env.K8S_NAMESPACE}
+                        set -euxo pipefail
 
-                        ./kubectl rollout status deployment/stockit-be-${env.TARGET_COLOR} \
-                          --namespace=${env.K8S_NAMESPACE} \
+                        if [ ! -x ./kubectl ]; then
+                          curl -L -o ./kubectl "https://dl.k8s.io/release/\$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                          chmod +x ./kubectl
+                        fi
+
+                        ACTIVE_COLOR=\$(./kubectl get svc stockit-be -n ${K8S_NAMESPACE} -o jsonpath='{.spec.selector.color}' 2>/dev/null || true)
+                        if [ -z "\${ACTIVE_COLOR}" ] || [ "\${ACTIVE_COLOR}" = "null" ]; then
+                          ACTIVE_COLOR=blue
+                        fi
+
+                        if [ "\${ACTIVE_COLOR}" = "blue" ]; then
+                          TARGET_COLOR=green
+                        elif [ "\${ACTIVE_COLOR}" = "green" ]; then
+                          TARGET_COLOR=blue
+                        else
+                          echo "Invalid active color: \${ACTIVE_COLOR}"
+                          exit 1
+                        fi
+
+                        echo "[BlueGreen] active=\${ACTIVE_COLOR}, target=\${TARGET_COLOR}"
+                        echo "\${ACTIVE_COLOR}" > .active_color
+
+                        ./kubectl set image deployment/stockit-be-\${TARGET_COLOR} \
+                          stockit-be=${IMAGE_NAME}:${IMAGE_TAG} \
+                          --namespace=${K8S_NAMESPACE}
+
+                        ./kubectl rollout status deployment/stockit-be-\${TARGET_COLOR} \
+                          --namespace=${K8S_NAMESPACE} \
                           --timeout=240s
 
                         ./kubectl patch svc stockit-be \
-                          --namespace=${env.K8S_NAMESPACE} \
-                          -p '{"spec":{"selector":{"app":"stockit-be","color":"${env.TARGET_COLOR}"}}}'
+                          --namespace=${K8S_NAMESPACE} \
+                          -p "{\\\"spec\\\":{\\\"selector\\\":{\\\"app\\\":\\\"stockit-be\\\",\\\"color\\\":\\\"\${TARGET_COLOR}\\\"}}}"
                     """
                 }
             }
@@ -141,10 +137,13 @@ spec:
             container('gradle') {
                 sh """
                     set +e
-                    if [ -x ./kubectl ] && [ -n "${env.ACTIVE_COLOR}" ] && [ "${env.ACTIVE_COLOR}" != "null" ]; then
-                      ./kubectl patch svc stockit-be \
-                        --namespace=${env.K8S_NAMESPACE} \
-                        -p '{"spec":{"selector":{"app":"stockit-be","color":"${env.ACTIVE_COLOR}"}}}'
+                    if [ -x ./kubectl ] && [ -f .active_color ]; then
+                      ACTIVE_COLOR=\$(cat .active_color)
+                      if [ -n "\${ACTIVE_COLOR}" ] && [ "\${ACTIVE_COLOR}" != "null" ]; then
+                        ./kubectl patch svc stockit-be \
+                          --namespace=${K8S_NAMESPACE} \
+                          -p "{\\\"spec\\\":{\\\"selector\\\":{\\\"app\\\":\\\"stockit-be\\\",\\\"color\\\":\\\"\${ACTIVE_COLOR}\\\"}}}"
+                      fi
                     fi
                 """
             }
