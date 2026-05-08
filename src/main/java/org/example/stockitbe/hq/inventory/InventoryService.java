@@ -258,7 +258,6 @@ public class InventoryService {
     @Transactional(readOnly = true)
     public List<InventoryDto.ImbalancedSkuRes> findImbalancedSkus() {
         List<Inventory> inventories = inventoryRepository.findAll();
-        if (inventories.isEmpty()) return List.of();
 
         Map<Long, Infrastructure> warehouseById = infrastructureRepository.findAll().stream()
                 .filter(infra -> infra.getLocationType() == LocationType.WAREHOUSE)
@@ -267,6 +266,7 @@ public class InventoryService {
 
         Set<Long> skuIds = inventories.stream()
                 .filter(inv -> warehouseById.containsKey(inv.getLocationId()))
+                .filter(inv -> InventoryStatusPolicy.QUERY_ALLOWED_STATUSES.contains(inv.getInventoryStatus()))
                 .map(Inventory::getSkuId)
                 .collect(Collectors.toSet());
         if (skuIds.isEmpty()) return List.of();
@@ -296,22 +296,28 @@ public class InventoryService {
         }
 
         Map<Long, ImbalancedSkuAggregate> aggregateBySkuId = new HashMap<>();
-        for (WarehouseSkuStock stock : stockByWarehouseSkuKey.values()) {
-            ProductSku sku = skuById.get(stock.skuId);
-            if (sku == null) continue;
+        for (ProductSku sku : skuById.values()) {
             ProductMaster master = masterByCode.get(sku.getProductCode());
             if (master == null) continue;
 
-            ImbalancedSkuAggregate agg = aggregateBySkuId.computeIfAbsent(sku.getId(), key -> new ImbalancedSkuAggregate(sku, master));
+            ImbalancedSkuAggregate agg = new ImbalancedSkuAggregate(sku, master);
             int safetyStock = Math.max(0, n(master.getWarehouseSafetyStock()));
 
-            agg.totalOnHand += stock.totalOnHand;
-            agg.totalAvailable += stock.totalAvailable;
+            for (Long warehouseId : warehouseById.keySet()) {
+                String key = sku.getId() + ":" + warehouseId;
+                WarehouseSkuStock stock = stockByWarehouseSkuKey.get(key);
+                int onHand = stock == null ? 0 : stock.totalOnHand;
+                int available = stock == null ? 0 : stock.totalAvailable;
 
-            if (stock.totalAvailable < safetyStock) {
-                agg.shortageWarehouseCount += 1;
-                agg.totalShortageQty += (safetyStock - stock.totalAvailable);
+                agg.totalOnHand += onHand;
+                agg.totalAvailable += available;
+
+                if (available < safetyStock) {
+                    agg.shortageWarehouseCount += 1;
+                    agg.totalShortageQty += (safetyStock - available);
+                }
             }
+            aggregateBySkuId.put(sku.getId(), agg);
         }
 
         return aggregateBySkuId.values().stream()
