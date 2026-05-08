@@ -1,8 +1,8 @@
-package org.example.stockitbe.hq.esg;
+package org.example.stockitbe.hq.esg.carbonprice;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.example.stockitbe.hq.esg.model.CarbonPriceDto;
+import org.example.stockitbe.hq.esg.carbonprice.model.CarbonPriceDto;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
