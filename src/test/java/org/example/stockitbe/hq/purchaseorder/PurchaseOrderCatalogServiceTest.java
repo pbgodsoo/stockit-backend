@@ -102,7 +102,6 @@ class PurchaseOrderCatalogServiceTest {
     void getCatalog_allVendors() {
         when(vendorProductRepository.findAllByStatusOrderByIdDesc(VendorProductStatus.ACTIVE))
                 .thenReturn(List.of(vpA1, vpB1));
-        when(vendorRepository.findAllById(any())).thenReturn(List.of(vendorA, vendorB));
         when(productMasterRepository.findAllByCodeIn(any())).thenReturn(List.of(pmA, pmB));
         when(productSkuRepository.findAllByProductCodeInOrderByIdAsc(any())).thenReturn(List.of(
                 sku("SKU-A-1", "PM-A", "화이트", "L", 6800L),
@@ -133,7 +132,6 @@ class PurchaseOrderCatalogServiceTest {
     void getCatalog_skipMastersWithoutSkus() {
         when(vendorProductRepository.findAllByStatusOrderByIdDesc(VendorProductStatus.ACTIVE))
                 .thenReturn(List.of(vpA1, vpA2));
-        when(vendorRepository.findAllById(any())).thenReturn(List.of(vendorA));
         when(productMasterRepository.findAllByCodeIn(any())).thenReturn(List.of(pmA, pmEmpty));
         when(productSkuRepository.findAllByProductCodeInOrderByIdAsc(any())).thenReturn(List.of(
                 sku("SKU-A-1", "PM-A", "화이트", "L", 6800L)
@@ -152,7 +150,6 @@ class PurchaseOrderCatalogServiceTest {
         when(vendorRepository.findByCode("VND-A")).thenReturn(java.util.Optional.of(vendorA));
         when(vendorProductRepository.findAllByVendorIdAndStatusNotOrderByIdDesc(1L, VendorProductStatus.DELETED))
                 .thenReturn(List.of(vpA1));
-        when(vendorRepository.findAllById(any())).thenReturn(List.of(vendorA));
         when(productMasterRepository.findAllByCodeIn(any())).thenReturn(List.of(pmA));
         when(productSkuRepository.findAllByProductCodeInOrderByIdAsc(any())).thenReturn(List.of(
                 sku("SKU-A-1", "PM-A", "화이트", "L", 6800L)
