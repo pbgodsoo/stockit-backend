@@ -95,3 +95,4 @@ spec:
             limits:
               cpu: 500m
               memory: 1Gi
+#테스트
