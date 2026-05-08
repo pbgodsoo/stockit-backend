@@ -9,6 +9,7 @@ spec:
   type: LoadBalancer
   selector:
     app: stockit-be
+    color: blue
   ports:
     - name: http
       port: 8080
