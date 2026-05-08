@@ -357,12 +357,8 @@ public class WarehouseTransferService {
                     .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_SKU_NOT_FOUND));
             skuByCode.put(line.getSkuCode(), sku);
 
-            int fromAvailable = inventoryRepository.findBySkuIdAndLocationId(sku.getId(), fromWarehouse.getId())
-                    .map(Inventory::getAvailableQuantity)
-                    .orElse(0);
-            int toAvailable = inventoryRepository.findBySkuIdAndLocationId(sku.getId(), toWarehouse.getId())
-                    .map(Inventory::getAvailableQuantity)
-                    .orElse(0);
+            int fromAvailable = sumAvailableForTransfer(sku.getId(), fromWarehouse.getId());
+            int toAvailable = sumAvailableForTransfer(sku.getId(), toWarehouse.getId());
             if (safeQty(line.getQty()) > Math.max(0, fromAvailable)) {
                 throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
             }
@@ -370,6 +366,13 @@ public class WarehouseTransferService {
             toAvailableBySkuId.put(sku.getId(), Math.max(0, toAvailable));
         }
         return new ExecuteGroupContext(fromWarehouse, toWarehouse, skuByCode, fromAvailableBySkuId, toAvailableBySkuId);
+    }
+
+    private int sumAvailableForTransfer(Long skuId, Long locationId) {
+        return inventoryRepository.findAllBySkuIdAndLocationId(skuId, locationId).stream()
+                .filter(inv -> InventoryStatusPolicy.QUERY_ALLOWED_STATUSES.contains(inv.getInventoryStatus()))
+                .mapToInt(inv -> Math.max(0, nz(inv.getAvailableQuantity())))
+                .sum();
     }
 
     private Infrastructure loadWarehouse(String code) {
