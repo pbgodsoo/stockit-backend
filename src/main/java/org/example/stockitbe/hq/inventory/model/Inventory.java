@@ -88,12 +88,28 @@ public class Inventory extends BaseEntity {
         this.quantity = n(this.quantity) + safeMove;
     }
 
+    public void absorbAsCircularCandidate(Inventory source, Date changedAt) {
+        if (source == null) return;
+        this.quantity = n(this.quantity) + n(source.getQuantity());
+        this.availableQuantity = n(this.availableQuantity) + n(source.getAvailableQuantity());
+        this.reservedQuantity = n(this.reservedQuantity) + n(source.getReservedQuantity());
+        this.inTransitQuantity = n(this.inTransitQuantity) + n(source.getInTransitQuantity());
+        this.statusChangedAt = changedAt == null ? new Date() : changedAt;
+        this.lastMovementAt = maxDate(this.lastMovementAt, source.getLastMovementAt());
+    }
+
     public boolean isEmptyStock() {
         return n(this.quantity) <= 0 && n(this.availableQuantity) <= 0;
     }
 
     private int n(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    private Date maxDate(Date a, Date b) {
+        if (a == null) return b == null ? new Date() : b;
+        if (b == null) return a;
+        return a.after(b) ? a : b;
     }
 
     /**

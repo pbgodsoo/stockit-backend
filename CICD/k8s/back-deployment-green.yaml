@@ -1,19 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: stockit-be
+  name: stockit-be-green
   namespace: default
   labels:
     app: stockit-be
+    color: green
 spec:
   replicas: 1
   selector:
     matchLabels:
       app: stockit-be
+      color: green
   template:
     metadata:
       labels:
         app: stockit-be
+        color: green
     spec:
       containers:
         - name: stockit-be
@@ -61,15 +64,25 @@ spec:
                   name: stockit-be-secret
                   key: openai-api-key
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /actuator/health/readiness
               port: http
-            initialDelaySeconds: 20
+            initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
-            tcpSocket:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          startupProbe:
+            httpGet:
+              path: /actuator/health
               port: http
             initialDelaySeconds: 30
-            periodSeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 30
           resources:
             requests:
               cpu: 250m
