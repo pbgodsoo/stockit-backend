@@ -144,7 +144,8 @@ public class DashboardService {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (warehouseId != null) {
-                predicates.add(cb.equal(root.get("warehouseId"), warehouseId));
+                // PurchaseOrder 외부 도메인 매핑 정석화(이슈 #205) 후 entity 필드는 warehouseId(Long) → warehouse(@ManyToOne).
+                predicates.add(cb.equal(root.get("warehouse").get("id"), warehouseId));
             }
             if (from != null) {
                 Date fromDate = Date.from(from.atStartOfDay(ZoneId.systemDefault()).toInstant());
