@@ -92,7 +92,7 @@ spec:
             steps {
                 container('gradle') {
                     script {
-                        env.ACTIVE_COLOR = sh(
+                        def rawActiveColor = sh(
                             script: """
                                 set -e
                                 if [ ! -x ./kubectl ]; then
@@ -104,10 +104,14 @@ spec:
                             returnStdout: true
                         ).trim()
 
-                        if (!env.ACTIVE_COLOR?.trim()) {
+                        env.ACTIVE_COLOR = rawActiveColor
+                        if (!env.ACTIVE_COLOR?.trim() || env.ACTIVE_COLOR == 'null') {
                             env.ACTIVE_COLOR = 'blue'
                         }
                         env.TARGET_COLOR = (env.ACTIVE_COLOR == 'blue') ? 'green' : 'blue'
+                        if (!(env.TARGET_COLOR in ['blue', 'green'])) {
+                            error("Invalid target color computed: ${env.TARGET_COLOR}")
+                        }
 
                         echo "[BlueGreen] active=${env.ACTIVE_COLOR}, target=${env.TARGET_COLOR}"
                     }
@@ -137,7 +141,7 @@ spec:
             container('gradle') {
                 sh """
                     set +e
-                    if [ -x ./kubectl ] && [ -n "${env.ACTIVE_COLOR}" ]; then
+                    if [ -x ./kubectl ] && [ -n "${env.ACTIVE_COLOR}" ] && [ "${env.ACTIVE_COLOR}" != "null" ]; then
                       ./kubectl patch svc stockit-be \
                         --namespace=${env.K8S_NAMESPACE} \
                         -p '{"spec":{"selector":{"app":"stockit-be","color":"${env.ACTIVE_COLOR}"}}}'
