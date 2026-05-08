@@ -111,7 +111,7 @@ spec:
                           exit 1
                         fi
 
-                        TARGET_REPLICAS=2
+                        TARGET_REPLICAS=1
                         SOURCE_REPLICAS=0
 
                         echo "[BlueGreen] active=\${ACTIVE_COLOR}, target=\${TARGET_COLOR}"
@@ -164,7 +164,7 @@ spec:
                         fi
 
                         ./kubectl scale deployment/stockit-be-\${ACTIVE_COLOR} \
-                          --replicas=2 \
+                          --replicas=1 \
                           --namespace=${K8S_NAMESPACE}
 
                         if [ -n "\${TARGET_COLOR}" ]; then
