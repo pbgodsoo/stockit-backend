@@ -45,6 +45,9 @@ spec:
     environment {
         IMAGE_NAME = 'sunyeoplee/stockit-backend'
         IMAGE_TAG  = "${env.BUILD_NUMBER}"
+        K8S_NAMESPACE = 'default'
+        ACTIVE_COLOR = ''
+        TARGET_COLOR = ''
     }
 
     stages {
@@ -88,13 +91,32 @@ spec:
         stage('Deploy to k8s') {
             steps {
                 container('gradle') {
+                    script {
+                        env.ACTIVE_COLOR = sh(
+                                script: """
+                                    set -e
+                                    if [ ! -x ./kubectl ]; then
+                                      curl -L -o ./kubectl "https://dl.k8s.io/release/\$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                                      chmod +x ./kubectl
+                                    fi
+                                    ./kubectl get svc stockit-be -n ${K8S_NAMESPACE} -o jsonpath='{.spec.selector.color}'
+                                """,
+                                returnStdout: true
+                        ).trim()
+                        env.TARGET_COLOR = (env.ACTIVE_COLOR == 'blue') ? 'green' : 'blue'
+                    }
+
                     sh """
-                        curl -LO "https://dl.k8s.io/release/\$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-                        chmod +x kubectl
-                        mv kubectl /usr/local/bin/kubectl
-                        kubectl set image deployment/stockit-be \
-                        stockit-be=${IMAGE_NAME}:${IMAGE_TAG} \
-                        --namespace=default
+                        set -eux
+                        ./kubectl set image deployment/stockit-be-${TARGET_COLOR} \
+                          stockit-be=${IMAGE_NAME}:${IMAGE_TAG} \
+                          --namespace=${K8S_NAMESPACE}
+                        ./kubectl rollout status deployment/stockit-be-${TARGET_COLOR} \
+                          --namespace=${K8S_NAMESPACE} \
+                          --timeout=180s
+                        ./kubectl patch svc stockit-be \
+                          --namespace=${K8S_NAMESPACE} \
+                          -p '{"spec":{"selector":{"app":"stockit-be","color":"${TARGET_COLOR}"}}}'
                     """
                 }
             }
@@ -103,7 +125,17 @@ spec:
 
     post {
         failure {
-            echo 'Pipeline 실패!'
+            echo 'Pipeline 실패! 서비스 셀렉터 롤백 시도'
+            container('gradle') {
+                sh '''
+                    set +e
+                    if [ -x ./kubectl ] && [ -n "${ACTIVE_COLOR}" ]; then
+                      ./kubectl patch svc stockit-be \
+                        --namespace=${K8S_NAMESPACE} \
+                        -p "{\"spec\":{\"selector\":{\"app\":\"stockit-be\",\"color\":\"${ACTIVE_COLOR}\"}}}"
+                    fi
+                '''
+            }
         }
         success {
             echo "Pushed: ${IMAGE_NAME}:${IMAGE_TAG}"
