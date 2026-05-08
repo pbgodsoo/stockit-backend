@@ -89,7 +89,7 @@ spec:
         stage('Deploy to k8s') {
             steps {
                 container('gradle') {
-                    sh """
+                    sh """#!/bin/bash
                         set -euxo pipefail
 
                         if [ ! -x ./kubectl ]; then
