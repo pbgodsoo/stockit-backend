@@ -8,6 +8,7 @@ import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
 import org.example.stockitbe.hq.inventory.InventoryRepository;
 import org.example.stockitbe.hq.inventory.model.Inventory;
+import org.example.stockitbe.hq.inventory.model.InventoryStatusPolicy;
 import org.example.stockitbe.hq.product.ProductMasterRepository;
 import org.example.stockitbe.hq.product.ProductSkuRepository;
 import org.example.stockitbe.hq.product.model.ProductMaster;
@@ -149,14 +150,23 @@ public class WarehouseTransferService {
         ProductMaster master = productMasterRepository.findByCode(sku.getProductCode())
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_MASTER_NOT_FOUND));
 
-        Map<Long, Inventory> inventoryByLocation = inventoryRepository.findAllBySkuIdIn(List.of(sku.getId())).stream()
-                .collect(Collectors.toMap(Inventory::getLocationId, Function.identity(), (a, b) -> a));
+        Map<Long, WarehouseSkuStockAggregate> stockByLocation = new HashMap<>();
+        inventoryRepository.findAllBySkuIdIn(List.of(sku.getId())).stream()
+                .filter(inv -> InventoryStatusPolicy.QUERY_ALLOWED_STATUSES.contains(inv.getInventoryStatus()))
+                .forEach(inv -> {
+                    WarehouseSkuStockAggregate stock = stockByLocation.computeIfAbsent(inv.getLocationId(), ignored -> new WarehouseSkuStockAggregate());
+                    stock.onHand += Math.max(0, nz(inv.getQuantity()));
+                    stock.available += Math.max(0, nz(inv.getAvailableQuantity()));
+                    if (stock.updatedAt == null || (inv.getUpdatedAt() != null && inv.getUpdatedAt().after(stock.updatedAt))) {
+                        stock.updatedAt = inv.getUpdatedAt();
+                    }
+                });
 
         return infrastructureRepository.findByLocationTypeOrderByIdDesc(LocationType.WAREHOUSE).stream()
                 .map(warehouse -> {
-                    Inventory inv = inventoryByLocation.get(warehouse.getId());
-                    int onHand = inv == null ? 0 : nz(inv.getQuantity());
-                    int available = inv == null ? 0 : nz(inv.getAvailableQuantity());
+                    WarehouseSkuStockAggregate stock = stockByLocation.get(warehouse.getId());
+                    int onHand = stock == null ? 0 : stock.onHand;
+                    int available = stock == null ? 0 : stock.available;
                     int reserved = Math.max(0, onHand - available);
                     int safety = Math.max(0, nz(master.getWarehouseSafetyStock()));
                     String status = available <= 0 ? "품절" : (available < safety ? "부족" : "정상");
@@ -169,11 +179,17 @@ public class WarehouseTransferService {
                             .availableStock(available)
                             .safetyStock(safety)
                             .status(status)
-                            .updatedAt(inv == null ? null : inv.getUpdatedAt())
+                            .updatedAt(stock == null ? null : stock.updatedAt)
                             .build();
                 })
                 .sorted(Comparator.comparing(WarehouseTransferDto.WarehouseSkuDistributionRes::getWarehouseCode))
                 .toList();
+    }
+
+    private static class WarehouseSkuStockAggregate {
+        private int onHand;
+        private int available;
+        private Date updatedAt;
     }
 
     private List<WarehouseTransferDto.TransferListItemRes> buildListItems(List<WarehouseTransferHeader> headers, String keyword) {

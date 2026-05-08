@@ -288,6 +288,7 @@ public class InventoryService {
         Map<String, WarehouseSkuStock> stockByWarehouseSkuKey = new HashMap<>();
         for (Inventory inventory : inventories) {
             if (!warehouseById.containsKey(inventory.getLocationId())) continue;
+            if (!InventoryStatusPolicy.QUERY_ALLOWED_STATUSES.contains(inventory.getInventoryStatus())) continue;
             String key = inventory.getSkuId() + ":" + inventory.getLocationId();
             WarehouseSkuStock stock = stockByWarehouseSkuKey.computeIfAbsent(key, ignored -> new WarehouseSkuStock(inventory.getSkuId()));
             stock.totalOnHand += Math.max(0, n(inventory.getQuantity()));
