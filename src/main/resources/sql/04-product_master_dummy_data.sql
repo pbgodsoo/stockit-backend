@@ -2,18 +2,18 @@
 -- 실행 순서: category_two_level_seed.sql + vendor + infrastructure 이후
 
 INSERT INTO material
-(code, name_ko, material_group, active, create_date, update_date)
+(code, name_ko, material_group, carbon_factor, active, create_date, update_date)
 VALUES
-('COTTON','면','NATURAL',1,NOW(),NOW()),
-('WOOL','울','NATURAL',1,NOW(),NOW()),
-('CASHMERE','캐시미어','NATURAL',1,NOW(),NOW()),
-('SILK','실크','NATURAL',1,NOW(),NOW()),
-('LINEN','린넨','NATURAL',1,NOW(),NOW()),
-('POLYESTER','폴리에스터','SYNTHETIC',1,NOW(),NOW()),
-('ACRYLIC','아크릴','SYNTHETIC',1,NOW(),NOW()),
-('POLYAMIDE','나일론','SYNTHETIC',1,NOW(),NOW()),
-('ELASTANE','스판덱스','SYNTHETIC',1,NOW(),NOW()),
-('RAYON','레이온','SYNTHETIC',1,NOW(),NOW())
+('COTTON','면','NATURAL', 1.800,1,NOW(),NOW()),
+('WOOL','울','NATURAL',1.200, 1,NOW(),NOW()),
+('CASHMERE','캐시미어','NATURAL',1.300, 1,NOW(),NOW()),
+('SILK','실크','NATURAL',1.300, 1,NOW(),NOW()),
+('LINEN','린넨','NATURAL',1.700, 1,NOW(),NOW()),
+('POLYESTER','폴리에스터','SYNTHETIC', 2.300, 1,NOW(),NOW()),
+('ACRYLIC','아크릴','SYNTHETIC',2.400, 1,NOW(),NOW()),
+('POLYAMIDE','나일론','SYNTHETIC',2.500, 1,NOW(),NOW()),
+('ELASTANE','스판덱스','SYNTHETIC',2.200, 1,NOW(),NOW()),
+('RAYON','레이온','SYNTHETIC',2.700,1,NOW(),NOW())
 ON DUPLICATE KEY UPDATE
 name_ko=VALUES(name_ko), material_group=VALUES(material_group), active=VALUES(active), update_date=NOW();
 
