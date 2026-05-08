@@ -111,11 +111,18 @@ spec:
                           exit 1
                         fi
 
+                        TARGET_REPLICAS=2
+                        SOURCE_REPLICAS=0
+
                         echo "[BlueGreen] active=\${ACTIVE_COLOR}, target=\${TARGET_COLOR}"
                         echo "\${ACTIVE_COLOR}" > .active_color
 
                         ./kubectl set image deployment/stockit-be-\${TARGET_COLOR} \
                           stockit-be=${IMAGE_NAME}:${IMAGE_TAG} \
+                          --namespace=${K8S_NAMESPACE}
+
+                        ./kubectl scale deployment/stockit-be-\${TARGET_COLOR} \
+                          --replicas=\${TARGET_REPLICAS} \
                           --namespace=${K8S_NAMESPACE}
 
                         ./kubectl rollout status deployment/stockit-be-\${TARGET_COLOR} \
@@ -125,6 +132,14 @@ spec:
                         ./kubectl patch svc stockit-be \
                           --namespace=${K8S_NAMESPACE} \
                           -p "{\\\"spec\\\":{\\\"selector\\\":{\\\"app\\\":\\\"stockit-be\\\",\\\"color\\\":\\\"\${TARGET_COLOR}\\\"}}}"
+
+                        ./kubectl scale deployment/stockit-be-\${ACTIVE_COLOR} \
+                          --replicas=\${SOURCE_REPLICAS} \
+                          --namespace=${K8S_NAMESPACE}
+
+                        ./kubectl get deploy stockit-be-blue stockit-be-green \
+                          --namespace=${K8S_NAMESPACE} \
+                          -o custom-columns=NAME:.metadata.name,READY:.status.readyReplicas,DESIRED:.spec.replicas,UPDATED:.status.updatedReplicas,AVAILABLE:.status.availableReplicas
                     """
                 }
             }
@@ -140,6 +155,24 @@ spec:
                     if [ -x ./kubectl ] && [ -f .active_color ]; then
                       ACTIVE_COLOR=\$(cat .active_color)
                       if [ -n "\${ACTIVE_COLOR}" ] && [ "\${ACTIVE_COLOR}" != "null" ]; then
+                        if [ "\${ACTIVE_COLOR}" = "blue" ]; then
+                          TARGET_COLOR=green
+                        elif [ "\${ACTIVE_COLOR}" = "green" ]; then
+                          TARGET_COLOR=blue
+                        else
+                          TARGET_COLOR=""
+                        fi
+
+                        ./kubectl scale deployment/stockit-be-\${ACTIVE_COLOR} \
+                          --replicas=2 \
+                          --namespace=${K8S_NAMESPACE}
+
+                        if [ -n "\${TARGET_COLOR}" ]; then
+                          ./kubectl scale deployment/stockit-be-\${TARGET_COLOR} \
+                            --replicas=0 \
+                            --namespace=${K8S_NAMESPACE}
+                        fi
+
                         ./kubectl patch svc stockit-be \
                           --namespace=${K8S_NAMESPACE} \
                           -p "{\\\"spec\\\":{\\\"selector\\\":{\\\"app\\\":\\\"stockit-be\\\",\\\"color\\\":\\\"\${ACTIVE_COLOR}\\\"}}}"
