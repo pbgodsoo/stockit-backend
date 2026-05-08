@@ -24,10 +24,12 @@ public class VendorProduct extends BaseEntity {
     @Column(name = "code", nullable = false, length = 64)
     private String code;
 
-    @Column(name = "vendor_id", nullable = false)
-    private Long vendorId;
+    // 외부 도메인 — JPA 정석 매핑 (ADR-024).
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "vendor_id", nullable = false)
+    private Vendor vendor;
 
-    // 마스터 제품 logical reference (FK 제약 없음 — 마스터 제품 BE 미구현)
+    // 마스터 제품 자연 키 — ProductMaster.code (String 자연 키, 매핑 안 박음).
     @Column(name = "product_code", nullable = false, length = 64)
     private String productCode;
 
@@ -55,11 +57,11 @@ public class VendorProduct extends BaseEntity {
     private VendorProductStatus status;
 
     @Builder
-    private VendorProduct(String code, Long vendorId, String productCode, String productName,
+    private VendorProduct(String code, Vendor vendor, String productCode, String productName,
                           Long unitPrice, Integer moq, Integer leadTimeDays,
                           LocalDate contractStart, LocalDate contractEnd, VendorProductStatus status) {
         this.code = code;
-        this.vendorId = vendorId;
+        this.vendor = vendor;
         this.productCode = productCode;
         this.productName = productName;
         this.unitPrice = unitPrice;

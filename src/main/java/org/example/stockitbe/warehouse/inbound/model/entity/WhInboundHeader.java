@@ -8,9 +8,12 @@ import lombok.NoArgsConstructor;
 import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.model.BaseEntity;
 import org.example.stockitbe.common.model.BaseResponseStatus;
+import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.warehouse.inbound.model.InboundType;
 
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 /**
  * 창고 입고 헤더 (ERP 표준 — Goods Receipt Note 패턴).
@@ -46,9 +49,12 @@ public class WhInboundHeader extends BaseEntity {
     @Column(name = "source_ref_id")
     private Long sourceRefId;
 
-    @Column(name = "warehouse_id", nullable = false)
-    private Long warehouseId;
+    // 외부 도메인 — Infrastructure 가 창고 마스터 (LocationType=WAREHOUSE).
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "warehouse_id", nullable = false)
+    private Infrastructure warehouse;
 
+    // warehouse.name 시점 박제 스냅샷 — 창고명 변경에 영향 안 받게 입고 시점 라벨 보존.
     @Column(name = "warehouse_name", nullable = false, length = 128)
     private String warehouseName;
 
@@ -73,16 +79,20 @@ public class WhInboundHeader extends BaseEntity {
     @Column(name = "memo", length = 500)
     private String memo;
 
+    // 부모-자식 컴포지션 — items 라이프사이클 동일, cascade 자동화 대상.
+    @OneToMany(mappedBy = "inboundHeader", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<WhInboundItem> items = new ArrayList<>();
+
     @Builder
     private WhInboundHeader(String inboundCode, InboundType inboundType, String sourceRefNo, Long sourceRefId,
-                            Long warehouseId, String warehouseName, String sourceName,
+                            Infrastructure warehouse, String warehouseName, String sourceName,
                             Long totalQuantity, Long totalAmount, String memo,
                             Date completedAt, String confirmedByMemberId, String confirmedByName) {
         this.inboundCode = inboundCode;
         this.inboundType = inboundType;
         this.sourceRefNo = sourceRefNo;
         this.sourceRefId = sourceRefId;
-        this.warehouseId = warehouseId;
+        this.warehouse = warehouse;
         this.warehouseName = warehouseName;
         this.sourceName = sourceName;
         this.totalQuantity = totalQuantity == null ? 0L : totalQuantity;
@@ -92,6 +102,17 @@ public class WhInboundHeader extends BaseEntity {
         this.completedAt = completedAt;
         this.confirmedByMemberId = confirmedByMemberId;
         this.confirmedByName = confirmedByName;
+    }
+
+    /**
+     * items 일괄 등록 (시점 복사). cascade=ALL 이 자동 INSERT.
+     */
+    public void replaceItems(List<WhInboundItem> newItems) {
+        this.items.clear();
+        newItems.forEach(it -> {
+            it.linkToParent(this);
+            this.items.add(it);
+        });
     }
 
     /**

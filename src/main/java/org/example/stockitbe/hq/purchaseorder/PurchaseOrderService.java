@@ -66,12 +66,13 @@ public class PurchaseOrderService {
             return List.of();
         }
 
-        // vendor / warehouse / itemCount 매핑
-        Set<Long> vendorIds = orders.stream().map(PurchaseOrder::getVendorId).collect(Collectors.toSet());
+        // vendor / warehouse / itemCount 매핑.
+        // LAZY proxy 의 getId() 는 추가 쿼리 X — proxy 안에 id 미리 채워져 있음.
+        Set<Long> vendorIds = orders.stream().map(po -> po.getVendor().getId()).collect(Collectors.toSet());
         Map<Long, Vendor> vendorMap = vendorRepository.findAllById(vendorIds).stream()
                 .collect(Collectors.toMap(Vendor::getId, v -> v));
 
-        Set<Long> warehouseIds = orders.stream().map(PurchaseOrder::getWarehouseId).collect(Collectors.toSet());
+        Set<Long> warehouseIds = orders.stream().map(po -> po.getWarehouse().getId()).collect(Collectors.toSet());
         Map<Long, String> warehouseCodeById = infrastructureRepository.findAllById(warehouseIds).stream()
                 .filter(infra -> infra.getLocationType() == LocationType.WAREHOUSE)
                 .collect(Collectors.toMap(Infrastructure::getId, Infrastructure::getCode));
@@ -79,22 +80,23 @@ public class PurchaseOrderService {
         Set<Long> orderIds = orders.stream().map(PurchaseOrder::getId).collect(Collectors.toSet());
         // batch 1회 조회 결과를 itemCountMap + productNamesMap 두 가지로 활용 (쿼리 0추가)
         List<PurchaseOrderItem> allItems = itemRepository.findAllByPurchaseOrderIdIn(orderIds);
+        // LAZY proxy 의 getId() 는 추가 쿼리 X — proxy 안에 id 미리 채워져 있음.
         Map<Long, Long> itemCountMap = allItems.stream()
-                .collect(Collectors.groupingBy(PurchaseOrderItem::getPurchaseOrderId, Collectors.counting()));
+                .collect(Collectors.groupingBy(it -> it.getPurchaseOrder().getId(), Collectors.counting()));
         Map<Long, List<String>> productNamesMap = allItems.stream()
                 .collect(Collectors.groupingBy(
-                        PurchaseOrderItem::getPurchaseOrderId,
+                        it -> it.getPurchaseOrder().getId(),
                         Collectors.mapping(PurchaseOrderItem::getProductName, Collectors.toList())));
 
         return orders.stream()
                 .map(po -> {
-                    Vendor vendor = vendorMap.get(po.getVendorId());
+                    Vendor vendor = vendorMap.get(po.getVendor().getId());
                     if (vendor == null) {
                         throw BaseException.from(BaseResponseStatus.VENDOR_NOT_FOUND);
                     }
                     int count = itemCountMap.getOrDefault(po.getId(), 0L).intValue();
                     List<String> names = productNamesMap.getOrDefault(po.getId(), List.of());
-                    String warehouseCode = warehouseCodeById.getOrDefault(po.getWarehouseId(), "");
+                    String warehouseCode = warehouseCodeById.getOrDefault(po.getWarehouse().getId(), "");
                     return PurchaseOrderDto.ListRes.from(po, vendor, warehouseCode, count, names);
                 })
                 .toList();
@@ -119,7 +121,7 @@ public class PurchaseOrderService {
         List<VendorProduct> vendorProducts = req.getItems().stream()
                 .map(itemReq -> {
                     VendorProduct vp = lookupVendorProduct(itemReq.getVendorProductCode());
-                    if (!vp.getVendorId().equals(vendor.getId())) {
+                    if (!vp.getVendor().getId().equals(vendor.getId())) {
                         throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_VENDOR_PRODUCT_MISMATCH);
                     }
                     return vp;
@@ -143,15 +145,16 @@ public class PurchaseOrderService {
 
         String code = generateCode();
         PurchaseOrder entity = req.toEntity(vendor, warehouse, code, totalAmount);
-        PurchaseOrder saved = purchaseOrderRepository.save(entity);
 
-        // items 저장 (purchaseOrderId 채움)
+        // 자식 items 메모리 동기화 — replaceItems 가 부모-자식 양방향 + totalAmount 재계산.
         List<PurchaseOrderItem> items = new ArrayList<>();
         for (int i = 0; i < req.getItems().size(); i++) {
-            PurchaseOrderItem item = req.getItems().get(i).toEntity(saved.getId(), vendorProducts.get(i), skus.get(i));
-            items.add(item);
+            items.add(req.getItems().get(i).toEntity(vendorProducts.get(i), skus.get(i)));
         }
-        itemRepository.saveAll(items);
+        entity.replaceItems(items);
+
+        // 부모 save → cascade=ALL 이 자식 INSERT 자동 처리.
+        PurchaseOrder saved = purchaseOrderRepository.save(entity);
 
         appendHistory(saved, null, me);
 
@@ -175,7 +178,7 @@ public class PurchaseOrderService {
         List<VendorProduct> vendorProducts = req.getItems().stream()
                 .map(itemReq -> {
                     VendorProduct vp = lookupVendorProduct(itemReq.getVendorProductCode());
-                    if (!vp.getVendorId().equals(po.getVendorId())) {
+                    if (!vp.getVendor().getId().equals(po.getVendor().getId())) {
                         throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_VENDOR_PRODUCT_MISMATCH);
                     }
                     return vp;
@@ -192,20 +195,16 @@ public class PurchaseOrderService {
             }
         }
 
-        // 기존 items 삭제
-        itemRepository.deleteAllByPurchaseOrderId(po.getId());
-        itemRepository.flush();
-
-        // 신규 items 빌드/save
+        // 신규 items 빌드 후 부모 도메인 메소드에 위임 —
+        // orphanRemoval=true 가 옛 items DELETE, cascade=ALL 이 신규 items INSERT, totalAmount 재계산도 한꺼번에.
         List<PurchaseOrderItem> newItems = new ArrayList<>();
         for (int i = 0; i < req.getItems().size(); i++) {
-            newItems.add(req.getItems().get(i).toEntity(po.getId(), vendorProducts.get(i), skus.get(i)));
+            newItems.add(req.getItems().get(i).toEntity(vendorProducts.get(i), skus.get(i)));
         }
-        itemRepository.saveAll(newItems);
+        po.replaceItems(newItems);
 
-        // 창고 스냅샷 갱신 (서버 lookup 결과) + totalAmount 재계산
-        po.updateLogistics(warehouse.getId(), warehouse.getName());
-        po.recalculateTotalAmount(newItems);
+        // 창고 매핑 + 스냅샷 갱신 (서버 lookup 결과)
+        po.updateLogistics(warehouse, warehouse.getName());
 
         return buildDetailRes(po);
     }
@@ -234,7 +233,7 @@ public class PurchaseOrderService {
         // 발주 ↔ 인벤토리 연결 — 가용재고 += 발주 수량 (도착 전 예약). PR #173 위치로 복귀
         // (이전 사이클에서 inbound 로 잠시 이동했다가 ERP 표준 정정으로 다시 PO 책임으로).
         itemRepository.findAllByPurchaseOrderId(po.getId())
-                .forEach(it -> inventoryService.increaseAvailable(po.getWarehouseId(), it.getSkuCode(), it.getQuantity()));
+                .forEach(it -> inventoryService.increaseAvailable(po.getWarehouse().getId(), it.getSkuCode(), it.getQuantity()));
         return buildDetailRes(po);
     }
 
@@ -347,21 +346,16 @@ public class PurchaseOrderService {
                 yield me.getName() + " (" + me.getLocationName() + ")";
             }
         };
-        PurchaseOrderStatusHistory entry = PurchaseOrderStatusHistory.builder()
-                .purchaseOrderId(po.getId())
-                .status(po.getStatus())
-                .changedByName(changedByName)
-                .note(note)
-                .build();
-        historyRepository.save(entry);
+        // cascade=PERSIST 가 자동 INSERT — historyRepository.save 직접 호출 폐기.
+        po.appendHistory(changedByName, note);
     }
 
     private PurchaseOrderDto.DetailRes buildDetailRes(PurchaseOrder po) {
-        Vendor vendor = vendorRepository.findById(po.getVendorId())
+        Vendor vendor = vendorRepository.findById(po.getVendor().getId())
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.VENDOR_NOT_FOUND));
 
         // warehouse code lookup (응답용 — id → code 변환)
-        String warehouseCode = infrastructureRepository.findById(po.getWarehouseId())
+        String warehouseCode = infrastructureRepository.findById(po.getWarehouse().getId())
                 .filter(infra -> infra.getLocationType() == LocationType.WAREHOUSE)
                 .map(Infrastructure::getCode)
                 .orElse("");
@@ -370,7 +364,7 @@ public class PurchaseOrderService {
         List<PurchaseOrderStatusHistory> history = historyRepository.findAllByPurchaseOrderIdOrderByChangedAtAsc(po.getId());
 
         // vendorProductId → vendorProductCode 맵 (FE 친화 응답용)
-        Set<Long> vendorProductIds = items.stream().map(PurchaseOrderItem::getVendorProductId).collect(Collectors.toSet());
+        Set<Long> vendorProductIds = items.stream().map(it -> it.getVendorProduct().getId()).collect(Collectors.toSet());
         Map<Long, String> codeMap = new HashMap<>();
         if (!vendorProductIds.isEmpty()) {
             vendorProductRepository.findAllById(vendorProductIds)
@@ -385,7 +379,8 @@ public class PurchaseOrderService {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (vendorId != null) {
-                predicates.add(cb.equal(root.get("vendorId"), vendorId));
+                // @ManyToOne path traversal — Specification 이 자동으로 vendor_id 컬럼 비교 SQL 로 변환.
+                predicates.add(cb.equal(root.get("vendor").get("id"), vendorId));
             }
             if (status != null) {
                 predicates.add(cb.equal(root.get("status"), status));

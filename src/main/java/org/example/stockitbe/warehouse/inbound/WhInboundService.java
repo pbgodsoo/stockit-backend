@@ -82,18 +82,15 @@ public class WhInboundService {
                 .inboundType(InboundType.PURCHASE_ORDER)
                 .sourceRefNo(po.getCode())
                 .sourceRefId(po.getId())
-                .warehouseId(po.getWarehouseId())
+                .warehouse(po.getWarehouse())
                 .warehouseName(po.getWarehouseName())
                 .sourceName(po.getVendorName())
                 .totalQuantity(totalQuantity)
                 .totalAmount(po.getTotalAmount());
 
-        WhInboundHeader header = saveHeaderWithCodeRetry(headerBuilder);
-
-        // items 시점 복사
+        // items 시점 복사 — replaceItems + cascade=ALL 로 부모 save 시 자식 자동 INSERT.
         List<WhInboundItem> items = poItems.stream()
                 .map(it -> WhInboundItem.builder()
-                        .inboundHeaderId(header.getId())
                         .productCode(it.getProductCode())
                         .productName(it.getProductName())
                         .skuCode(it.getSkuCode())
@@ -104,9 +101,8 @@ public class WhInboundService {
                         .subtotal(it.getSubtotal())
                         .build())
                 .toList();
-        itemRepository.saveAll(items);
 
-        return header;
+        return saveHeaderWithCodeRetry(headerBuilder, items);
     }
 
     /**
@@ -123,7 +119,7 @@ public class WhInboundService {
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.INBOUND_NOT_FOUND));
 
         Long myWarehouseId = resolveWarehouseId(me.getLocationCode());
-        if (!inbound.getWarehouseId().equals(myWarehouseId)) {
+        if (!inbound.getWarehouse().getId().equals(myWarehouseId)) {
             throw BaseException.from(BaseResponseStatus.INBOUND_NOT_FOUND);
         }
 
@@ -143,7 +139,7 @@ public class WhInboundService {
         // 인벤토리 실재고 인식
         List<WhInboundItem> items = itemRepository.findAllByInboundHeaderIdOrderByIdAsc(inbound.getId());
         items.forEach(item -> inventoryService.markPhysical(
-                inbound.getWarehouseId(), item.getSkuCode(), item.getQuantity()));
+                inbound.getWarehouse().getId(), item.getSkuCode(), item.getQuantity()));
 
         // source 도메인 mirror — 종료 단계 박음
         if (inbound.getInboundType() == InboundType.PURCHASE_ORDER) {
@@ -188,11 +184,11 @@ public class WhInboundService {
                 .filter(po -> poCodes.contains(po.getCode()))
                 .collect(Collectors.toMap(PurchaseOrder::getCode, Function.identity()));
 
-        // items batch 조회 (N+1 회피)
+        // items batch 조회 (N+1 회피). LAZY proxy 의 getId() 는 추가 쿼리 X.
         List<Long> headerIds = headers.stream().map(WhInboundHeader::getId).toList();
         Map<Long, List<WhInboundItem>> itemsByHeader = itemRepository
                 .findAllByInboundHeaderIdInOrderByIdAsc(headerIds).stream()
-                .collect(Collectors.groupingBy(WhInboundItem::getInboundHeaderId));
+                .collect(Collectors.groupingBy(it -> it.getInboundHeader().getId()));
 
         return headers.stream()
                 .map(h -> {
@@ -215,7 +211,7 @@ public class WhInboundService {
         Long myWarehouseId = resolveWarehouseId(me.getLocationCode());
         WhInboundHeader inbound = headerRepository.findByInboundCode(inboundCode)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.INBOUND_NOT_FOUND));
-        if (!inbound.getWarehouseId().equals(myWarehouseId)) {
+        if (!inbound.getWarehouse().getId().equals(myWarehouseId)) {
             throw BaseException.from(BaseResponseStatus.INBOUND_NOT_FOUND);
         }
         List<WhInboundItem> items = itemRepository
@@ -269,18 +265,15 @@ public class WhInboundService {
                     .inboundType(InboundType.PURCHASE_ORDER)
                     .sourceRefNo(po.getCode())
                     .sourceRefId(po.getId())
-                    .warehouseId(po.getWarehouseId())
+                    .warehouse(po.getWarehouse())
                     .warehouseName(po.getWarehouseName())
                     .sourceName(po.getVendorName())
                     .totalQuantity(totalQuantity)
                     .totalAmount(po.getTotalAmount())
                     .completedAt(completedAt);
 
-            WhInboundHeader header = saveHeaderWithCodeRetry(builder);
-
             List<WhInboundItem> items = poItems.stream()
                     .map(it -> WhInboundItem.builder()
-                            .inboundHeaderId(header.getId())
                             .productCode(it.getProductCode())
                             .productName(it.getProductName())
                             .skuCode(it.getSkuCode())
@@ -291,7 +284,8 @@ public class WhInboundService {
                             .subtotal(it.getSubtotal())
                             .build())
                     .toList();
-            itemRepository.saveAll(items);
+
+            WhInboundHeader header = saveHeaderWithCodeRetry(builder, items);
 
             created++;
             createdCodes.add(header.getInboundCode());
@@ -339,11 +333,18 @@ public class WhInboundService {
         return Date.from(d.atStartOfDay(ZoneId.systemDefault()).toInstant());
     }
 
-    private WhInboundHeader saveHeaderWithCodeRetry(WhInboundHeader.WhInboundHeaderBuilder builder) {
+    /**
+     * 헤더 + items 한 트랜잭션에 INSERT. cascade=ALL 이 자식 자동 INSERT.
+     * inboundCode unique 충돌 시 재시도 (최대 5회).
+     */
+    private WhInboundHeader saveHeaderWithCodeRetry(WhInboundHeader.WhInboundHeaderBuilder builder,
+                                                     List<WhInboundItem> items) {
         for (int i = 0; i < 5; i++) {
             String code = codeGenerator.nextCode(new Date());
             try {
-                return headerRepository.save(builder.inboundCode(code).build());
+                WhInboundHeader header = builder.inboundCode(code).build();
+                header.replaceItems(items);
+                return headerRepository.save(header);
             } catch (DataIntegrityViolationException ignore) {
                 // unique 충돌 — retry
             }

@@ -40,10 +40,10 @@ public class PurchaseOrderDto {
         public PurchaseOrder toEntity(Vendor vendor, Infrastructure warehouse, String code, Long totalAmount) {
             return PurchaseOrder.builder()
                     .code(code)
-                    .vendorId(vendor.getId())
+                    .vendor(vendor)
                     .vendorName(vendor.getName())
                     .vendorContactName(vendor.getContactName())
-                    .warehouseId(warehouse.getId())
+                    .warehouse(warehouse)
                     .warehouseName(warehouse.getName())
                     .memberId(this.memberId)
                     .memberName(this.memberName)
@@ -65,10 +65,10 @@ public class PurchaseOrderDto {
         @Min(1)
         private Integer quantity;
 
-        public PurchaseOrderItem toEntity(Long purchaseOrderId, VendorProduct vp, ProductSku sku) {
+        // purchaseOrder 인자 X — PurchaseOrder.replaceItems 안에서 linkToParent 로 부모-자식 동기화.
+        public PurchaseOrderItem toEntity(VendorProduct vp, ProductSku sku) {
             return PurchaseOrderItem.builder()
-                    .purchaseOrderId(purchaseOrderId)
-                    .vendorProductId(vp.getId())
+                    .vendorProduct(vp)
                     .productCode(vp.getProductCode())
                     .productName(vp.getProductName())
                     .skuCode(sku.getSkuCode())
@@ -127,7 +127,7 @@ public class PurchaseOrderDto {
                     .code(po.getCode())
                     .vendorCode(vendor.getCode())
                     .vendorName(po.getVendorName())
-                    .warehouseId(po.getWarehouseId())
+                    .warehouseId(po.getWarehouse().getId())
                     .warehouseCode(warehouseCode)
                     .warehouseName(po.getWarehouseName())
                     .memberName(po.getMemberName())
@@ -166,7 +166,7 @@ public class PurchaseOrderDto {
                                      List<PurchaseOrderStatusHistory> history,
                                      Map<Long, String> vendorProductCodeById) {
             List<ItemRes> itemRes = items.stream()
-                    .map(item -> ItemRes.from(item, vendorProductCodeById.get(item.getVendorProductId())))
+                    .map(item -> ItemRes.from(item, vendorProductCodeById.get(item.getVendorProduct().getId())))
                     .toList();
             List<HistoryRes> historyRes = history.stream()
                     .map(HistoryRes::from)
@@ -175,7 +175,7 @@ public class PurchaseOrderDto {
                     .code(po.getCode())
                     .vendorCode(vendor.getCode())
                     .vendorName(po.getVendorName())
-                    .warehouseId(po.getWarehouseId())
+                    .warehouseId(po.getWarehouse().getId())
                     .warehouseCode(warehouseCode)
                     .warehouseName(po.getWarehouseName())
                     .memberId(po.getMemberId())
@@ -209,7 +209,7 @@ public class PurchaseOrderDto {
 
         public static ItemRes from(PurchaseOrderItem item, String vendorProductCode) {
             return ItemRes.builder()
-                    .vendorProductId(item.getVendorProductId())
+                    .vendorProductId(item.getVendorProduct().getId())
                     .vendorProductCode(vendorProductCode)
                     .productCode(item.getProductCode())
                     .productName(item.getProductName())
