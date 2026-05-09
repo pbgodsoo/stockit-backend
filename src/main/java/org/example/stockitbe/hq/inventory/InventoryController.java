@@ -48,8 +48,26 @@ public class InventoryController {
     }
 
     @GetMapping("/circular-candidates")
-    public BaseResponse<List<InventoryDto.CircularCandidateRes>> getCircularCandidates() {
-        return BaseResponse.success(inventoryService.findCircularCandidates());
+    public BaseResponse<InventoryDto.CircularCandidatePageRes> getCircularCandidates(
+            @RequestParam(defaultValue = "0") Integer page,
+            @RequestParam(defaultValue = "20") Integer size,
+            @RequestParam(defaultValue = "convertibleStock,desc") String sort,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String parentCategory,
+            @RequestParam(required = false) String childCategory,
+            @RequestParam(required = false) List<String> warehouseCodes,
+            @RequestParam(required = false) List<Integer> conditionCodes
+    ) {
+        return BaseResponse.success(inventoryService.findCircularCandidates(
+                page,
+                size,
+                sort,
+                keyword,
+                parentCategory,
+                childCategory,
+                warehouseCodes,
+                conditionCodes
+        ));
     }
 
     @GetMapping("/circular")

@@ -585,9 +585,34 @@ public class InventoryService {
     }
 
     @Transactional(readOnly = true)
-    public List<InventoryDto.CircularCandidateRes> findCircularCandidates() {
+    public InventoryDto.CircularCandidatePageRes findCircularCandidates(Integer page,
+                                                                         Integer size,
+                                                                         String sort,
+                                                                         String keyword,
+                                                                         String parentCategory,
+                                                                         String childCategory,
+                                                                         List<String> warehouseCodes,
+                                                                         List<Integer> conditionCodes) {
+        int safePage = Math.max(0, page == null ? 0 : page);
+        int safeSize = normalizePageSize(size);
+        Sort sortSpec = parseCandidateSort(sort);
+        String safeKeyword = keyword == null ? "" : keyword.trim().toLowerCase(Locale.ROOT);
+        String safeParentCategory = parentCategory == null ? "" : parentCategory.trim();
+        String safeChildCategory = childCategory == null ? "" : childCategory.trim();
+        Set<String> warehouseCodeSet = (warehouseCodes == null ? List.<String>of() : warehouseCodes).stream()
+                .filter(Objects::nonNull)
+                .map(code -> code.trim().toUpperCase(Locale.ROOT))
+                .filter(code -> !code.isBlank())
+                .collect(Collectors.toSet());
+        Set<Integer> conditionCodeSet = (conditionCodes == null ? List.<Integer>of() : conditionCodes).stream()
+                .filter(Objects::nonNull)
+                .filter(code -> code >= 1 && code <= 3)
+                .collect(Collectors.toSet());
+
         List<Inventory> candidates = inventoryRepository.findAllByInventoryStatus(InventoryStatus.CIRCULAR_CANDIDATE);
-        if (candidates.isEmpty()) return List.of();
+        if (candidates.isEmpty()) {
+            return buildCircularCandidatePage(List.of(), safePage, safeSize, 0);
+        }
 
         Map<Long, Infrastructure> warehouseById = infrastructureRepository.findAll().stream()
                 .filter(i -> i.getLocationType() == LocationType.WAREHOUSE)
@@ -595,7 +620,9 @@ public class InventoryService {
         List<Inventory> warehouseCandidates = candidates.stream()
                 .filter(inv -> warehouseById.containsKey(inv.getLocationId()))
                 .toList();
-        if (warehouseCandidates.isEmpty()) return List.of();
+        if (warehouseCandidates.isEmpty()) {
+            return buildCircularCandidatePage(List.of(), safePage, safeSize, 0);
+        }
 
         Set<Long> skuIds = warehouseCandidates.stream().map(Inventory::getSkuId).collect(Collectors.toSet());
         Map<Long, ProductSku> skuById = productSkuRepository.findAllById(skuIds).stream()
@@ -617,7 +644,7 @@ public class InventoryService {
                         Collectors.mapping(InventoryCandidateCondition::getConditionCode, Collectors.toList())
                 ));
 
-        return warehouseCandidates.stream()
+        List<InventoryDto.CircularCandidateRes> rows = warehouseCandidates.stream()
                 .map(inv -> {
                     ProductSku sku = skuById.get(inv.getSkuId());
                     if (sku == null) return null;
@@ -652,8 +679,17 @@ public class InventoryService {
                             .build();
                 })
                 .filter(Objects::nonNull)
-                .sorted(Comparator.comparing(InventoryDto.CircularCandidateRes::getSkuCode))
                 .toList();
+
+        List<InventoryDto.CircularCandidateRes> filtered = rows.stream()
+                .filter(row -> matchesCandidateKeyword(row, safeKeyword))
+                .filter(row -> matchesCandidateCategory(row, safeParentCategory, safeChildCategory))
+                .filter(row -> matchesCandidateWarehouse(row, warehouseCodeSet))
+                .filter(row -> matchesCandidateConditionCodes(row, conditionCodeSet))
+                .sorted(buildCandidateComparator(sortSpec))
+                .toList();
+
+        return buildCircularCandidatePage(filtered, safePage, safeSize, filtered.size());
     }
 
     @Transactional(readOnly = true)
@@ -783,6 +819,27 @@ public class InventoryService {
                 .build();
     }
 
+    private InventoryDto.CircularCandidatePageRes buildCircularCandidatePage(List<InventoryDto.CircularCandidateRes> rows,
+                                                                              int page,
+                                                                              int size,
+                                                                              int totalElements) {
+        int from = Math.min(page * size, totalElements);
+        int to = Math.min(from + size, totalElements);
+        List<InventoryDto.CircularCandidateRes> content = rows.subList(from, to);
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+        PageImpl<InventoryDto.CircularCandidateRes> result = new PageImpl<>(content, pageable, totalElements);
+
+        return InventoryDto.CircularCandidatePageRes.builder()
+                .content(result.getContent())
+                .page(result.getNumber())
+                .size(result.getSize())
+                .totalElements(result.getTotalElements())
+                .totalPages(result.getTotalPages())
+                .hasNext(result.hasNext())
+                .hasPrevious(result.hasPrevious())
+                .build();
+    }
+
     private int normalizePageSize(Integer size) {
         int requested = size == null ? 20 : size;
         if (requested == 50 || requested == 100) return requested;
@@ -799,6 +856,20 @@ public class InventoryService {
         if (!Set.of("skuCode", "quantity", "materialKgPrice", "circularSalePrice", "weight").contains(field)) {
             field = "skuCode";
             dir = Sort.Direction.ASC;
+        }
+        return Sort.by(new Sort.Order(dir, field));
+    }
+
+    private Sort parseCandidateSort(String sort) {
+        String normalized = sort == null ? "" : sort.trim();
+        if (normalized.isBlank()) return Sort.by(Sort.Order.desc("convertibleStock"));
+        String[] split = normalized.split(",");
+        String field = split.length > 0 ? split[0].trim() : "convertibleStock";
+        String direction = split.length > 1 ? split[1].trim().toLowerCase(Locale.ROOT) : "desc";
+        Sort.Direction dir = "asc".equals(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        if (!Set.of("skuCode", "availableStock", "convertibleStock", "updatedAt").contains(field)) {
+            field = "convertibleStock";
+            dir = Sort.Direction.DESC;
         }
         return Sort.by(new Sort.Order(dir, field));
     }
@@ -831,6 +902,28 @@ public class InventoryService {
         return comparator.thenComparing(row -> row.getSkuCode() == null ? "" : row.getSkuCode());
     }
 
+    private Comparator<InventoryDto.CircularCandidateRes> buildCandidateComparator(Sort sortSpec) {
+        Sort.Order order = sortSpec.stream().findFirst().orElse(Sort.Order.desc("convertibleStock"));
+        Comparator<InventoryDto.CircularCandidateRes> comparator;
+        switch (order.getProperty()) {
+            case "skuCode":
+                comparator = Comparator.comparing(row -> safeText(row.getSkuCode()));
+                break;
+            case "availableStock":
+                comparator = Comparator.comparing(row -> n(row.getAvailableStock()));
+                break;
+            case "updatedAt":
+                comparator = Comparator.comparing(row -> row.getUpdatedAt() == null ? new Date(0) : row.getUpdatedAt());
+                break;
+            case "convertibleStock":
+            default:
+                comparator = Comparator.comparing(row -> n(row.getConvertibleStock()));
+                break;
+        }
+        if (order.getDirection() == Sort.Direction.DESC) comparator = comparator.reversed();
+        return comparator.thenComparing(row -> safeText(row.getSkuCode()));
+    }
+
     private boolean matchesCircularKeyword(InventoryDto.CircularInventoryRes row, String keyword) {
         if (keyword == null || keyword.isBlank()) return true;
         String materialDetail = row.getMaterialCompositions() == null
@@ -849,6 +942,37 @@ public class InventoryService {
     private boolean matchesWarehouseCodes(InventoryDto.CircularInventoryRes row, Set<String> warehouseCodes) {
         if (warehouseCodes == null || warehouseCodes.isEmpty()) return true;
         return warehouseCodes.contains(safeText(row.getWarehouseCode()).toUpperCase(Locale.ROOT));
+    }
+
+    private boolean matchesCandidateKeyword(InventoryDto.CircularCandidateRes row, String keyword) {
+        if (keyword == null || keyword.isBlank()) return true;
+        String searchable = String.join(" ",
+                safeText(row.getSkuCode()),
+                safeText(row.getItemCode()),
+                safeText(row.getItemName())
+        ).toLowerCase(Locale.ROOT);
+        return searchable.contains(keyword);
+    }
+
+    private boolean matchesCandidateCategory(InventoryDto.CircularCandidateRes row, String parentCategory, String childCategory) {
+        if (parentCategory != null && !parentCategory.isBlank() && !parentCategory.equals(safeText(row.getParentCategory()))) {
+            return false;
+        }
+        if (childCategory != null && !childCategory.isBlank() && !childCategory.equals(safeText(row.getChildCategory()))) {
+            return false;
+        }
+        return true;
+    }
+
+    private boolean matchesCandidateWarehouse(InventoryDto.CircularCandidateRes row, Set<String> warehouseCodes) {
+        if (warehouseCodes == null || warehouseCodes.isEmpty()) return true;
+        return warehouseCodes.contains(safeText(row.getWarehouseCode()).toUpperCase(Locale.ROOT));
+    }
+
+    private boolean matchesCandidateConditionCodes(InventoryDto.CircularCandidateRes row, Set<Integer> conditionCodes) {
+        if (conditionCodes == null || conditionCodes.isEmpty()) return true;
+        List<Integer> matched = row.getMatchedConditionCodes() == null ? List.of() : row.getMatchedConditionCodes();
+        return conditionCodes.stream().allMatch(matched::contains);
     }
 
     private boolean matchesMaterialFilter(InventoryDto.CircularInventoryRes row,
