@@ -11,7 +11,6 @@ import org.example.stockitbe.hq.infrastructure.StoreWarehouseMapRepository;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
 import org.example.stockitbe.hq.infrastructure.model.StoreWarehouseRole;
-import org.example.stockitbe.hq.inventory.InventoryService;
 import org.example.stockitbe.hq.product.ProductMasterRepository;
 import org.example.stockitbe.hq.product.ProductSkuRepository;
 import org.example.stockitbe.hq.product.model.ProductMaster;
@@ -23,6 +22,9 @@ import org.example.stockitbe.store.order.model.dto.StoreOrderDto;
 import org.example.stockitbe.store.order.model.entity.StoreOrderHeader;
 import org.example.stockitbe.store.order.model.entity.StoreOrderItem;
 import org.example.stockitbe.store.order.model.entity.StoreOrderStatusHistory;
+import org.example.stockitbe.store.inbound.StoreInboundHeaderRepository;
+import org.example.stockitbe.store.inbound.model.StoreInboundStatus;
+import org.example.stockitbe.store.inbound.model.entity.StoreInboundHeader;
 import org.example.stockitbe.user.model.AuthUserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,10 +48,11 @@ public class StoreOrderService {
     private final StoreOrderStatusHistoryRepository historyRepository;
     private final InfrastructureRepository infrastructureRepository;
     private final StoreWarehouseMapRepository storeWarehouseMapRepository;
-    private final InventoryService inventoryService;
     private final ProductSkuRepository productSkuRepository;
     private final ProductMasterRepository productMasterRepository;
     private final CategoryRepository categoryRepository;
+    private final StoreInboundHeaderRepository storeInboundHeaderRepository;
+    private final StoreOrderApprovalOrchestrationService approvalOrchestrationService;
 
     // 매장 발주 요청 생성
     @Transactional
@@ -158,7 +161,10 @@ public class StoreOrderService {
                     header,
                     headerStore == null ? "" : headerStore.getCode(),
                     headerStore == null ? "" : headerStore.getName(),
-                    buildHeadline(items)
+                    buildHeadline(items),
+                    totalInboundCount(header.getOrderNo()),
+                    receivedInboundCount(header.getOrderNo()),
+                    inboundProgress(header.getOrderNo())
             ));
         }
         return result;
@@ -424,9 +430,7 @@ public class StoreOrderService {
         header.markApproved();
 
         List<StoreOrderItem> items = itemRepository.findAllByOrderHeaderIdOrderByIdAsc(header.getId());
-        for (StoreOrderItem item : items) {
-            inventoryService.increaseAvailable(header.getStoreId(), item.getSkuCode(), item.getRequestedQuantity());
-        }
+        approvalOrchestrationService.createOutboundInboundForApprovedOrder(header, items, actorMemberId, actorName, reason);
 
         appendOrderStatusHistory(header.getId(), StoreOrderStatus.APPROVED.name(), now,
                 actorMemberId, actorName, reason);
@@ -439,10 +443,18 @@ public class StoreOrderService {
         Infrastructure store = infrastructureRepository.findById(header.getStoreId()).orElse(null);
         List<StoreOrderItem> items = itemRepository.findAllByOrderHeaderIdOrderByIdAsc(header.getId());
         List<StoreOrderStatusHistory> history = historyRepository.findAllByOrderHeaderIdOrderByChangedAtAscIdAsc(header.getId());
+        List<StoreInboundHeader> inboundHeaders = storeInboundHeaderRepository.findAllBySourceRefNo(header.getOrderNo());
         return StoreOrderDto.CreateRes.from(
                 header,
                 store == null ? "" : store.getCode(),
                 store == null ? "" : store.getName(),
+                inboundHeaders.size(),
+                (int) inboundHeaders.stream().filter(h -> h.getStatus() == StoreInboundStatus.RECEIVED).count(),
+                toInboundProgress(
+                        inboundHeaders.size(),
+                        (int) inboundHeaders.stream().filter(h -> h.getStatus() == StoreInboundStatus.RECEIVED).count()
+                ),
+                inboundHeaders.stream().map(this::toInboundSummary).toList(),
                 items.stream().map(StoreOrderDto.CreateLineRes::from).toList(),
                 history.stream().map(StoreOrderDto.CreateHistoryRes::from).toList()
         );
@@ -553,6 +565,39 @@ public class StoreOrderService {
     private String blankTo(String s, String fallback) {
         if (s == null || s.isBlank()) return fallback;
         return s;
+    }
+
+    private int totalInboundCount(String orderNo) {
+        return storeInboundHeaderRepository.findAllBySourceRefNo(orderNo).size();
+    }
+
+    private int receivedInboundCount(String orderNo) {
+        return (int) storeInboundHeaderRepository.findAllBySourceRefNo(orderNo).stream()
+                .filter(h -> h.getStatus() == StoreInboundStatus.RECEIVED)
+                .count();
+    }
+
+    private StoreOrderDto.InboundProgress inboundProgress(String orderNo) {
+        int total = totalInboundCount(orderNo);
+        int received = receivedInboundCount(orderNo);
+        return toInboundProgress(total, received);
+    }
+
+    private StoreOrderDto.InboundProgress toInboundProgress(int total, int received) {
+        if (total <= 0 || received <= 0) return StoreOrderDto.InboundProgress.NOT_STARTED;
+        if (received >= total) return StoreOrderDto.InboundProgress.FULL;
+        return StoreOrderDto.InboundProgress.PARTIAL;
+    }
+
+    private StoreOrderDto.InboundSummaryRes toInboundSummary(StoreInboundHeader inbound) {
+        return StoreOrderDto.InboundSummaryRes.builder()
+                .inboundNo(inbound.getInboundNo())
+                .outboundNo(inbound.getOutboundNo())
+                .fromWarehouseId(inbound.getFromWarehouseId())
+                .expectedArrivalAt(inbound.getExpectedArrivalAt())
+                .totalExpectedQuantity(inbound.getTotalExpectedQuantity())
+                .status(inbound.getStatus())
+                .build();
     }
 
     private record CategoryLookup(Map<Long, Category> categoryById, Map<String, Category> categoryByCode) {}

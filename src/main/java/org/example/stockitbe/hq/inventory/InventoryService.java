@@ -351,6 +351,18 @@ public class InventoryService {
                 .toList();
     }
 
+    // 특정 창고(locationId)의 특정 SKU(skuId)를 락 잡고 예약 가능한 만큼 예약 (매장 발주 승인 관련)
+    // 반환 값: 실제 예약된 수량
+    @Transactional
+    public int reserveForOutboundUpTo(Long locationId, Long skuId, int requestedQuantity) {
+        if (locationId == null || skuId == null || requestedQuantity <= 0) return 0;
+        return inventoryRepository.findWithLockBySkuIdAndLocationIdAndInventoryStatus(
+                        skuId, locationId, InventoryStatus.NORMAL
+                )
+                .map(inv -> inv.reserveUpTo(requestedQuantity))
+                .orElse(0);
+    }
+
     /**
      * 발주 IN_TRANSIT 진입 시 해당 창고 SKU 의 가용재고 증가 (이슈 #169 — 발주 ↔ 인벤토리 연결 룰).
      * row 부재 시 신규 INSERT 분기. 동일 트랜잭션에서 호출자(PurchaseOrderService.startInTransit)

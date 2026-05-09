@@ -14,7 +14,7 @@ import java.util.Date;
 @Table(name = "store_inbound_header",
         uniqueConstraints = {
                 @UniqueConstraint(name = "uk_store_inbound_no", columnNames = "inbound_no"),
-                @UniqueConstraint(name = "uk_store_inbound_source_ref", columnNames = "source_ref_no")
+                @UniqueConstraint(name = "uk_store_inbound_outbound_no", columnNames = "outbound_no")
         },
         indexes = {
                 @Index(name = "idx_store_inbound_store_status", columnList = "store_id,status"),
@@ -78,15 +78,22 @@ public class StoreInboundHeader extends BaseEntity {
     @Column(name = "received_by_name", length = 100)
     private String receivedByName;
 
+    @Column(name = "delivery_group_no", length = 50)
+    private String deliveryGroupNo;
+
     @Column(name = "memo", length = 500)
     private String memo;
+
+    public void assignInboundNo(String inboundNo) {
+        this.inboundNo = inboundNo;
+    }
 
     @Builder
     private StoreInboundHeader(String inboundNo, String sourceRefNo, Long sourceRefId, String outboundNo,
                                Long storeId, Long fromWarehouseId, StoreInboundStatus status,
                                Integer totalSkuCount, Integer totalExpectedQuantity, Date expectedArrivalAt,
                                Date requestedAt, Date receivedAt, String requestedByMemberId, String requestedByName,
-                               String receivedByMemberId, String receivedByName, String memo) {
+                               String receivedByMemberId, String receivedByName, String deliveryGroupNo, String memo) {
         this.inboundNo = inboundNo;
         this.sourceRefNo = sourceRefNo;
         this.sourceRefId = sourceRefId;
@@ -103,6 +110,7 @@ public class StoreInboundHeader extends BaseEntity {
         this.requestedByName = requestedByName;
         this.receivedByMemberId = receivedByMemberId;
         this.receivedByName = receivedByName;
+        this.deliveryGroupNo = deliveryGroupNo;
         this.memo = memo;
     }
 

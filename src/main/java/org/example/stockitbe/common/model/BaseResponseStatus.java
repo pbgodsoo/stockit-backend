@@ -104,6 +104,7 @@ public enum BaseResponseStatus {
     STORE_ORDER_SCOPE_FORBIDDEN(false, 4608, "로그인한 매장 범위를 벗어난 요청입니다."),
     STORE_ORDER_BATCH_STORE_CODE_REQUIRED(false, 4609, "배치 승인 STORE 모드에서는 storeCode가 필수입니다."),
     STORE_ORDER_BATCH_SCOPE_INVALID(false, 4610, "유효하지 않은 배치 승인 범위입니다."),
+    STORE_ORDER_APPROVE_INSUFFICIENT_WAREHOUSE_STOCK(false, 4611, "Primary/Backup 창고 합산 재고가 부족하여 발주를 승인할 수 없습니다."),
 
     // 4400번대 회원 관리
     USER_NOT_PENDING(false, 4400, "대기 상태인 신청만 처리할 수 있습니다."),
