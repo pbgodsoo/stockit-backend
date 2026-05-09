@@ -41,6 +41,7 @@ public class Material extends BaseEntity {
         this.code = code;
         this.nameKo = nameKo;
         this.materialGroup = materialGroup;
+        this.carbonFactor = carbonFactor;
         this.active = active == null ? Boolean.TRUE : active;
     }
 }
