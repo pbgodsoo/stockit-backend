@@ -157,4 +157,16 @@ public class Inventory extends BaseEntity {
         this.lastMovementAt = new Date();
         return reserved;
     }
+
+    // ------------- 물류 창고 출고 관련 ------------------
+    // 출고리스트에서 reserved로 잡힌 아이템을 출고 확정 시 InTransit 재고로 반영
+    public int moveReservedToInTransit(int requestedQuantity) {
+        int safeRequested = Math.max(0, requestedQuantity);
+        int movable = Math.max(0, n(this.reservedQuantity));
+        int moved = Math.min(safeRequested, movable);
+        this.reservedQuantity = n(this.reservedQuantity) - moved;
+        this.inTransitQuantity = n(this.inTransitQuantity) + moved;
+        this.lastMovementAt = new Date();
+        return moved;
+    }
 }

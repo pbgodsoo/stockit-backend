@@ -363,6 +363,22 @@ public class InventoryService {
                 .orElse(0);
     }
 
+    // 출고 확정 시점에 특정 창고/상품 재고를 reserved -> inTransit으로 옮기는 역할
+    // 반환값은 "실제로 이동된 수량"이며, 호출부에서 요청수량과 일치하는지 검증해 예외 처리한다.
+    @Transactional
+        public int moveReservedToInTransit(Long locationId, Long skuId, int requestedQuantity) {
+        // 1. 필수 파라미터가 없거나 요청 수량이 0 이하이면 처리하지 않는다.
+        if (locationId == null || skuId == null || requestedQuantity <= 0) return 0;
+
+        // 2. NORMAL 재고 row를 락으로 조회해 동시성 충돌 없이 전이 처리한다.
+        // 3. row가 있으면 reserved -> inTransit 전이를 수행하고, 없으면 0을 반환한다.
+        return inventoryRepository.findWithLockBySkuIdAndLocationIdAndInventoryStatus(
+                        skuId, locationId, InventoryStatus.NORMAL
+                )
+                .map(inv -> inv.moveReservedToInTransit(requestedQuantity))
+                .orElse(0);
+    }
+
     /**
      * 발주 IN_TRANSIT 진입 시 해당 창고 SKU 의 가용재고 증가 (이슈 #169 — 발주 ↔ 인벤토리 연결 룰).
      * row 부재 시 신규 INSERT 분기. 동일 트랜잭션에서 호출자(PurchaseOrderService.startInTransit)
