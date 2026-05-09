@@ -117,9 +117,9 @@
 
 성공 시 확인:
 - `result[]`
-- 헤더: `transferNo`, `fromWarehouseCode`, `toWarehouseCode`, `requestedBy`, `requestedAt`, `status`
+- 헤더: `transferNo`, `fromWarehouseCode`, `fromWarehouseName`, `toWarehouseCode`, `toWarehouseName`, `requestedBy`, `requestedAt`, `status`
 - 집계: `skuCount`, `totalQty`, `reasonCount`, `memoCount`
-- 상세 라인: `lines[]` (`skuCode`, `qty`, `reason`, `memo`, `fromStockBefore/After`, `toStockBefore/After`)
+- 상세 라인: `lines[]` (`skuCode`, `itemCode`, `itemName`, `color`, `size`, `qty`, `reason`, `memo`, `fromStockBefore`, `fromStockAfter`, `toStockBefore`, `toStockAfter`)
 
 ### 4.5 이동 상세 조회
 - Method: `GET`
@@ -130,7 +130,9 @@
 
 성공 시 확인:
 - 이력 조회와 동일한 구조의 단건 상세
-- `lines[]`에서 SKU별 이동 수량/사유/메모 및 전후 가용재고 확인
+- 헤더: `transferNo`, `fromWarehouseCode`, `fromWarehouseName`, `toWarehouseCode`, `toWarehouseName`, `requestedBy`, `requestedAt`, `status`
+- 집계: `skuCount`, `totalQty`, `reasonCount`, `memoCount`
+- `lines[]`에서 SKU별 `skuCode`, `itemCode`, `itemName`, `color`, `size`, `qty`, `reason`, `memo` 및 전후 가용재고(`fromStockBefore`, `fromStockAfter`, `toStockBefore`, `toStockAfter`) 확인
 
 ## 5. 주요 검증/실패 포인트
 
