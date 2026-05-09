@@ -60,6 +60,12 @@ public class StoreOrderApprovalOrchestrationService {
     private final StoreInboundItemRepository inboundItemRepository;
     private final StoreInboundStatusHistoryRepository inboundStatusHistoryRepository;
 
+    // 사용하는 메서드: StoreOrderService.approveInternal
+    // 발주 승인 직후 출고/입고 문서를 동기 오케스트레이션으로 생성한다.
+    // 1) 기존 생성 여부(멱등) 확인
+    // 2) Primary/Backup 창고 결정
+    // 3) SKU별 예약/분배 수행
+    // 4) 창고별 출고/입고 헤더·아이템·상태이력 생성
     @Transactional
     public void createOutboundInboundForApprovedOrder(
             StoreOrderHeader header,
@@ -84,6 +90,7 @@ public class StoreOrderApprovalOrchestrationService {
                 outboundHeaderRepository.findMaxSourceRefSeq(OutboundSourceType.STORE_ORDER, header.getOrderNo())
         ).orElse(0);
 
+        // 창고별 할당 결과를 순회하면서 출고/입고를 한 쌍으로 생성한다.
         int seq = maxSeq;
         for (WarehouseAllocation allocation : allocationBundle.allocations()) {
             seq++;
@@ -106,6 +113,8 @@ public class StoreOrderApprovalOrchestrationService {
                             .build()
             );
             outbound.assignOutboundNo(generateOutboundNo(outbound.getId(), now));
+
+            // 출고 라인은 원천 발주 라인을 스냅샷 복제한다.
             List<WhOutboundItem> outboundItems = new ArrayList<>();
             for (AllocatedLine line : allocation.lines()) {
                 outboundItems.add(WhOutboundItem.builder()
@@ -125,6 +134,8 @@ public class StoreOrderApprovalOrchestrationService {
                         .build());
             }
             List<WhOutboundItem> savedOutboundItems = outboundItemRepository.saveAll(outboundItems);
+
+            // 출고 최초 상태(READY_TO_SHIP) 이력을 즉시 적재한다.
             outboundStatusHistoryRepository.save(
                     WhOutboundStatusHistory.builder()
                             .outboundHeaderId(outbound.getId())
@@ -157,6 +168,7 @@ public class StoreOrderApprovalOrchestrationService {
             );
             inbound.assignInboundNo(generateInboundNo(inbound.getId(), now));
 
+            // 입고 라인의 outbound_item_id 연결을 위한 매핑을 만든다.
             Map<String, Long> outboundItemIdByKey = new HashMap<>();
             for (WhOutboundItem oi : savedOutboundItems) {
                 outboundItemIdByKey.put(oi.getSkuCode(), oi.getId());
@@ -182,6 +194,8 @@ public class StoreOrderApprovalOrchestrationService {
                         .build());
             }
             inboundItemRepository.saveAll(inboundItems);
+
+            // 입고 최초 상태(PENDING_RECEIPT) 이력을 즉시 적재한다.
             inboundStatusHistoryRepository.save(
                     StoreInboundStatusHistory.builder()
                             .inboundHeaderId(inbound.getId())
@@ -195,6 +209,9 @@ public class StoreOrderApprovalOrchestrationService {
         }
     }
 
+    // 사용하는 메서드: createOutboundInboundForApprovedOrder
+    // 기존 출고가 이미 있으면 대응 입고(outbound_no 기준)도 존재하는지 검증한다.
+    // 한쪽만 존재하는 비정상 상태는 FAIL로 중단해 데이터 정합성 붕괴를 막는다.
     private void validateIdempotentPair(List<WhOutboundHeader> existingOutbounds) {
         for (WhOutboundHeader outbound : existingOutbounds) {
             if (inboundHeaderRepository.findByOutboundNo(outbound.getOutboundNo()).isEmpty()) {
@@ -203,6 +220,9 @@ public class StoreOrderApprovalOrchestrationService {
         }
     }
 
+    // 사용하는 메서드: createOutboundInboundForApprovedOrder
+    // 발주 매장의 Primary/Backup 창고를 조회한다.
+    // 발주 헤더의 warehouseId와 매핑 Primary가 다르면 발주 헤더 값을 우선한다.
     private WarehouseSelection resolveWarehouses(Long storeId, Long primaryWarehouseIdFromOrder) {
         Infrastructure storeRef = infrastructureRepository.findById(storeId)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.STORE_ORDER_STORE_NOT_FOUND));
@@ -219,6 +239,9 @@ public class StoreOrderApprovalOrchestrationService {
         return new WarehouseSelection(primaryWarehouseId, backupWarehouseId);
     }
 
+    // 사용하는 메서드: createOutboundInboundForApprovedOrder
+    // SKU별로 Primary 창고 우선 예약 후 부족분은 Backup 창고로 재예약한다.
+    // Primary+Backup 합산으로도 수량이 부족하면 승인 실패 예외를 발생시킨다.
     private AllocationBundle allocateAndReserve(List<StoreOrderItem> orderItems, WarehouseSelection warehouseSelection) {
         List<AllocatedLine> primaryLines = new ArrayList<>();
         List<AllocatedLine> backupLines = new ArrayList<>();
@@ -264,6 +287,8 @@ public class StoreOrderApprovalOrchestrationService {
         return new AllocationBundle(allocations);
     }
 
+    // 사용하는 메서드: allocateAndReserve
+    // 발주 라인을 출고/입고 생성용 할당 라인 객체로 변환한다.
     private AllocatedLine toAllocatedLine(StoreOrderItem item, int quantity) {
         return new AllocatedLine(
                 item.getId(),
@@ -280,11 +305,15 @@ public class StoreOrderApprovalOrchestrationService {
         );
     }
 
+    // 사용하는 메서드: createOutboundInboundForApprovedOrder
+    // 출고번호 규칙: WOB-YYYYMMDD-00001
     private String generateOutboundNo(Long id, Date requestedAt) {
         LocalDate day = requestedAt.toInstant().atZone(KST).toLocalDate();
         return "WOB-" + day.format(NUMBER_DATE_FORMAT) + "-" + String.format("%05d", id);
     }
 
+    // 사용하는 메서드: createOutboundInboundForApprovedOrder
+    // 입고번호 규칙: SIB-YYYYMMDD-00001
     private String generateInboundNo(Long id, Date requestedAt) {
         LocalDate day = requestedAt.toInstant().atZone(KST).toLocalDate();
         return "SIB-" + day.format(NUMBER_DATE_FORMAT) + "-" + String.format("%05d", id);
