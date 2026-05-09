@@ -14,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -48,29 +47,15 @@ public class VendorProductService {
         if (list.isEmpty()) {
             return List.of();
         }
-
-        // N+1 방지 — vendorIds 일괄 lookup
-        Set<Long> vendorIds = list.stream().map(vp -> vp.getVendor().getId()).collect(Collectors.toSet());
-        Map<Long, Vendor> vendorMap = vendorRepository.findAllById(vendorIds).stream()
-                .collect(Collectors.toMap(Vendor::getId, v -> v));
-
         return list.stream()
-                .map(vp -> {
-                    Vendor vendor = vendorMap.get(vp.getVendor().getId());
-                    if (vendor == null) {
-                        throw BaseException.from(BaseResponseStatus.VENDOR_NOT_FOUND);
-                    }
-                    return VendorProductDto.ListRes.from(vp, vendor);
-                })
+                .map(vp -> VendorProductDto.ListRes.from(vp, vp.getVendor()))
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public VendorProductDto.DetailRes findByCode(String code) {
         VendorProduct vp = lookupVendorProduct(code);
-        Vendor vendor = vendorRepository.findById(vp.getVendor().getId())
-                .orElseThrow(() -> BaseException.from(BaseResponseStatus.VENDOR_NOT_FOUND));
-        return VendorProductDto.DetailRes.from(vp, vendor);
+        return VendorProductDto.DetailRes.from(vp, vp.getVendor());
     }
 
     @Transactional
@@ -108,9 +93,7 @@ public class VendorProductService {
                 req.getContractStart(),
                 req.getContractEnd()
         );
-        Vendor vendor = vendorRepository.findById(vp.getVendor().getId())
-                .orElseThrow(() -> BaseException.from(BaseResponseStatus.VENDOR_NOT_FOUND));
-        return VendorProductDto.DetailRes.from(vp, vendor);
+        return VendorProductDto.DetailRes.from(vp, vp.getVendor());
     }
 
     /**
@@ -145,9 +128,7 @@ public class VendorProductService {
     public VendorProductDto.DetailRes updateStatus(String code, VendorProductDto.StatusUpdateReq req) {
         VendorProduct vp = lookupVendorProduct(code);
         vp.changeStatus(req.getStatus());
-        Vendor vendor = vendorRepository.findById(vp.getVendor().getId())
-                .orElseThrow(() -> BaseException.from(BaseResponseStatus.VENDOR_NOT_FOUND));
-        return VendorProductDto.DetailRes.from(vp, vendor);
+        return VendorProductDto.DetailRes.from(vp, vp.getVendor());
     }
 
     @Transactional

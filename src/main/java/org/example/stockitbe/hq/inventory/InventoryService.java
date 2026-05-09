@@ -258,7 +258,6 @@ public class InventoryService {
     @Transactional(readOnly = true)
     public List<InventoryDto.ImbalancedSkuRes> findImbalancedSkus() {
         List<Inventory> inventories = inventoryRepository.findAll();
-        if (inventories.isEmpty()) return List.of();
 
         Map<Long, Infrastructure> warehouseById = infrastructureRepository.findAll().stream()
                 .filter(infra -> infra.getLocationType() == LocationType.WAREHOUSE)
@@ -267,6 +266,7 @@ public class InventoryService {
 
         Set<Long> skuIds = inventories.stream()
                 .filter(inv -> warehouseById.containsKey(inv.getLocationId()))
+                .filter(inv -> InventoryStatusPolicy.QUERY_ALLOWED_STATUSES.contains(inv.getInventoryStatus()))
                 .map(Inventory::getSkuId)
                 .collect(Collectors.toSet());
         if (skuIds.isEmpty()) return List.of();
@@ -288,6 +288,7 @@ public class InventoryService {
         Map<String, WarehouseSkuStock> stockByWarehouseSkuKey = new HashMap<>();
         for (Inventory inventory : inventories) {
             if (!warehouseById.containsKey(inventory.getLocationId())) continue;
+            if (!InventoryStatusPolicy.QUERY_ALLOWED_STATUSES.contains(inventory.getInventoryStatus())) continue;
             String key = inventory.getSkuId() + ":" + inventory.getLocationId();
             WarehouseSkuStock stock = stockByWarehouseSkuKey.computeIfAbsent(key, ignored -> new WarehouseSkuStock(inventory.getSkuId()));
             stock.totalOnHand += Math.max(0, n(inventory.getQuantity()));
@@ -295,22 +296,28 @@ public class InventoryService {
         }
 
         Map<Long, ImbalancedSkuAggregate> aggregateBySkuId = new HashMap<>();
-        for (WarehouseSkuStock stock : stockByWarehouseSkuKey.values()) {
-            ProductSku sku = skuById.get(stock.skuId);
-            if (sku == null) continue;
+        for (ProductSku sku : skuById.values()) {
             ProductMaster master = masterByCode.get(sku.getProductCode());
             if (master == null) continue;
 
-            ImbalancedSkuAggregate agg = aggregateBySkuId.computeIfAbsent(sku.getId(), key -> new ImbalancedSkuAggregate(sku, master));
+            ImbalancedSkuAggregate agg = new ImbalancedSkuAggregate(sku, master);
             int safetyStock = Math.max(0, n(master.getWarehouseSafetyStock()));
 
-            agg.totalOnHand += stock.totalOnHand;
-            agg.totalAvailable += stock.totalAvailable;
+            for (Long warehouseId : warehouseById.keySet()) {
+                String key = sku.getId() + ":" + warehouseId;
+                WarehouseSkuStock stock = stockByWarehouseSkuKey.get(key);
+                int onHand = stock == null ? 0 : stock.totalOnHand;
+                int available = stock == null ? 0 : stock.totalAvailable;
 
-            if (stock.totalAvailable < safetyStock) {
-                agg.shortageWarehouseCount += 1;
-                agg.totalShortageQty += (safetyStock - stock.totalAvailable);
+                agg.totalOnHand += onHand;
+                agg.totalAvailable += available;
+
+                if (available < safetyStock) {
+                    agg.shortageWarehouseCount += 1;
+                    agg.totalShortageQty += (safetyStock - available);
+                }
             }
+            aggregateBySkuId.put(sku.getId(), agg);
         }
 
         return aggregateBySkuId.values().stream()
@@ -355,7 +362,8 @@ public class InventoryService {
         ProductSku sku = productSkuRepository.findBySkuCode(skuCode)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_SKU_NOT_FOUND));
 
-        inventoryRepository.findBySkuIdAndLocationId(sku.getId(), locationId)
+        // 발주 hook 은 NORMAL 재고에만 반영 — (sku, location) 에 status 3행이 있을 수 있어 단일 보장 위해 status 까지 좁힌다.
+        inventoryRepository.findBySkuIdAndLocationIdAndInventoryStatus(sku.getId(), locationId, InventoryStatus.NORMAL)
                 .ifPresentOrElse(
                         inv -> inv.increaseAvailable(quantity),
                         () -> inventoryRepository.save(Inventory.builder()
@@ -379,7 +387,8 @@ public class InventoryService {
         ProductSku sku = productSkuRepository.findBySkuCode(skuCode)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_SKU_NOT_FOUND));
 
-        inventoryRepository.findBySkuIdAndLocationId(sku.getId(), locationId)
+        // 입고 확정 hook 도 NORMAL 한정 — increaseAvailable 과 동일한 status 분리 룰.
+        inventoryRepository.findBySkuIdAndLocationIdAndInventoryStatus(sku.getId(), locationId, InventoryStatus.NORMAL)
                 .ifPresentOrElse(
                         inv -> inv.moveAvailableToPhysical(quantity),
                         () -> inventoryRepository.save(Inventory.builder()
@@ -502,39 +511,62 @@ public class InventoryService {
         Map<String, GroupAvailabilityAggregate> groupAvailability = buildGroupAvailability(normalInventories, skuById);
 
         Date now = new Date();
-        List<Inventory> converted = new ArrayList<>();
-        Map<Long, List<Integer>> matchedByInventoryId = new HashMap<>();
+        int convertedCount = 0;
+        Map<Long, Set<Integer>> matchedByFinalInventoryId = new HashMap<>();
 
-        for (Inventory inventory : normalInventories) {
-            ProductSku sku = skuById.get(inventory.getSkuId());
+        for (Inventory snapshot : normalInventories) {
+            ProductSku sku = skuById.get(snapshot.getSkuId());
             if (sku == null) continue;
             ProductMaster productMaster = productMasterByCode.get(sku.getProductCode());
-            List<Integer> matchedCodes = evaluateCandidateConditions(inventory, sku, productMaster, groupAvailability);
+            List<Integer> matchedCodes = evaluateCandidateConditions(snapshot, sku, productMaster, groupAvailability);
             if (matchedCodes.isEmpty()) continue;
 
-            inventory.markCircularCandidate(now);
-            converted.add(inventory);
-            matchedByInventoryId.put(inventory.getId(), matchedCodes);
+            Inventory source = inventoryRepository.findWithLockById(snapshot.getId()).orElse(null);
+            if (source == null || source.getInventoryStatus() != InventoryStatus.NORMAL) continue;
+
+            Inventory target = inventoryRepository
+                    .findWithLockBySkuIdAndLocationIdAndInventoryStatus(
+                            source.getSkuId(),
+                            source.getLocationId(),
+                            InventoryStatus.CIRCULAR_CANDIDATE
+                    )
+                    .orElse(null);
+
+            Long finalInventoryId;
+            if (target != null) {
+                target.absorbAsCircularCandidate(source, now);
+                inventoryRepository.save(target);
+                inventoryCandidateConditionRepository.deleteByInventoryIdIn(List.of(source.getId()));
+                inventoryRepository.delete(source);
+                finalInventoryId = target.getId();
+            } else {
+                source.markCircularCandidate(now);
+                inventoryRepository.save(source);
+                finalInventoryId = source.getId();
+            }
+
+            matchedByFinalInventoryId
+                    .computeIfAbsent(finalInventoryId, ignored -> new HashSet<>())
+                    .addAll(matchedCodes);
+            convertedCount += 1;
         }
 
-        if (converted.isEmpty()) {
+        if (matchedByFinalInventoryId.isEmpty()) {
             return InventoryDto.CircularCandidateRefreshRes.builder()
                     .scannedCount(normalInventories.size())
                     .convertedCount(0)
                     .build();
         }
 
-        inventoryRepository.saveAll(converted);
-
-        List<Long> convertedIds = converted.stream().map(Inventory::getId).toList();
+        List<Long> convertedIds = new ArrayList<>(matchedByFinalInventoryId.keySet());
         inventoryCandidateConditionRepository.deleteByInventoryIdIn(convertedIds);
 
         List<InventoryCandidateCondition> conditions = new ArrayList<>();
-        for (Inventory inventory : converted) {
-            List<Integer> codes = matchedByInventoryId.getOrDefault(inventory.getId(), List.of());
-            for (Integer code : codes) {
+        for (Map.Entry<Long, Set<Integer>> entry : matchedByFinalInventoryId.entrySet()) {
+            Long inventoryId = entry.getKey();
+            for (Integer code : entry.getValue()) {
                 conditions.add(InventoryCandidateCondition.builder()
-                        .inventoryId(inventory.getId())
+                        .inventoryId(inventoryId)
                         .conditionCode(code)
                         .conditionLabel(conditionLabel(code))
                         .matchedAt(now)
@@ -545,7 +577,7 @@ public class InventoryService {
 
         return InventoryDto.CircularCandidateRefreshRes.builder()
                 .scannedCount(normalInventories.size())
-                .convertedCount(converted.size())
+                .convertedCount(convertedCount)
                 .build();
     }
 

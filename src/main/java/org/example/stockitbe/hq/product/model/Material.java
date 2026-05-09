@@ -36,12 +36,17 @@ public class Material extends BaseEntity {
     @Column(name = "active", nullable = false)
     private Boolean active;
 
+    // ADR-021 추천 임베딩 input 풍부화 — 소재별 자연어 설명. 시드 + 추천 시점 product → composition → material join 으로 활용.
+    @Column(name = "description", length = 500)
+    private String description;
+
     @Builder
-    private Material(String code, String nameKo, String materialGroup, Boolean active) {
+    private Material(String code, String nameKo, String materialGroup, Boolean active, String description) {
         this.code = code;
         this.nameKo = nameKo;
         this.materialGroup = materialGroup;
         this.carbonFactor = carbonFactor;
         this.active = active == null ? Boolean.TRUE : active;
+        this.description = description;
     }
 }

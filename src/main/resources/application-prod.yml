@@ -7,6 +7,9 @@ spring:
     url: ${DB_URL}
     username: ${DB_USER}
     password: ${DB_PASS}
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 1
 
   jpa:
     database-platform: org.hibernate.dialect.MariaDBDialect
@@ -43,3 +46,21 @@ jwt:
   secret: ${JWT_SECRET}
   access-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS}
   refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS}
+
+esg:
+  carbon-api:
+    base-url: https://apis.data.go.kr/1160100/service/GetGeneralProductInfoService
+    service-key: ${PUBLIC_DATA_API_KEY}
+    target-symbol: KAU25       # 현재 거래 활성 종목
+    fallback-price: 9200
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: health,info

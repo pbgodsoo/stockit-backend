@@ -7,6 +7,9 @@ spring:
     url: ${DB_URL}
     username: ${DB_USER}
     password: ${DB_PASS}
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 1
 
   jpa:
     database-platform: org.hibernate.dialect.MariaDBDialect
@@ -52,3 +55,13 @@ esg:
     target-symbol: KAU25       # 현재 거래 활성 종목
     fallback-price: 9200
 
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: health,info
