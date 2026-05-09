@@ -1,4 +1,4 @@
-package org.example.stockitbe.hq.esg.model;
+package org.example.stockitbe.hq.esg.carbonprice.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;

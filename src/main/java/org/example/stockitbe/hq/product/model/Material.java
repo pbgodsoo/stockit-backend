@@ -7,6 +7,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.example.stockitbe.common.model.BaseEntity;
 
+import java.math.BigDecimal;
+
 @Entity
 @Table(name = "material", uniqueConstraints = {
         @UniqueConstraint(name = "uk_material_code", columnNames = "code")
@@ -28,6 +30,9 @@ public class Material extends BaseEntity {
     @Column(name = "material_group", nullable = false, length = 32)
     private String materialGroup;
 
+    @Column(name = "carbon_factor", nullable = false, precision = 5, scale = 3)
+    private BigDecimal carbonFactor;   // tCO₂/kg
+
     @Column(name = "active", nullable = false)
     private Boolean active;
 
@@ -40,6 +45,7 @@ public class Material extends BaseEntity {
         this.code = code;
         this.nameKo = nameKo;
         this.materialGroup = materialGroup;
+        this.carbonFactor = carbonFactor;
         this.active = active == null ? Boolean.TRUE : active;
         this.description = description;
     }

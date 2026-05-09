@@ -65,4 +65,14 @@ public class InfrastructureDto {
                     .build();
         }
     }
+
+    @Getter
+    @AllArgsConstructor
+    @Builder
+    public static class PublicRes {
+        private String code;            // WH-SL-0001
+        private LocationType locationType;  // STORE | WAREHOUSE
+        private String name;            // 서울 도심 풀필먼트 허브
+        private String region;          // 서울
+    }
 }
