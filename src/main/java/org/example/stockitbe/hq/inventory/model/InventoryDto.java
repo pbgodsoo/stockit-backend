@@ -80,6 +80,19 @@ public class InventoryDto {
     @Getter
     @Builder
     @AllArgsConstructor
+    public static class CircularCandidatePageRes {
+        private List<CircularCandidateRes> content;
+        private Integer page;
+        private Integer size;
+        private Long totalElements;
+        private Integer totalPages;
+        private Boolean hasNext;
+        private Boolean hasPrevious;
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
     public static class CircularCandidateRefreshRes {
         private Integer scannedCount;
         private Integer convertedCount;
@@ -138,6 +151,19 @@ public class InventoryDto {
         private Double unitWeightKg;
         private Double totalWeightKg;
         private Long circularSalePrice;
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class CircularInventoryPageRes {
+        private List<CircularInventoryRes> content;
+        private Integer page;
+        private Integer size;
+        private Long totalElements;
+        private Integer totalPages;
+        private Boolean hasNext;
+        private Boolean hasPrevious;
     }
 
     @Getter
