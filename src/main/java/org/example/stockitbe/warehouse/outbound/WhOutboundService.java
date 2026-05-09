@@ -11,7 +11,7 @@ import org.example.stockitbe.store.inbound.StoreInboundHeaderRepository;
 import org.example.stockitbe.store.inbound.model.entity.StoreInboundHeader;
 import org.example.stockitbe.user.model.AuthUserDetails;
 import org.example.stockitbe.warehouse.outbound.model.OutboundStatus;
-import org.example.stockitbe.warehouse.outbound.model.WhOutboundDto;
+import org.example.stockitbe.warehouse.outbound.model.dto.WhOutboundDto;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundHeader;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundItem;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundStatusHistory;

@@ -1,10 +1,11 @@
-package org.example.stockitbe.warehouse.outbound.model;
+package org.example.stockitbe.warehouse.outbound.model.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.example.stockitbe.store.inbound.model.StoreInboundStatus;
+import org.example.stockitbe.warehouse.outbound.model.OutboundStatus;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundHeader;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundItem;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundStatusHistory;
