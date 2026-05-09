@@ -16,7 +16,7 @@ import java.util.Date;
 @Table(name = "wh_outbound_header",
         uniqueConstraints = {
                 @UniqueConstraint(name = "uk_wh_outbound_no", columnNames = "outbound_no"),
-                @UniqueConstraint(name = "uk_wh_outbound_source_ref", columnNames = {"source_type", "source_ref_no"})
+                @UniqueConstraint(name = "uk_wh_outbound_source_ref_seq", columnNames = {"source_type", "source_ref_no", "source_ref_seq"})
         },
         indexes = {
                 @Index(name = "idx_wh_outbound_warehouse_status", columnList = "warehouse_id,status"),
@@ -40,6 +40,9 @@ public class WhOutboundHeader extends BaseEntity {
 
     @Column(name = "source_ref_no", nullable = false, length = 50)
     private String sourceRefNo;
+
+    @Column(name = "source_ref_seq", nullable = false)
+    private Integer sourceRefSeq;
 
     @Column(name = "source_ref_id")
     private Long sourceRefId;
@@ -82,8 +85,12 @@ public class WhOutboundHeader extends BaseEntity {
     @Column(name = "memo", length = 500)
     private String memo;
 
+    public void assignOutboundNo(String outboundNo) {
+        this.outboundNo = outboundNo;
+    }
+
     @Builder
-    private WhOutboundHeader(String outboundNo, OutboundSourceType sourceType, String sourceRefNo, Long sourceRefId,
+    private WhOutboundHeader(String outboundNo, OutboundSourceType sourceType, String sourceRefNo, Integer sourceRefSeq, Long sourceRefId,
                              Long warehouseId, OutboundDestinationType destinationType, Long destinationId,
                              OutboundStatus status, Integer totalRequestedQuantity,
                              Date requestedAt, Date confirmedAt, Date departedAt, Date arrivedAt,
@@ -91,6 +98,7 @@ public class WhOutboundHeader extends BaseEntity {
         this.outboundNo = outboundNo;
         this.sourceType = sourceType;
         this.sourceRefNo = sourceRefNo;
+        this.sourceRefSeq = sourceRefSeq == null ? 1 : sourceRefSeq;
         this.sourceRefId = sourceRefId;
         this.warehouseId = warehouseId;
         this.destinationType = destinationType;

@@ -10,6 +10,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.example.stockitbe.store.order.model.StoreOrderHistoryType;
 import org.example.stockitbe.store.order.model.StoreOrderStatus;
+import org.example.stockitbe.store.inbound.model.StoreInboundStatus;
 import org.example.stockitbe.store.order.model.entity.StoreOrderHeader;
 import org.example.stockitbe.store.order.model.entity.StoreOrderItem;
 import org.example.stockitbe.store.order.model.entity.StoreOrderStatusHistory;
@@ -68,10 +69,16 @@ public class StoreOrderDto {
         private Integer totalRequestedQuantity;
         private String memo;
         private String cancelReason;
+        private Integer totalInboundCount;
+        private Integer receivedInboundCount;
+        private InboundProgress inboundProgress;
+        private List<InboundSummaryRes> inboundSummaries;
         private List<CreateLineRes> items;
         private List<CreateHistoryRes> statusHistory;
 
         public static CreateRes from(StoreOrderHeader header, String storeCode, String storeName,
+                                     Integer totalInboundCount, Integer receivedInboundCount, InboundProgress inboundProgress,
+                                     List<InboundSummaryRes> inboundSummaries,
                                      List<CreateLineRes> items, List<CreateHistoryRes> history) {
             return CreateRes.builder()
                     .orderId(header.getOrderNo())
@@ -85,6 +92,10 @@ public class StoreOrderDto {
                     .totalRequestedQuantity(header.getTotalRequestedQuantity())
                     .memo(header.getMemo())
                     .cancelReason(header.getCancelReason())
+                    .totalInboundCount(totalInboundCount)
+                    .receivedInboundCount(receivedInboundCount)
+                    .inboundProgress(inboundProgress)
+                    .inboundSummaries(inboundSummaries)
                     .items(items)
                     .statusHistory(history)
                     .build();
@@ -296,8 +307,12 @@ public class StoreOrderDto {
         private String memo;
         private String cancelReason;
         private String headline;
+        private Integer totalInboundCount;
+        private Integer receivedInboundCount;
+        private InboundProgress inboundProgress;
 
-        public static ListRes from(StoreOrderHeader header, String storeCode, String storeName, String headline) {
+        public static ListRes from(StoreOrderHeader header, String storeCode, String storeName, String headline,
+                                   Integer totalInboundCount, Integer receivedInboundCount, InboundProgress inboundProgress) {
             return ListRes.builder()
                     .orderId(header.getOrderNo())
                     .storeCode(storeCode)
@@ -310,8 +325,29 @@ public class StoreOrderDto {
                     .memo(header.getMemo())
                     .cancelReason(header.getCancelReason())
                     .headline(headline)
+                    .totalInboundCount(totalInboundCount)
+                    .receivedInboundCount(receivedInboundCount)
+                    .inboundProgress(inboundProgress)
                     .build();
         }
+    }
+
+    @Getter
+    @AllArgsConstructor
+    @Builder
+    public static class InboundSummaryRes {
+        private String inboundNo;
+        private String outboundNo;
+        private Long fromWarehouseId;
+        private Date expectedArrivalAt;
+        private Integer totalExpectedQuantity;
+        private StoreInboundStatus status;
+    }
+
+    public enum InboundProgress {
+        NOT_STARTED,
+        PARTIAL,
+        FULL
     }
 
     // 발주 상세 조회 응답 DTO
