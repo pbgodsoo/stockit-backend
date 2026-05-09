@@ -1,8 +1,8 @@
-package org.example.stockitbe.hq.esg.quota;
+package org.example.stockitbe.hq.esg.emissionquota;
 
 import lombok.RequiredArgsConstructor;
-import org.example.stockitbe.hq.esg.quota.model.EmissionQuota;
-import org.example.stockitbe.hq.esg.quota.model.EmissionQuotaDto;
+import org.example.stockitbe.hq.esg.emissionquota.model.EmissionQuota;
+import org.example.stockitbe.hq.esg.emissionquota.model.EmissionQuotaDto;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

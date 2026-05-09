@@ -1,6 +1,6 @@
-package org.example.stockitbe.hq.esg.quota;
+package org.example.stockitbe.hq.esg.emissionquota;
 
-import org.example.stockitbe.hq.esg.quota.model.EmissionQuota;
+import org.example.stockitbe.hq.esg.emissionquota.model.EmissionQuota;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

@@ -1,8 +1,8 @@
-package org.example.stockitbe.hq.esg.quota;
+package org.example.stockitbe.hq.esg.emissionquota;
 
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.model.BaseResponse;
-import org.example.stockitbe.hq.esg.quota.model.EmissionQuotaDto;
+import org.example.stockitbe.hq.esg.emissionquota.model.EmissionQuotaDto;
 import org.example.stockitbe.user.model.AuthUserDetails;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;

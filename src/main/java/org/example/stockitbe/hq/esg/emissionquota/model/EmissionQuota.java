@@ -1,4 +1,4 @@
-package org.example.stockitbe.hq.esg.quota.model;
+package org.example.stockitbe.hq.esg.emissionquota.model;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
