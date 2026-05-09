@@ -28,4 +28,6 @@ public interface InfrastructureRepository extends JpaRepository<Infrastructure, 
     List<Infrastructure> findByRegionContainingIgnoreCaseAndNameContainingIgnoreCaseOrderByIdDesc(String region, String keyword);
     List<Infrastructure> findByStatusAndNameContainingIgnoreCaseOrderByIdDesc(InfraStatus status, String keyword);
     List<Infrastructure> findByNameContainingIgnoreCaseOrderByIdDesc(String keyword);
+    List<Infrastructure> findAllByLocationTypeAndStatusOrderByCodeAsc(LocationType locationType, InfraStatus status);
+
 }

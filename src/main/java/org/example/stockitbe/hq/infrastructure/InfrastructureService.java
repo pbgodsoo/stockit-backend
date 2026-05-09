@@ -210,4 +210,22 @@ public class InfrastructureService {
         map.put("호남", "HN");
         return Map.copyOf(map);
     }
+
+    public List<InfrastructureDto.PublicRes> findActiveForSignup(LocationType type, String region) {
+        List<Infrastructure> rows = (type != null)
+                ? infrastructureRepository.findAllByLocationTypeAndStatusOrderByCodeAsc(type, InfraStatus.ACTIVE)
+                : infrastructureRepository.findAllByOrderByIdDesc();   // 또는 새 메서드 추가
+        return rows.stream()
+                .filter(i -> InfraStatus.ACTIVE.equals(i.getStatus()))   // type null 분기 시 추가 필터
+                .filter(i -> region == null || region.isBlank() || region.equals(i.getRegion()))
+                .map(i -> InfrastructureDto.PublicRes.builder()
+                        .code(i.getCode())
+                        .locationType(i.getLocationType())
+                        .name(i.getName())
+                        .region(i.getRegion())
+                        .build())
+                .toList();
+    }
+
+
 }
