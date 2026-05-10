@@ -23,6 +23,7 @@ import org.example.stockitbe.store.order.model.entity.StoreOrderHeader;
 import org.example.stockitbe.store.order.model.entity.StoreOrderStatusHistory;
 import org.example.stockitbe.user.model.AuthUserDetails;
 import org.example.stockitbe.warehouse.outbound.repository.WhOutboundHeaderRepository;
+import org.example.stockitbe.warehouse.outbound.model.OutboundStatus;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundHeader;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -98,7 +99,14 @@ public class StoreInboundService {
             throw BaseException.from(BaseResponseStatus.INVALID_INBOUND_STATUS_TRANSITION);
         }
 
-        // 4) 입고 라인 기준으로 매장 NORMAL 재고를 증가시킨다.
+        // 4) 이 입고와 연결된 출고가 ARRIVED 상태인지 검증한다.
+        WhOutboundHeader outbound = whOutboundHeaderRepository.findByOutboundNo(inbound.getOutboundNo())
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.OUTBOUND_NOT_FOUND));
+        if (outbound.getStatus() != OutboundStatus.ARRIVED) {
+            throw BaseException.from(BaseResponseStatus.INBOUND_NOT_CONFIRMABLE);
+        }
+
+        // 5) 입고 라인 기준으로 매장 NORMAL 재고를 증가시킨다.
         List<StoreInboundItem> inboundItems = inboundItemRepository.findAllByInboundHeaderIdOrderByIdAsc(inbound.getId());
         for (StoreInboundItem item : inboundItems) {
             inventoryService.increaseOnHandAndAvailable(
