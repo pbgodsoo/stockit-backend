@@ -7,7 +7,7 @@ import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
 import org.example.stockitbe.hq.inventory.InventoryService;
-import org.example.stockitbe.store.inbound.StoreInboundHeaderRepository;
+import org.example.stockitbe.store.inbound.repository.StoreInboundHeaderRepository;
 import org.example.stockitbe.store.inbound.model.entity.StoreInboundHeader;
 import org.example.stockitbe.user.model.AuthUserDetails;
 import org.example.stockitbe.warehouse.outbound.model.OutboundStatus;
@@ -15,6 +15,9 @@ import org.example.stockitbe.warehouse.outbound.model.dto.WhOutboundDto;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundHeader;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundItem;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundStatusHistory;
+import org.example.stockitbe.warehouse.outbound.repository.WhOutboundHeaderRepository;
+import org.example.stockitbe.warehouse.outbound.repository.WhOutboundItemRepository;
+import org.example.stockitbe.warehouse.outbound.repository.WhOutboundStatusHistoryRepository;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 

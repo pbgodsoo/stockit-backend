@@ -1,4 +1,4 @@
-package org.example.stockitbe.store.inbound;
+package org.example.stockitbe.store.inbound.repository;
 
 import org.example.stockitbe.store.inbound.model.StoreInboundStatus;
 import org.example.stockitbe.store.inbound.model.entity.StoreInboundHeader;
