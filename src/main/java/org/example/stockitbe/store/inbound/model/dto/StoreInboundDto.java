@@ -20,17 +20,19 @@ public class StoreInboundDto {
         private String inboundNo;
         private String sourceRefNo;
         private String outboundNo;
+        private OutboundStatus outboundStatus;
         private Long fromWarehouseId;
         private StoreInboundStatus status;
         private Date expectedArrivalAt;
         private Integer totalExpectedQuantity;
         private Date requestedAt;
 
-        public static ListRes from(StoreInboundHeader header) {
+        public static ListRes from(StoreInboundHeader header, OutboundStatus outboundStatus) {
             return ListRes.builder()
                     .inboundNo(header.getInboundNo())
                     .sourceRefNo(header.getSourceRefNo())
                     .outboundNo(header.getOutboundNo())
+                    .outboundStatus(outboundStatus)
                     .fromWarehouseId(header.getFromWarehouseId())
                     .status(header.getStatus())
                     .expectedArrivalAt(header.getExpectedArrivalAt())

@@ -15,24 +15,28 @@ import org.example.stockitbe.store.inbound.model.entity.StoreInboundStatusHistor
 import org.example.stockitbe.store.inbound.repository.StoreInboundHeaderRepository;
 import org.example.stockitbe.store.inbound.repository.StoreInboundItemRepository;
 import org.example.stockitbe.store.inbound.repository.StoreInboundStatusHistoryRepository;
-import org.example.stockitbe.store.order.repository.StoreOrderHeaderRepository;
-import org.example.stockitbe.store.order.repository.StoreOrderStatusHistoryRepository;
 import org.example.stockitbe.store.order.model.StoreOrderHistoryType;
 import org.example.stockitbe.store.order.model.StoreOrderStatus;
 import org.example.stockitbe.store.order.model.entity.StoreOrderHeader;
 import org.example.stockitbe.store.order.model.entity.StoreOrderStatusHistory;
+import org.example.stockitbe.store.order.repository.StoreOrderHeaderRepository;
+import org.example.stockitbe.store.order.repository.StoreOrderStatusHistoryRepository;
 import org.example.stockitbe.user.model.AuthUserDetails;
-import org.example.stockitbe.warehouse.outbound.repository.WhOutboundHeaderRepository;
 import org.example.stockitbe.warehouse.outbound.model.OutboundStatus;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundHeader;
+import org.example.stockitbe.warehouse.outbound.repository.WhOutboundHeaderRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -61,12 +65,19 @@ public class StoreInboundService {
         Date toDateExclusive = to == null ? null : Date.from(to.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant());
 
         // 3) 매장 소속 입고건을 조회 후 필터링하여 응답 DTO로 변환한다.
-        return inboundHeaderRepository.findAllByStoreIdOrderByRequestedAtDescIdDesc(myStoreId).stream()
+        List<StoreInboundHeader> filteredHeaders = inboundHeaderRepository.findAllByStoreIdOrderByRequestedAtDescIdDesc(myStoreId).stream()
                 .filter(h -> statusFilter == null || h.getStatus() == statusFilter)
                 .filter(h -> fromDate == null || !h.getRequestedAt().before(fromDate))
                 .filter(h -> toDateExclusive == null || h.getRequestedAt().before(toDateExclusive))
                 .filter(h -> matchesKeyword(h, safeKeyword))
-                .map(StoreInboundDto.ListRes::from)
+                .toList();
+
+        // 4) outboundNo 기준 출고 상태를 일괄 조회한다.
+        Map<String, OutboundStatus> outboundStatusByNo = loadOutboundStatusMap(filteredHeaders);
+
+        // 5) 목록 DTO를 조합한다.
+        return filteredHeaders.stream()
+                .map(h -> StoreInboundDto.ListRes.from(h, outboundStatusByNo.get(h.getOutboundNo())))
                 .toList();
     }
 
@@ -88,25 +99,23 @@ public class StoreInboundService {
     // 동일 트랜잭션 내에서 재고 반영, 입고 상태 전이/이력, 발주 완료 전이를 원자적으로 수행한다.
     @Transactional
     public StoreInboundDto.DetailRes confirm(AuthUserDetails me, String inboundNo, String reason) {
-        // 1) 로그인 사용자 매장 범위를 확인한다.
+        // 1) 매장 범위와 대상 입고건을 확인한다.
         Long myStoreId = resolveStoreId(me);
-
-        // 2) 입고번호로 대상 건을 찾고 소유 범위를 검증한다.
         StoreInboundHeader inbound = findOwnedInbound(inboundNo, myStoreId);
 
-        // 3) PENDING_RECEIPT 상태에서만 확정이 가능하다.
+        // 2) PENDING_RECEIPT 상태에서만 확정이 가능하다.
         if (inbound.getStatus() != StoreInboundStatus.PENDING_RECEIPT) {
             throw BaseException.from(BaseResponseStatus.INVALID_INBOUND_STATUS_TRANSITION);
         }
 
-        // 4) 이 입고와 연결된 출고가 ARRIVED 상태인지 검증한다.
+        // 3) 이 입고와 연결된 출고가 배송 완료(ARRIVED)인지 확인한다.
         WhOutboundHeader outbound = whOutboundHeaderRepository.findByOutboundNo(inbound.getOutboundNo())
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.OUTBOUND_NOT_FOUND));
         if (outbound.getStatus() != OutboundStatus.ARRIVED) {
             throw BaseException.from(BaseResponseStatus.INBOUND_NOT_CONFIRMABLE);
         }
 
-        // 5) 입고 라인 기준으로 매장 NORMAL 재고를 증가시킨다.
+        // 4) 입고 품목 수량만큼 매장 NORMAL 재고를 반영한다.
         List<StoreInboundItem> inboundItems = inboundItemRepository.findAllByInboundHeaderIdOrderByIdAsc(inbound.getId());
         for (StoreInboundItem item : inboundItems) {
             inventoryService.increaseOnHandAndAvailable(
@@ -116,7 +125,7 @@ public class StoreInboundService {
             );
         }
 
-        // 5) 입고 헤더를 RECEIVED로 전이하고 확정자/시각을 기록한다.
+        // 5) 입고 헤더 상태를 RECEIVED로 전이하고 이력을 남긴다.
         Date now = new Date();
         String actorMemberId = me == null ? null : me.getEmployeeCode();
         String actorName = me == null ? null : me.getName();
@@ -134,10 +143,10 @@ public class StoreInboundService {
                         .build()
         );
 
-        // 7) 같은 발주의 연계 입고가 모두 RECEIVED면 발주를 COMPLETED로 자동 전이한다.
+        // 6) 같은 발주의 연결 입고가 전부 RECEIVED면 발주를 COMPLETED로 전이한다.
         completeOrderWhenAllInboundReceived(inbound.getSourceRefNo(), actorMemberId, actorName);
 
-        // 8) 최신 상태 기준 상세 응답을 반환한다.
+        // 7) 최신 상세 응답을 반환한다.
         return buildDetailRes(inbound);
     }
 
@@ -236,5 +245,23 @@ public class StoreInboundService {
         String search = (header.getInboundNo() + " " + header.getSourceRefNo() + " " + header.getOutboundNo())
                 .toLowerCase(Locale.ROOT);
         return search.contains(safeKeyword);
+    }
+
+    // [출고 상태 맵 조회] 목록 건들의 outboundNo를 기준으로 출고 상태를 일괄 조회한다.
+    private Map<String, OutboundStatus> loadOutboundStatusMap(List<StoreInboundHeader> headers) {
+        if (headers == null || headers.isEmpty()) return Collections.emptyMap();
+
+        List<String> outboundNos = headers.stream()
+                .map(StoreInboundHeader::getOutboundNo)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (outboundNos.isEmpty()) return Collections.emptyMap();
+
+        Map<String, OutboundStatus> result = new HashMap<>();
+        for (WhOutboundHeader outbound : whOutboundHeaderRepository.findAllByOutboundNoIn(outboundNos)) {
+            result.put(outbound.getOutboundNo(), outbound.getStatus());
+        }
+        return result;
     }
 }
