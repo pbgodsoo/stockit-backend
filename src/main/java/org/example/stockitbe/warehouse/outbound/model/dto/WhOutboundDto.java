@@ -38,6 +38,7 @@ public class WhOutboundDto {
         private String warehouseName;
         private String destinationType;
         private Long destinationId;
+        private String destinationName;
         private OutboundStatus status;
         private Integer totalRequestedQuantity;
         private Date requestedAt;
@@ -59,6 +60,7 @@ public class WhOutboundDto {
         private String warehouseName;
         private String destinationType;
         private Long destinationId;
+        private String destinationName;
         private OutboundStatus status;
         private Integer totalRequestedQuantity;
         private Date requestedAt;
@@ -142,7 +144,12 @@ public class WhOutboundDto {
         private StoreInboundStatus inboundStatus;
     }
 
-    public static ListRes toListRes(WhOutboundHeader header, String warehouseCode, String warehouseName) {
+    public static ListRes toListRes(
+            WhOutboundHeader header,
+            String warehouseCode,
+            String warehouseName,
+            String destinationName
+    ) {
         return ListRes.builder()
                 .outboundNo(header.getOutboundNo())
                 .sourceType(header.getSourceType().name())
@@ -153,6 +160,7 @@ public class WhOutboundDto {
                 .warehouseName(warehouseName)
                 .destinationType(header.getDestinationType().name())
                 .destinationId(header.getDestinationId())
+                .destinationName(destinationName)
                 .status(header.getStatus())
                 .totalRequestedQuantity(header.getTotalRequestedQuantity())
                 .requestedAt(header.getRequestedAt())

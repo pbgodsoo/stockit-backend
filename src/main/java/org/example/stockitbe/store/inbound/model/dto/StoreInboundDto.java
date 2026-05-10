@@ -23,18 +23,20 @@ public class StoreInboundDto {
         private String outboundNo;
         private OutboundStatus outboundStatus;
         private Long fromWarehouseId;
+        private String fromWarehouseName;
         private StoreInboundStatus status;
         private Date expectedArrivalAt;
         private Integer totalExpectedQuantity;
         private Date requestedAt;
 
-        public static ListRes from(StoreInboundHeader header, OutboundStatus outboundStatus) {
+        public static ListRes from(StoreInboundHeader header, OutboundStatus outboundStatus, String fromWarehouseName) {
             return ListRes.builder()
                     .inboundNo(header.getInboundNo())
                     .sourceRefNo(header.getSourceRefNo())
                     .outboundNo(header.getOutboundNo())
                     .outboundStatus(outboundStatus)
                     .fromWarehouseId(header.getFromWarehouseId())
+                    .fromWarehouseName(fromWarehouseName)
                     .status(header.getStatus())
                     .expectedArrivalAt(header.getExpectedArrivalAt())
                     .totalExpectedQuantity(header.getTotalExpectedQuantity())
@@ -53,6 +55,7 @@ public class StoreInboundDto {
         private String outboundNo;
         private Long storeId;
         private Long fromWarehouseId;
+        private String fromWarehouseName;
         private StoreInboundStatus status;
         private Integer totalSkuCount;
         private Integer totalExpectedQuantity;
@@ -74,6 +77,7 @@ public class StoreInboundDto {
                 StoreInboundHeader header,
                 List<StoreInboundItem> items,
                 List<StoreInboundStatusHistory> history,
+                String fromWarehouseName,
                 OutboundSummaryRes outbound,
                 List<WhOutboundStatusHistory> outboundHistory
         ) {
@@ -84,6 +88,7 @@ public class StoreInboundDto {
                     .outboundNo(header.getOutboundNo())
                     .storeId(header.getStoreId())
                     .fromWarehouseId(header.getFromWarehouseId())
+                    .fromWarehouseName(fromWarehouseName)
                     .status(header.getStatus())
                     .totalSkuCount(header.getTotalSkuCount())
                     .totalExpectedQuantity(header.getTotalExpectedQuantity())

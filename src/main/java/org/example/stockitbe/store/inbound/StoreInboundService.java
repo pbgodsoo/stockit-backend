@@ -35,10 +35,12 @@ import java.time.ZoneId;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -77,10 +79,15 @@ public class StoreInboundService {
 
         // 4) outboundNo 기준 출고 상태를 일괄 조회한다.
         Map<String, OutboundStatus> outboundStatusByNo = loadOutboundStatusMap(filteredHeaders);
+        Map<Long, String> warehouseNameById = loadWarehouseNameMap(filteredHeaders);
 
         // 5) 목록 DTO를 조합한다.
         return filteredHeaders.stream()
-                .map(h -> StoreInboundDto.ListRes.from(h, outboundStatusByNo.get(h.getOutboundNo())))
+                .map(h -> StoreInboundDto.ListRes.from(
+                        h,
+                        outboundStatusByNo.get(h.getOutboundNo()),
+                        warehouseNameById.get(h.getFromWarehouseId())
+                ))
                 .toList();
     }
 
@@ -206,7 +213,11 @@ public class StoreInboundService {
                         .outboundStatus(outbound.getStatus())
                         .build();
 
-        return StoreInboundDto.DetailRes.of(inbound, items, history, outboundSummary, outboundHistory);
+        String fromWarehouseName = infrastructureRepository.findById(inbound.getFromWarehouseId())
+                .map(Infrastructure::getName)
+                .orElse(null);
+
+        return StoreInboundDto.DetailRes.of(inbound, items, history, fromWarehouseName, outboundSummary, outboundHistory);
     }
 
     // 로그인 사용자 매장 ID 해석
@@ -267,6 +278,25 @@ public class StoreInboundService {
         Map<String, OutboundStatus> result = new HashMap<>();
         for (WhOutboundHeader outbound : whOutboundHeaderRepository.findAllByOutboundNoIn(outboundNos)) {
             result.put(outbound.getOutboundNo(), outbound.getStatus());
+        }
+        return result;
+    }
+
+    // [출고지 창고명 맵 조회] 목록 건들의 fromWarehouseId를 기준으로 창고명을 일괄 조회한다.
+    private Map<Long, String> loadWarehouseNameMap(List<StoreInboundHeader> headers) {
+        if (headers == null || headers.isEmpty()) return Collections.emptyMap();
+
+        Set<Long> warehouseIds = new HashSet<>();
+        for (StoreInboundHeader header : headers) {
+            if (header.getFromWarehouseId() != null) {
+                warehouseIds.add(header.getFromWarehouseId());
+            }
+        }
+        if (warehouseIds.isEmpty()) return Collections.emptyMap();
+
+        Map<Long, String> result = new HashMap<>();
+        for (Infrastructure infra : infrastructureRepository.findAllById(warehouseIds)) {
+            result.put(infra.getId(), infra.getName());
         }
         return result;
     }
