@@ -1,8 +1,7 @@
 package org.example.stockitbe.hq.warehousetransfer.model;
 
 public enum WarehouseTransferStatus {
-    REQUESTED,
-    IN_PROGRESS,
-    COMPLETED,
-    CANCELED
+    READY_TO_SHIP,
+    IN_TRANSIT,
+    ARRIVED
 }

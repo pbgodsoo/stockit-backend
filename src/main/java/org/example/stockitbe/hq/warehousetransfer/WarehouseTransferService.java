@@ -17,9 +17,21 @@ import org.example.stockitbe.hq.warehousetransfer.model.WarehouseTransferDto;
 import org.example.stockitbe.hq.warehousetransfer.model.WarehouseTransferHeader;
 import org.example.stockitbe.hq.warehousetransfer.model.WarehouseTransferItem;
 import org.example.stockitbe.hq.warehousetransfer.model.WarehouseTransferStatus;
+import org.example.stockitbe.warehouse.outbound.model.OutboundDestinationType;
+import org.example.stockitbe.warehouse.outbound.model.OutboundSourceType;
+import org.example.stockitbe.warehouse.outbound.model.OutboundStatus;
+import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundHeader;
+import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundItem;
+import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundStatusHistory;
+import org.example.stockitbe.warehouse.outbound.repository.WhOutboundHeaderRepository;
+import org.example.stockitbe.warehouse.outbound.repository.WhOutboundItemRepository;
+import org.example.stockitbe.warehouse.outbound.repository.WhOutboundStatusHistoryRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -40,9 +52,16 @@ public class WarehouseTransferService {
     private final ProductSkuRepository productSkuRepository;
     private final ProductMasterRepository productMasterRepository;
     private final InventoryRepository inventoryRepository;
+    private final WhOutboundHeaderRepository outboundHeaderRepository;
+    private final WhOutboundItemRepository outboundItemRepository;
+    private final WhOutboundStatusHistoryRepository outboundStatusHistoryRepository;
+    private final PlatformTransactionManager transactionManager;
 
+    // 재고이동 실행
+    // 라우트(출발/도착 창고) 단위로 독립 처리하며, 실패 라우트는 수집해 부분성공으로 반환한다.
     @Transactional
     public WarehouseTransferDto.ExecuteRes execute(WarehouseTransferDto.ExecuteReq request) {
+        // 1) 요청 라인 유효성을 검증한다.
         List<WarehouseTransferDto.ExecuteLineReq> lines = request.getLines() == null ? List.of() : request.getLines();
         if (lines.isEmpty()) throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
 
@@ -52,71 +71,107 @@ public class WarehouseTransferService {
 
         List<WarehouseTransferDto.ExecuteLineResultRes> lineResults = new ArrayList<>();
         List<WarehouseTransferDto.ExecuteTransferRes> createdTransfers = new ArrayList<>();
+        List<WarehouseTransferDto.ExecuteFailedRouteRes> failedTransfers = new ArrayList<>();
 
+        // 2) 라우트별 독립 트랜잭션으로 처리한다.
         for (List<WarehouseTransferDto.ExecuteLineReq> groupLines : grouped.values()) {
-            ExecuteGroupContext context = validateGroup(groupLines);
-            WarehouseTransferHeader savedHeader = saveHeaderWithTransferNoRetry(
-                    context,
-                    requestedBy,
-                    buildReasonSummary(groupLines),
-                    buildMemoSummary(groupLines)
-            );
-            String transferNo = savedHeader.getTransferNo();
-
-            List<WarehouseTransferItem> items = new ArrayList<>();
-            int totalQty = 0;
-            for (WarehouseTransferDto.ExecuteLineReq line : groupLines) {
-                int qty = safeQty(line.getQty());
-                totalQty += qty;
-
-                ProductSku sku = context.skuByCode.get(line.getSkuCode());
-                int fromBefore = context.fromAvailableBySkuId.getOrDefault(sku.getId(), 0);
-                int toBefore = context.toAvailableBySkuId.getOrDefault(sku.getId(), 0);
-
-                items.add(WarehouseTransferItem.builder()
-                        .header(savedHeader)
-                        .skuId(sku.getId())
-                        .quantity(qty)
-                        .reason(trimToNull(line.getReason()))
-                        .memo(trimToNull(line.getMemo()))
-                        .fromAvailableBefore(fromBefore)
-                        .toAvailableBefore(toBefore)
-                        .fromAvailableAfter(Math.max(0, fromBefore - qty))
-                        .toAvailableAfter(toBefore + qty)
-                        .build());
-
-                lineResults.add(WarehouseTransferDto.ExecuteLineResultRes.builder()
-                        .lineId(line.getLineId())
-                        .skuCode(line.getSkuCode())
-                        .fromWarehouseCode(line.getFromWarehouseCode())
-                        .toWarehouseCode(line.getToWarehouseCode())
-                        .qty(qty)
-                        .success(true)
-                        .message("SUCCESS")
-                        .transferNo(transferNo)
-                        .build());
+            try {
+                ExecuteGroupResult routeResult = processRouteInNewTransaction(groupLines, requestedBy);
+                lineResults.addAll(routeResult.lineResults());
+                createdTransfers.add(routeResult.transferRes());
+            } catch (BaseException e) {
+                // 도메인 예외는 상태코드/메시지를 그대로 노출한다.
+                failedTransfers.add(toFailedRoute(groupLines, e.getStatus()));
+            } catch (Exception e) {
+                // 비도메인 예외는 공통 실패 코드로 정규화한다.
+                failedTransfers.add(toFailedRoute(groupLines, BaseResponseStatus.FAIL));
             }
-            itemRepository.saveAll(items);
-
-            createdTransfers.add(WarehouseTransferDto.ExecuteTransferRes.builder()
-                    .transferNo(transferNo)
-                    .fromWarehouseCode(context.fromWarehouse.getCode())
-                    .fromWarehouseName(context.fromWarehouse.getName())
-                    .toWarehouseCode(context.toWarehouse.getCode())
-                    .toWarehouseName(context.toWarehouse.getName())
-                    .status(WarehouseTransferStatus.IN_PROGRESS.name())
-                    .skuCount(items.size())
-                    .totalQty(totalQty)
-                    .build());
         }
 
+        // 3) 성공/실패 라우트를 분리해 응답한다.
         return WarehouseTransferDto.ExecuteRes.builder()
                 .requestedCount(lines.size())
                 .successCount(lineResults.size())
-                .failureCount(0)
+                .failureCount(failedTransfers.size())
                 .lineResults(lineResults)
                 .createdTransfers(createdTransfers)
+                .failedTransfers(failedTransfers)
                 .build();
+    }
+
+    private ExecuteGroupResult processRouteInNewTransaction(
+            List<WarehouseTransferDto.ExecuteLineReq> groupLines,
+            String requestedBy
+    ) {
+        // 라우트 단위 부분성공을 위해 신규 트랜잭션으로 경계를 분리한다.
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return template.execute(status -> processRoute(groupLines, requestedBy));
+    }
+
+    private ExecuteGroupResult processRoute(List<WarehouseTransferDto.ExecuteLineReq> groupLines, String requestedBy) {
+        // 1) 라우트 검증 + 헤더 생성
+        ExecuteGroupContext context = validateGroup(groupLines);
+        WarehouseTransferHeader savedHeader = saveHeaderWithTransferNoRetry(
+                context,
+                requestedBy,
+                buildReasonSummary(groupLines),
+                buildMemoSummary(groupLines)
+        );
+        String transferNo = savedHeader.getTransferNo();
+
+        // 2) 라우트 라인별 transfer item 및 결과 응답 라인을 구성한다.
+        List<WarehouseTransferItem> items = new ArrayList<>();
+        List<WarehouseTransferDto.ExecuteLineResultRes> lineResults = new ArrayList<>();
+        int totalQty = 0;
+        for (WarehouseTransferDto.ExecuteLineReq line : groupLines) {
+            int qty = safeQty(line.getQty());
+            totalQty += qty;
+
+            ProductSku sku = context.skuByCode.get(line.getSkuCode());
+            int fromBefore = context.fromAvailableBySkuId.getOrDefault(sku.getId(), 0);
+            int toBefore = context.toAvailableBySkuId.getOrDefault(sku.getId(), 0);
+
+            items.add(WarehouseTransferItem.builder()
+                    .header(savedHeader)
+                    .skuId(sku.getId())
+                    .quantity(qty)
+                    .reason(trimToNull(line.getReason()))
+                    .memo(trimToNull(line.getMemo()))
+                    .fromAvailableBefore(fromBefore)
+                    .toAvailableBefore(toBefore)
+                    .fromAvailableAfter(Math.max(0, fromBefore - qty))
+                    .toAvailableAfter(toBefore + qty)
+                    .build());
+
+            lineResults.add(WarehouseTransferDto.ExecuteLineResultRes.builder()
+                    .lineId(line.getLineId())
+                    .skuCode(line.getSkuCode())
+                    .fromWarehouseCode(line.getFromWarehouseCode())
+                    .toWarehouseCode(line.getToWarehouseCode())
+                    .qty(qty)
+                    .success(true)
+                    .message("SUCCESS")
+                    .transferNo(transferNo)
+                    .build());
+        }
+        // 3) transfer item 저장 후 outbound를 생성/연계한다.
+        List<WarehouseTransferItem> savedItems = itemRepository.saveAll(items);
+        createWhTransferOutbound(savedHeader, savedItems, context, requestedBy);
+        // 4) 재고이동 상태를 출고 흐름의 시작 상태로 동기화한다.
+        savedHeader.markReadyToShip();
+
+        WarehouseTransferDto.ExecuteTransferRes transferRes = WarehouseTransferDto.ExecuteTransferRes.builder()
+                .transferNo(transferNo)
+                .fromWarehouseCode(context.fromWarehouse.getCode())
+                .fromWarehouseName(context.fromWarehouse.getName())
+                .toWarehouseCode(context.toWarehouse.getCode())
+                .toWarehouseName(context.toWarehouse.getName())
+                .status(savedHeader.getStatus().name())
+                .skuCount(items.size())
+                .totalQty(totalQty)
+                .build();
+        return new ExecuteGroupResult(lineResults, transferRes);
     }
 
     @Transactional(readOnly = true)
@@ -342,6 +397,7 @@ public class WarehouseTransferService {
         }
 
         Map<String, ProductSku> skuByCode = new HashMap<>();
+        Map<Long, ProductSku> skuById = new HashMap<>();
         Map<Long, Integer> fromAvailableBySkuId = new HashMap<>();
         Map<Long, Integer> toAvailableBySkuId = new HashMap<>();
 
@@ -356,6 +412,7 @@ public class WarehouseTransferService {
             ProductSku sku = productSkuRepository.findBySkuCode(line.getSkuCode())
                     .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_SKU_NOT_FOUND));
             skuByCode.put(line.getSkuCode(), sku);
+            skuById.put(sku.getId(), sku);
 
             int fromAvailable = sumAvailableForTransfer(sku.getId(), fromWarehouse.getId());
             int toAvailable = sumAvailableForTransfer(sku.getId(), toWarehouse.getId());
@@ -365,7 +422,16 @@ public class WarehouseTransferService {
             fromAvailableBySkuId.put(sku.getId(), Math.max(0, fromAvailable));
             toAvailableBySkuId.put(sku.getId(), Math.max(0, toAvailable));
         }
-        return new ExecuteGroupContext(fromWarehouse, toWarehouse, skuByCode, fromAvailableBySkuId, toAvailableBySkuId);
+        Map<String, ProductMaster> masterByCode = loadMasterMap(skuByCode.values());
+        return new ExecuteGroupContext(
+                fromWarehouse,
+                toWarehouse,
+                skuByCode,
+                skuById,
+                masterByCode,
+                fromAvailableBySkuId,
+                toAvailableBySkuId
+        );
     }
 
     private int sumAvailableForTransfer(Long skuId, Long locationId) {
@@ -405,7 +471,7 @@ public class WarehouseTransferService {
                                 .transferNo(transferNo)
                                 .fromWarehouseId(context.fromWarehouse.getId())
                                 .toWarehouseId(context.toWarehouse.getId())
-                                .status(WarehouseTransferStatus.IN_PROGRESS)
+                                .status(WarehouseTransferStatus.READY_TO_SHIP)
                                 .requestedBy(requestedBy)
                                 .requestedAt(now)
                                 .reasonSummary(reasonSummary)
@@ -483,10 +549,154 @@ public class WarehouseTransferService {
         return s == null ? "" : s;
     }
 
+    private void createWhTransferOutbound(
+            WarehouseTransferHeader transferHeader,
+            List<WarehouseTransferItem> transferItems,
+            ExecuteGroupContext context,
+            String requestedBy
+    ) {
+        // 1) 헤더를 멱등 upsert한다.
+        Date now = transferHeader.getRequestedAt() == null ? new Date() : transferHeader.getRequestedAt();
+        WhOutboundHeader outbound = upsertWhTransferOutboundHeader(transferHeader, context, requestedBy, now);
+
+        // 2) 기존 라인이 없을 때만 outbound item을 스냅샷으로 생성한다.
+        if (outboundItemRepository.findAllByOutboundHeaderIdOrderByIdAsc(outbound.getId()).isEmpty()) {
+            List<WhOutboundItem> outboundItems = new ArrayList<>();
+            for (WarehouseTransferItem transferItem : transferItems) {
+                ProductSku sku = context.skuById.get(transferItem.getSkuId());
+                if (sku == null) throw BaseException.from(BaseResponseStatus.PRODUCT_SKU_NOT_FOUND);
+                ProductMaster master = context.masterByCode.get(sku.getProductCode());
+                if (master == null) throw BaseException.from(BaseResponseStatus.PRODUCT_MASTER_NOT_FOUND);
+
+                outboundItems.add(WhOutboundItem.builder()
+                        .outboundHeaderId(outbound.getId())
+                        .sourceLineRefId(transferItem.getId())
+                        .skuId(transferItem.getSkuId())
+                        .skuCode(sku.getSkuCode())
+                        .productCode(master.getCode())
+                        .productName(master.getName())
+                        .mainCategory(master.getCategoryCode())
+                        .subCategory(master.getCategoryCode())
+                        .color(sku.getColor())
+                        .size(sku.getSize())
+                        .unitPrice(sku.getUnitPrice())
+                        .requestedQuantity(transferItem.getQuantity())
+                        .memo(transferItem.getMemo())
+                        .build());
+            }
+            outboundItemRepository.saveAll(outboundItems);
+        }
+
+        // 3) READY_TO_SHIP 최초 이력이 없으면 1건 생성한다.
+        boolean historyExists = outboundStatusHistoryRepository
+                .findAllByOutboundHeaderIdOrderByChangedAtAscIdAsc(outbound.getId())
+                .stream()
+                .anyMatch(h -> h.getStatus() == OutboundStatus.READY_TO_SHIP);
+        if (!historyExists) {
+            outboundStatusHistoryRepository.save(
+                    WhOutboundStatusHistory.builder()
+                            .outboundHeaderId(outbound.getId())
+                            .status(OutboundStatus.READY_TO_SHIP)
+                            .changedAt(now)
+                            .changedByMemberId(requestedBy)
+                            .changedByName(requestedBy)
+                            .reason("WAREHOUSE_TRANSFER_EXECUTE")
+                            .build()
+            );
+        }
+    }
+
+    private WhOutboundHeader upsertWhTransferOutboundHeader(
+            WarehouseTransferHeader transferHeader,
+            ExecuteGroupContext context,
+            String requestedBy,
+            Date now
+    ) {
+        // 1차 방어: 사전 조회
+        Optional<WhOutboundHeader> existing = outboundHeaderRepository.findBySourceTypeAndSourceRefNoAndSourceRefSeq(
+                OutboundSourceType.WAREHOUSE_TRANSFER,
+                transferHeader.getTransferNo(),
+                1
+        );
+        if (existing.isPresent()) return existing.get();
+
+        try {
+            // 2차 방어: 유니크 충돌 전까지 신규 생성 시도
+            WhOutboundHeader saved = outboundHeaderRepository.save(
+                    WhOutboundHeader.builder()
+                            .outboundNo("TEMP-" + UUID.randomUUID())
+                            .sourceType(OutboundSourceType.WAREHOUSE_TRANSFER)
+                            .sourceRefNo(transferHeader.getTransferNo())
+                            .sourceRefSeq(1)
+                            .sourceRefId(transferHeader.getId())
+                            .warehouseId(transferHeader.getFromWarehouseId())
+                            .destinationType(OutboundDestinationType.WAREHOUSE)
+                            .destinationId(transferHeader.getToWarehouseId())
+                            .status(OutboundStatus.READY_TO_SHIP)
+                            .totalRequestedQuantity(transferItemsQuantity(transferHeader.getId()))
+                            .requestedAt(now)
+                            .requestedByMemberId(requestedBy)
+                            .requestedByName(requestedBy)
+                            .memo(transferHeader.getMemoSummary())
+                            .build()
+            );
+            saved.assignOutboundNo(generateOutboundNo(saved.getId(), now));
+            return saved;
+        } catch (DataIntegrityViolationException e) {
+            // 동시성 충돌 시 재조회로 멱등 완료 처리
+            return outboundHeaderRepository.findBySourceTypeAndSourceRefNoAndSourceRefSeq(
+                            OutboundSourceType.WAREHOUSE_TRANSFER, transferHeader.getTransferNo(), 1)
+                    .orElseThrow(() -> BaseException.from(BaseResponseStatus.FAIL));
+        }
+    }
+
+    private int transferItemsQuantity(Long transferHeaderId) {
+        return itemRepository.findAllByHeader_IdOrderByIdAsc(transferHeaderId).stream()
+                .mapToInt(item -> Math.max(0, safeQty(item.getQuantity())))
+                .sum();
+    }
+
+    private String generateOutboundNo(Long id, Date requestedAt) {
+        // 출고번호 정책: WOB-YYYYMMDD-00001
+        LocalDate day = requestedAt.toInstant().atZone(ZoneId.of("Asia/Seoul")).toLocalDate();
+        return "WOB-" + day.format(DAY_FORMAT) + "-" + String.format("%05d", id);
+    }
+
+    private WarehouseTransferDto.ExecuteFailedRouteRes toFailedRoute(
+            List<WarehouseTransferDto.ExecuteLineReq> groupLines,
+            BaseResponseStatus status
+    ) {
+        // 라우트 실패를 라인 단위 상세와 함께 응답 DTO로 변환한다.
+        WarehouseTransferDto.ExecuteLineReq first = groupLines.get(0);
+        List<WarehouseTransferDto.ExecuteLineFailureRes> failedLines = groupLines.stream()
+                .map(line -> WarehouseTransferDto.ExecuteLineFailureRes.builder()
+                        .lineId(line.getLineId())
+                        .skuCode(line.getSkuCode())
+                        .qty(safeQty(line.getQty()))
+                        .reason(status.getMessage())
+                        .build())
+                .toList();
+        return WarehouseTransferDto.ExecuteFailedRouteRes.builder()
+                .fromWarehouseCode(first.getFromWarehouseCode())
+                .toWarehouseCode(first.getToWarehouseCode())
+                .errorCode(status.getCode())
+                .errorMessage(status.getMessage())
+                .failedLines(failedLines)
+                .build();
+    }
+
+    private record ExecuteGroupResult(
+            List<WarehouseTransferDto.ExecuteLineResultRes> lineResults,
+            WarehouseTransferDto.ExecuteTransferRes transferRes
+    ) {
+    }
+
     private record ExecuteGroupContext(
             Infrastructure fromWarehouse,
             Infrastructure toWarehouse,
             Map<String, ProductSku> skuByCode,
+            Map<Long, ProductSku> skuById,
+            Map<String, ProductMaster> masterByCode,
             Map<Long, Integer> fromAvailableBySkuId,
             Map<Long, Integer> toAvailableBySkuId
     ) {

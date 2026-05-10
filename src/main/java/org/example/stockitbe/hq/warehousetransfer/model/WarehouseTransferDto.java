@@ -83,6 +83,32 @@ public class WarehouseTransferDto {
         private Integer failureCount;
         private List<ExecuteLineResultRes> lineResults;
         private List<ExecuteTransferRes> createdTransfers;
+        // 부분성공 지원: 실패 라우트 목록
+        private List<ExecuteFailedRouteRes> failedTransfers;
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class ExecuteFailedRouteRes {
+        // 실패한 라우트(출발/도착 창고) 식별값
+        private String fromWarehouseCode;
+        private String toWarehouseCode;
+        // 실패 사유 표준 코드/메시지
+        private Integer errorCode;
+        private String errorMessage;
+        // 라우트 내 실패 라인 상세
+        private List<ExecuteLineFailureRes> failedLines;
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class ExecuteLineFailureRes {
+        private String lineId;
+        private String skuCode;
+        private Integer qty;
+        private String reason;
     }
 
     @Getter
