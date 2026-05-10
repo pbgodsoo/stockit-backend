@@ -1,0 +1,103 @@
+package org.example.stockitbe.hq.circularbuyer;
+
+import org.example.stockitbe.hq.circularbuyer.model.CircularBuyerTransaction;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.util.Date;
+import java.util.List;
+
+public interface CircularBuyerTransactionRepository extends JpaRepository<CircularBuyerTransaction, Long> {
+
+    long countByTransactedAtBetween(Date from, Date to);
+
+    /** KPI: 기간 내 총 매출, 활성 거래처 수, 거래된 소재 종류 수. */
+    @Query(value = """
+        SELECT
+            COALESCE(SUM(t.total_amount), 0)     AS totalSales,
+            COUNT(DISTINCT t.buyer_id)           AS activeVendors,
+            COUNT(DISTINCT t.material_code)      AS activeMaterials
+        FROM circular_buyer_transaction t
+        WHERE t.transacted_at >= :from
+          AND t.transacted_at <  :to
+        """, nativeQuery = true)
+    List<Object[]> kpiAggregate(@Param("from") Date from, @Param("to") Date to);
+
+    /** TOP 거래처 (매출 1위). */
+    @Query(value = """
+        SELECT b.company_name AS name, SUM(t.total_amount) AS amount
+        FROM circular_buyer_transaction t
+        JOIN circular_buyer b ON b.id = t.buyer_id
+        WHERE t.transacted_at >= :from AND t.transacted_at < :to
+        GROUP BY b.company_name
+        ORDER BY amount DESC
+        LIMIT 1
+        """, nativeQuery = true)
+    List<Object[]> topVendor(@Param("from") Date from, @Param("to") Date to);
+
+    /** TOP 소재 (매출 1위, 한글명). */
+    @Query(value = """
+        SELECT p.material_name_ko AS name, SUM(t.total_amount) AS amount
+        FROM circular_buyer_transaction t
+        JOIN circular_material_price_policy p ON p.material_code = t.material_code
+        WHERE t.transacted_at >= :from AND t.transacted_at < :to
+        GROUP BY p.material_name_ko
+        ORDER BY amount DESC
+        LIMIT 1
+        """, nativeQuery = true)
+    List<Object[]> topMaterial(@Param("from") Date from, @Param("to") Date to);
+
+    /**
+     * 거래처별 집계.
+     * 각 거래처가 가장 많이 거래한 소재명 + 단가 + 총 weight + 총 매출.
+     * 결과 컬럼 순서: company_name, material_name_ko, price_per_kg, total_weight, total_amount
+     */
+    @Query(value = """
+        SELECT
+            b.company_name,
+            (SELECT p2.material_name_ko
+               FROM circular_buyer_transaction t2
+               JOIN circular_material_price_policy p2 ON p2.material_code = t2.material_code
+              WHERE t2.buyer_id = b.id
+                AND t2.transacted_at >= :from AND t2.transacted_at < :to
+              GROUP BY p2.material_name_ko
+              ORDER BY SUM(t2.total_amount) DESC
+              LIMIT 1)                         AS material_name_ko,
+            (SELECT p3.price_per_kg
+               FROM circular_buyer_transaction t3
+               JOIN circular_material_price_policy p3 ON p3.material_code = t3.material_code
+              WHERE t3.buyer_id = b.id
+                AND t3.transacted_at >= :from AND t3.transacted_at < :to
+              GROUP BY p3.material_code, p3.price_per_kg
+              ORDER BY SUM(t3.total_amount) DESC
+              LIMIT 1)                         AS unit_price,
+            SUM(t.weight_kg)                   AS total_weight,
+            SUM(t.total_amount)                AS total_amount
+        FROM circular_buyer_transaction t
+        JOIN circular_buyer b ON b.id = t.buyer_id
+        WHERE t.transacted_at >= :from AND t.transacted_at < :to
+        GROUP BY b.id, b.company_name
+        ORDER BY total_amount DESC
+        """, nativeQuery = true)
+    List<Object[]> aggregateByVendor(@Param("from") Date from, @Param("to") Date to);
+
+    /**
+     * 소재별 집계 (순환재고 상세).
+     * 결과: material_code, material_name_ko, material_group, total_weight, total_amount
+     */
+    @Query(value = """
+        SELECT
+            p.material_code,
+            p.material_name_ko,
+            p.material_group,
+            SUM(t.weight_kg)     AS total_weight,
+            SUM(t.total_amount)  AS total_amount
+        FROM circular_buyer_transaction t
+        JOIN circular_material_price_policy p ON p.material_code = t.material_code
+        WHERE t.transacted_at >= :from AND t.transacted_at < :to
+        GROUP BY p.material_code, p.material_name_ko, p.material_group
+        ORDER BY total_amount DESC
+        """, nativeQuery = true)
+    List<Object[]> aggregateByMaterial(@Param("from") Date from, @Param("to") Date to);
+}

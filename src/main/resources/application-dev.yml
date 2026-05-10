@@ -65,3 +65,7 @@ management:
     web:
       exposure:
         include: health,info
+
+admin:
+  bootstrap:
+    password: ${ADMIN_BOOTSTRAP_PASSWORD}
