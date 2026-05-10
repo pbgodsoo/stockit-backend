@@ -11,6 +11,7 @@ import java.util.List;
 
 public class WarehouseTransferDto {
 
+    // 재고이동 실행 요청 DTO (헤더 성격)
     @Getter
     @NoArgsConstructor
     @AllArgsConstructor
@@ -36,6 +37,7 @@ public class WarehouseTransferDto {
         }
     }
 
+    // 재고이동 실행 요청 라인 DTO (SKU 단위)
     @Getter
     @NoArgsConstructor
     @AllArgsConstructor
@@ -73,6 +75,7 @@ public class WarehouseTransferDto {
         }
     }
 
+    // 재고이동 실행 성공 라인 응답 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -100,6 +103,7 @@ public class WarehouseTransferDto {
         }
     }
 
+    // 재고이동 실행 성공 라우트(이동지시서) 요약 응답 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -135,6 +139,7 @@ public class WarehouseTransferDto {
         }
     }
 
+    // 재고이동 실행 종합 응답 DTO (성공/실패 집계)
     @Getter
     @Builder
     @AllArgsConstructor
@@ -164,6 +169,7 @@ public class WarehouseTransferDto {
         }
     }
 
+    // 재고이동 실행 실패 라우트 응답 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -194,6 +200,7 @@ public class WarehouseTransferDto {
         }
     }
 
+    // 재고이동 실행 실패 라인 응답 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -213,6 +220,7 @@ public class WarehouseTransferDto {
         }
     }
 
+    // 재고이동 목록 1행 응답 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -261,6 +269,7 @@ public class WarehouseTransferDto {
         }
     }
 
+    // 재고이동 상세 응답 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -309,6 +318,7 @@ public class WarehouseTransferDto {
         }
     }
 
+    // 재고이동 상세/목록 공통 라인 응답 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -351,6 +361,7 @@ public class WarehouseTransferDto {
         }
     }
 
+    // SKU 기준 창고별 재고 분포 응답 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -390,6 +401,7 @@ public class WarehouseTransferDto {
         }
     }
 
+    // ExecuteReq -> WarehouseTransferHeader 변환용 컨텍스트 DTO
     @Getter
     @AllArgsConstructor
     @Builder
@@ -404,6 +416,7 @@ public class WarehouseTransferDto {
         private String memoSummary;
     }
 
+    // ExecuteLineReq -> WarehouseTransferItem 변환용 컨텍스트 DTO
     @Getter
     @AllArgsConstructor
     @Builder
