@@ -230,13 +230,28 @@ public class CircularBuyerRecommendService {
 
     private String buildPrompt(List<CircularBuyer> top, CircularBuyerDto.RecommendReq req) {
         StringBuilder sb = new StringBuilder();
-        sb.append("너는 SPA 브랜드의 순환재고를 처리할 거래처를 추천하는 한국어 어시스턴트야.\n");
-        sb.append("아래 재고 정보와 후보 거래처를 보고, 각 후보가 왜 이 재고에 적합한지 1~2문장 사유를 만들어.\n\n");
+        sb.append("너는 SPA 브랜드 본사 관리자에게 순환재고 처리 거래처를 추천하는 한국어 어시스턴트야.\n");
+        sb.append("아래 재고 정보와 후보 거래처 ").append(top.size()).append("곳을 보고, ");
+        sb.append("각 거래처가 왜 이 재고에 적합한지 충분히 자세하고 신뢰감 있는 사유를 작성해.\n\n");
+
+        sb.append("[사유 작성 가이드]\n");
+        sb.append("- 각 거래처당 5~6줄, 약 200~300자 분량으로 충분히 길게.\n");
+        sb.append("- 다음 4가지 흐름을 자연스럽게 한 문단에 녹여서 작성:\n");
+        sb.append("  1) 거래처의 핵심 처리 영역과 전문성 (어떤 소재를 어떤 방식으로 처리하는 회사인지)\n");
+        sb.append("  2) 요청 재고와 매칭되는 구체적 이유 (소재 일치·처리 방식 적합성·산업군 부합)\n");
+        sb.append("  3) 처리 후 재활용 경로 (어떤 산업·제품으로 환생되는지 — 자동차 흡음재·건설 단열재·재생 원사·펄프·매트리스 충전 등)\n");
+        sb.append("  4) 친환경·순환경제 가치 (ESG 효과·탄소 감축·자원 순환)\n");
+        sb.append("- 거래처 description·메모·취급 품목에 등장하는 구체 어휘를 적극 활용해 사실 기반으로 작성.\n");
+        sb.append("- '적합한 거래처입니다' 같은 추상적 칭찬·불필요한 인사말·서론 금지 — 바로 본론.\n");
+        sb.append("- 한국어 자연어 매끄러운 문장, 각 문장은 마침표로 종료.\n");
+        sb.append("- JSON 안에 줄바꿈(\\n) 넣지 말고 한 문단으로 이어 써 (UI 가 자연스럽게 줄바꿈 처리).\n\n");
+
         sb.append("[요청 재고]\n");
         sb.append("- 소재 구분: ").append(materialFitLabel(req.getMaterialFit())).append("\n");
         if (req.getProductName() != null) sb.append("- 품목: ").append(req.getProductName()).append("\n");
         if (req.getDescription() != null) sb.append("- 설명: ").append(req.getDescription()).append("\n");
         if (req.getQuantityHint() != null) sb.append("- 수량 힌트: ").append(req.getQuantityHint()).append("\n");
+
         sb.append("\n[후보 거래처 ").append(top.size()).append("곳]\n");
         for (int i = 0; i < top.size(); i++) {
             CircularBuyer b = top.get(i);
@@ -250,10 +265,12 @@ public class CircularBuyerRecommendService {
             if (b.getDescription() != null) sb.append(" / 설명=").append(b.getDescription());
             sb.append("\n");
         }
-        sb.append("\n반드시 아래 JSON 배열 형식으로만 답해 (다른 텍스트 절대 금지):\n");
+
+        sb.append("\n반드시 아래 JSON 배열 형식으로만 답해 (다른 텍스트·코드블록·마크다운 절대 금지):\n");
         sb.append("[\n");
         for (int i = 0; i < top.size(); i++) {
-            sb.append("  {\"code\": \"").append(top.get(i).getCode()).append("\", \"rationale\": \"...\"}");
+            sb.append("  {\"code\": \"").append(top.get(i).getCode())
+                    .append("\", \"rationale\": \"<5~6줄 200~300자 사유 한 문단>\"}");
             if (i < top.size() - 1) sb.append(",");
             sb.append("\n");
         }
