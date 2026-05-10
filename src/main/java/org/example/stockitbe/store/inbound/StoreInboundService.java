@@ -24,7 +24,9 @@ import org.example.stockitbe.store.order.repository.StoreOrderStatusHistoryRepos
 import org.example.stockitbe.user.model.AuthUserDetails;
 import org.example.stockitbe.warehouse.outbound.model.OutboundStatus;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundHeader;
+import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundStatusHistory;
 import org.example.stockitbe.warehouse.outbound.repository.WhOutboundHeaderRepository;
+import org.example.stockitbe.warehouse.outbound.repository.WhOutboundStatusHistoryRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +50,7 @@ public class StoreInboundService {
     private final StoreOrderHeaderRepository storeOrderHeaderRepository;
     private final StoreOrderStatusHistoryRepository storeOrderStatusHistoryRepository;
     private final WhOutboundHeaderRepository whOutboundHeaderRepository;
+    private final WhOutboundStatusHistoryRepository whOutboundStatusHistoryRepository;
     private final InfrastructureRepository infrastructureRepository;
     private final InventoryService inventoryService;
 
@@ -193,6 +196,9 @@ public class StoreInboundService {
         List<StoreInboundStatusHistory> history = inboundStatusHistoryRepository
                 .findAllByInboundHeaderIdOrderByChangedAtAscIdAsc(inbound.getId());
         WhOutboundHeader outbound = whOutboundHeaderRepository.findByOutboundNo(inbound.getOutboundNo()).orElse(null);
+        List<WhOutboundStatusHistory> outboundHistory = outbound == null
+                ? List.of()
+                : whOutboundStatusHistoryRepository.findAllByOutboundHeaderIdOrderByChangedAtAscIdAsc(outbound.getId());
 
         StoreInboundDto.OutboundSummaryRes outboundSummary = outbound == null ? null :
                 StoreInboundDto.OutboundSummaryRes.builder()
@@ -200,7 +206,7 @@ public class StoreInboundService {
                         .outboundStatus(outbound.getStatus())
                         .build();
 
-        return StoreInboundDto.DetailRes.of(inbound, items, history, outboundSummary);
+        return StoreInboundDto.DetailRes.of(inbound, items, history, outboundSummary, outboundHistory);
     }
 
     // 로그인 사용자 매장 ID 해석

@@ -7,6 +7,7 @@ import org.example.stockitbe.store.inbound.model.entity.StoreInboundHeader;
 import org.example.stockitbe.store.inbound.model.entity.StoreInboundItem;
 import org.example.stockitbe.store.inbound.model.entity.StoreInboundStatusHistory;
 import org.example.stockitbe.warehouse.outbound.model.OutboundStatus;
+import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundStatusHistory;
 
 import java.util.Date;
 import java.util.List;
@@ -65,6 +66,7 @@ public class StoreInboundDto {
         private String deliveryGroupNo;
         private String memo;
         private OutboundSummaryRes outbound;
+        private List<OutboundStatusHistoryRes> outboundStatusHistory;
         private List<ItemRes> items;
         private List<StatusHistoryRes> statusHistory;
 
@@ -72,7 +74,8 @@ public class StoreInboundDto {
                 StoreInboundHeader header,
                 List<StoreInboundItem> items,
                 List<StoreInboundStatusHistory> history,
-                OutboundSummaryRes outbound
+                OutboundSummaryRes outbound,
+                List<WhOutboundStatusHistory> outboundHistory
         ) {
             return DetailRes.builder()
                     .inboundNo(header.getInboundNo())
@@ -94,6 +97,7 @@ public class StoreInboundDto {
                     .deliveryGroupNo(header.getDeliveryGroupNo())
                     .memo(header.getMemo())
                     .outbound(outbound)
+                    .outboundStatusHistory(outboundHistory.stream().map(OutboundStatusHistoryRes::from).toList())
                     .items(items.stream().map(ItemRes::from).toList())
                     .statusHistory(history.stream().map(StatusHistoryRes::from).toList())
                     .build();
@@ -161,6 +165,28 @@ public class StoreInboundDto {
     public static class OutboundSummaryRes {
         private String outboundNo;
         private OutboundStatus outboundStatus;
+    }
+
+    @Getter
+    @Builder
+    public static class OutboundStatusHistoryRes {
+        private Long id;
+        private OutboundStatus status;
+        private Date changedAt;
+        private String changedByMemberId;
+        private String changedByName;
+        private String reason;
+
+        public static OutboundStatusHistoryRes from(WhOutboundStatusHistory history) {
+            return OutboundStatusHistoryRes.builder()
+                    .id(history.getId())
+                    .status(history.getStatus())
+                    .changedAt(history.getChangedAt())
+                    .changedByMemberId(history.getChangedByMemberId())
+                    .changedByName(history.getChangedByName())
+                    .reason(history.getReason())
+                    .build();
+        }
     }
 }
 

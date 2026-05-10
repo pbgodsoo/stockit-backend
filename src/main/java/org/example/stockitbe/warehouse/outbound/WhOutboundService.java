@@ -7,8 +7,11 @@ import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
 import org.example.stockitbe.hq.inventory.InventoryService;
-import org.example.stockitbe.store.inbound.repository.StoreInboundHeaderRepository;
+import org.example.stockitbe.store.inbound.model.StoreInboundStatus;
 import org.example.stockitbe.store.inbound.model.entity.StoreInboundHeader;
+import org.example.stockitbe.store.inbound.model.entity.StoreInboundStatusHistory;
+import org.example.stockitbe.store.inbound.repository.StoreInboundHeaderRepository;
+import org.example.stockitbe.store.inbound.repository.StoreInboundStatusHistoryRepository;
 import org.example.stockitbe.user.model.AuthUserDetails;
 import org.example.stockitbe.warehouse.outbound.model.OutboundStatus;
 import org.example.stockitbe.warehouse.outbound.model.dto.WhOutboundDto;
@@ -18,8 +21,8 @@ import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundStatusHis
 import org.example.stockitbe.warehouse.outbound.repository.WhOutboundHeaderRepository;
 import org.example.stockitbe.warehouse.outbound.repository.WhOutboundItemRepository;
 import org.example.stockitbe.warehouse.outbound.repository.WhOutboundStatusHistoryRepository;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -35,6 +38,7 @@ public class WhOutboundService {
     private final WhOutboundItemRepository outboundItemRepository;
     private final WhOutboundStatusHistoryRepository outboundStatusHistoryRepository;
     private final StoreInboundHeaderRepository inboundHeaderRepository;
+    private final StoreInboundStatusHistoryRepository inboundStatusHistoryRepository;
     private final InfrastructureRepository infrastructureRepository;
     private final InventoryService inventoryService;
 
@@ -176,6 +180,23 @@ public class WhOutboundService {
         );
 
         // 4) 최신 상세 정보를 반환한다.
+        inboundHeaderRepository.findByOutboundNo(header.getOutboundNo()).ifPresent(inbound -> {
+            boolean exists = inboundStatusHistoryRepository
+                    .existsByInboundHeaderIdAndStatus(inbound.getId(), StoreInboundStatus.PENDING_RECEIPT);
+            if (!exists) {
+                inboundStatusHistoryRepository.save(
+                        StoreInboundStatusHistory.builder()
+                                .inboundHeaderId(inbound.getId())
+                                .status(StoreInboundStatus.PENDING_RECEIPT)
+                                .changedAt(now)
+                                .changedByMemberId(me.getEmployeeCode())
+                                .changedByName(me.getName())
+                                .reason("OUTBOUND_ARRIVED")
+                                .build()
+                );
+            }
+        });
+
         return detail(me, outboundNo);
     }
 
