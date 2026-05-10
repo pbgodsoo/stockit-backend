@@ -37,10 +37,9 @@ public class StoreOrderBatchApproveService {
 
     private final StoreOrderHeaderRepository headerRepository;
     private final InfrastructureRepository infrastructureRepository;
-    private final StoreOrderService storeOrderService;
+    private final StoreOrderBatchApproveItemService batchApproveItemService;
 
     // 발주 수동 배치
-    @Transactional
     public StoreOrderBatchDto.RunRes runManual(StoreOrderBatchDto.RunReq req, AuthUserDetails me) {
         StoreOrderBatchScope scope = req == null || req.getMode() == null ? StoreOrderBatchScope.ALL : req.getMode();
         String runId = UUID.randomUUID().toString();
@@ -67,7 +66,7 @@ public class StoreOrderBatchApproveService {
         int success = 0;
         for (StoreOrderHeader header : targets) {
             try {
-                storeOrderService.approveByBatch(
+                batchApproveItemService.approveOne(
                         header.getOrderNo(),
                         actorId,
                         actorName,
@@ -110,7 +109,6 @@ public class StoreOrderBatchApproveService {
     }
 
     // 발주 자동 배치
-    @Transactional
     public StoreOrderBatchDto.RunRes runAutoDaily() {
         String runId = UUID.randomUUID().toString();
         Date[] range = previousDayRange();
@@ -126,7 +124,7 @@ public class StoreOrderBatchApproveService {
         int success = 0;
         for (StoreOrderHeader header : targets) {
             try {
-                storeOrderService.approveByBatch(
+                batchApproveItemService.approveOne(
                         header.getOrderNo(),
                         "SYSTEM_BATCH",
                         "SYSTEM_BATCH",
