@@ -11,7 +11,6 @@ import org.example.stockitbe.hq.infrastructure.StoreWarehouseMapRepository;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
 import org.example.stockitbe.hq.infrastructure.model.StoreWarehouseRole;
-import org.example.stockitbe.hq.inventory.InventoryService;
 import org.example.stockitbe.hq.product.ProductMasterRepository;
 import org.example.stockitbe.hq.product.ProductSkuRepository;
 import org.example.stockitbe.hq.product.model.ProductMaster;
@@ -23,6 +22,9 @@ import org.example.stockitbe.store.order.model.dto.StoreOrderDto;
 import org.example.stockitbe.store.order.model.entity.StoreOrderHeader;
 import org.example.stockitbe.store.order.model.entity.StoreOrderItem;
 import org.example.stockitbe.store.order.model.entity.StoreOrderStatusHistory;
+import org.example.stockitbe.store.inbound.StoreInboundHeaderRepository;
+import org.example.stockitbe.store.inbound.model.StoreInboundStatus;
+import org.example.stockitbe.store.inbound.model.entity.StoreInboundHeader;
 import org.example.stockitbe.user.model.AuthUserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,10 +48,11 @@ public class StoreOrderService {
     private final StoreOrderStatusHistoryRepository historyRepository;
     private final InfrastructureRepository infrastructureRepository;
     private final StoreWarehouseMapRepository storeWarehouseMapRepository;
-    private final InventoryService inventoryService;
     private final ProductSkuRepository productSkuRepository;
     private final ProductMasterRepository productMasterRepository;
     private final CategoryRepository categoryRepository;
+    private final StoreInboundHeaderRepository storeInboundHeaderRepository;
+    private final StoreOrderApprovalOrchestrationService approvalOrchestrationService;
 
     // 매장 발주 요청 생성
     @Transactional
@@ -158,7 +161,10 @@ public class StoreOrderService {
                     header,
                     headerStore == null ? "" : headerStore.getCode(),
                     headerStore == null ? "" : headerStore.getName(),
-                    buildHeadline(items)
+                    buildHeadline(items),
+                    totalInboundCount(header.getOrderNo()),
+                    receivedInboundCount(header.getOrderNo()),
+                    inboundProgress(header.getOrderNo())
             ));
         }
         return result;
@@ -418,15 +424,17 @@ public class StoreOrderService {
         );
     }
 
-
+    // 사용하는 메서드: approve, approveByBatch
+    // 발주 승인 핵심 처리.
+    // 1) 상태를 APPROVED로 전이
+    // 2) 출고/입고 오케스트레이션 실행
+    // 3) 발주 상태 이력 기록
     private StoreOrderDto.ApproveRes approveInternal(StoreOrderHeader header, String actorMemberId, String actorName, String reason) {
         Date now = new Date();
         header.markApproved();
 
         List<StoreOrderItem> items = itemRepository.findAllByOrderHeaderIdOrderByIdAsc(header.getId());
-        for (StoreOrderItem item : items) {
-            inventoryService.increaseAvailable(header.getStoreId(), item.getSkuCode(), item.getRequestedQuantity());
-        }
+        approvalOrchestrationService.createOutboundInboundForApprovedOrder(header, items, actorMemberId, actorName, reason);
 
         appendOrderStatusHistory(header.getId(), StoreOrderStatus.APPROVED.name(), now,
                 actorMemberId, actorName, reason);
@@ -439,10 +447,18 @@ public class StoreOrderService {
         Infrastructure store = infrastructureRepository.findById(header.getStoreId()).orElse(null);
         List<StoreOrderItem> items = itemRepository.findAllByOrderHeaderIdOrderByIdAsc(header.getId());
         List<StoreOrderStatusHistory> history = historyRepository.findAllByOrderHeaderIdOrderByChangedAtAscIdAsc(header.getId());
+        List<StoreInboundHeader> inboundHeaders = storeInboundHeaderRepository.findAllBySourceRefNo(header.getOrderNo());
         return StoreOrderDto.CreateRes.from(
                 header,
                 store == null ? "" : store.getCode(),
                 store == null ? "" : store.getName(),
+                inboundHeaders.size(),
+                (int) inboundHeaders.stream().filter(h -> h.getStatus() == StoreInboundStatus.RECEIVED).count(),
+                toInboundProgress(
+                        inboundHeaders.size(),
+                        (int) inboundHeaders.stream().filter(h -> h.getStatus() == StoreInboundStatus.RECEIVED).count()
+                ),
+                inboundHeaders.stream().map(this::toInboundSummary).toList(),
                 items.stream().map(StoreOrderDto.CreateLineRes::from).toList(),
                 history.stream().map(StoreOrderDto.CreateHistoryRes::from).toList()
         );
@@ -553,6 +569,49 @@ public class StoreOrderService {
     private String blankTo(String s, String fallback) {
         if (s == null || s.isBlank()) return fallback;
         return s;
+    }
+
+    // 사용하는 메서드: list
+    // 발주번호 기준 연계 입고 전체 건수를 계산한다.
+    private int totalInboundCount(String orderNo) {
+        return storeInboundHeaderRepository.findAllBySourceRefNo(orderNo).size();
+    }
+
+    // 사용하는 메서드: list
+    // 발주번호 기준 RECEIVED 상태 입고 건수를 계산한다.
+    private int receivedInboundCount(String orderNo) {
+        return (int) storeInboundHeaderRepository.findAllBySourceRefNo(orderNo).stream()
+                .filter(h -> h.getStatus() == StoreInboundStatus.RECEIVED)
+                .count();
+    }
+
+    // 사용하는 메서드: list
+    // 입고 진행 집계값을 파생 enum으로 변환한다.
+    private StoreOrderDto.InboundProgress inboundProgress(String orderNo) {
+        int total = totalInboundCount(orderNo);
+        int received = receivedInboundCount(orderNo);
+        return toInboundProgress(total, received);
+    }
+
+    // 사용하는 메서드: buildCreateRes, inboundProgress
+    // 총 입고건/수령건 수치로 NOT_STARTED/PARTIAL/FULL 상태를 계산한다.
+    private StoreOrderDto.InboundProgress toInboundProgress(int total, int received) {
+        if (total <= 0 || received <= 0) return StoreOrderDto.InboundProgress.NOT_STARTED;
+        if (received >= total) return StoreOrderDto.InboundProgress.FULL;
+        return StoreOrderDto.InboundProgress.PARTIAL;
+    }
+
+    // 사용하는 메서드: buildCreateRes
+    // 입고 헤더 엔티티를 발주 상세 응답용 요약 DTO로 변환한다.
+    private StoreOrderDto.InboundSummaryRes toInboundSummary(StoreInboundHeader inbound) {
+        return StoreOrderDto.InboundSummaryRes.builder()
+                .inboundNo(inbound.getInboundNo())
+                .outboundNo(inbound.getOutboundNo())
+                .fromWarehouseId(inbound.getFromWarehouseId())
+                .expectedArrivalAt(inbound.getExpectedArrivalAt())
+                .totalExpectedQuantity(inbound.getTotalExpectedQuantity())
+                .status(inbound.getStatus())
+                .build();
     }
 
     private record CategoryLookup(Map<Long, Category> categoryById, Map<String, Category> categoryByCode) {}

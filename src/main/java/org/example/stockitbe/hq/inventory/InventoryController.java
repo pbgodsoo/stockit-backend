@@ -48,13 +48,49 @@ public class InventoryController {
     }
 
     @GetMapping("/circular-candidates")
-    public BaseResponse<List<InventoryDto.CircularCandidateRes>> getCircularCandidates() {
-        return BaseResponse.success(inventoryService.findCircularCandidates());
+    public BaseResponse<InventoryDto.CircularCandidatePageRes> getCircularCandidates(
+            @RequestParam(defaultValue = "0") Integer page,
+            @RequestParam(defaultValue = "20") Integer size,
+            @RequestParam(defaultValue = "convertibleStock,desc") String sort,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String parentCategory,
+            @RequestParam(required = false) String childCategory,
+            @RequestParam(required = false) List<String> warehouseCodes,
+            @RequestParam(required = false) List<Integer> conditionCodes
+    ) {
+        return BaseResponse.success(inventoryService.findCircularCandidates(
+                page,
+                size,
+                sort,
+                keyword,
+                parentCategory,
+                childCategory,
+                warehouseCodes,
+                conditionCodes
+        ));
     }
 
     @GetMapping("/circular")
-    public BaseResponse<List<InventoryDto.CircularInventoryRes>> getCircularInventories() {
-        return BaseResponse.success(inventoryService.findCircularInventories());
+    public BaseResponse<InventoryDto.CircularInventoryPageRes> getCircularInventories(
+            @RequestParam(defaultValue = "0") Integer page,
+            @RequestParam(defaultValue = "20") Integer size,
+            @RequestParam(defaultValue = "skuCode,asc") String sort,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) List<String> warehouseCodes,
+            @RequestParam(required = false) String materialGroup,
+            @RequestParam(required = false) String materialName,
+            @RequestParam(required = false) Integer minRatio
+    ) {
+        return BaseResponse.success(inventoryService.findCircularInventories(
+                page,
+                size,
+                sort,
+                keyword,
+                warehouseCodes,
+                materialGroup,
+                materialName,
+                minRatio
+        ));
     }
 
     @PostMapping("/circular-candidates/convert")

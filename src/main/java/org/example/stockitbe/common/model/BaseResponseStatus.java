@@ -104,6 +104,7 @@ public enum BaseResponseStatus {
     STORE_ORDER_SCOPE_FORBIDDEN(false, 4608, "로그인한 매장 범위를 벗어난 요청입니다."),
     STORE_ORDER_BATCH_STORE_CODE_REQUIRED(false, 4609, "배치 승인 STORE 모드에서는 storeCode가 필수입니다."),
     STORE_ORDER_BATCH_SCOPE_INVALID(false, 4610, "유효하지 않은 배치 승인 범위입니다."),
+    STORE_ORDER_APPROVE_INSUFFICIENT_WAREHOUSE_STOCK(false, 4611, "Primary/Backup 창고 합산 재고가 부족하여 발주를 승인할 수 없습니다."),
 
 
     // 4700번대~ 창고 입고 (WHS-005/007/008 + ADR-013/015/019 정정)
@@ -112,6 +113,10 @@ public enum BaseResponseStatus {
     INVALID_INBOUND_STATUS_TRANSITION(false, 4702, "허용되지 않은 입고 상태 전환입니다."),
     INBOUND_ALREADY_EXISTS_FOR_SOURCE(false, 4703, "해당 발주/이동에 대한 입고가 이미 존재합니다."),
     INBOUND_NOT_CONFIRMABLE(false, 4704, "입고 확정 가능한 상태가 아닙니다."),
+    OUTBOUND_NOT_FOUND(false, 4705, "해당 출고 정보를 찾을 수 없습니다."),
+    OUTBOUND_INVALID_STATUS_TRANSITION(false, 4706, "허용되지 않은 출고 상태 전환입니다."),
+    OUTBOUND_SCOPE_FORBIDDEN(false, 4707, "로그인한 창고 범위를 벗어난 출고 요청입니다."),
+    OUTBOUND_RESERVED_STOCK_NOT_ENOUGH(false, 4708, "예약 재고가 부족하여 출고를 확정할 수 없습니다."),
 
     // 4800번대 회원 관리
     USER_NOT_PENDING(false, 4800, "대기 상태인 신청만 처리할 수 있습니다."),
