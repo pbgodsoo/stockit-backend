@@ -8,8 +8,8 @@ import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
 import org.example.stockitbe.hq.infrastructure.model.InfraStatus;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
-import org.example.stockitbe.store.sale.StoreSaleHeaderRepository;
-import org.example.stockitbe.store.sale.StoreSaleItemRepository;
+import org.example.stockitbe.store.sale.repository.StoreSaleHeaderRepository;
+import org.example.stockitbe.store.sale.repository.StoreSaleItemRepository;
 import org.example.stockitbe.store.sale.model.StoreSaleStatus;
 import org.springframework.stereotype.Service;
 
