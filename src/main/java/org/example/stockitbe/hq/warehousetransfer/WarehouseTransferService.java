@@ -497,11 +497,11 @@ public class WarehouseTransferService {
     }
 
     // 이동번호 생성
-    // 정책: STF-YYYYMMDD-00001
+    // 정책: WTF-YYYYMMDD-00001
     private String generateTransferNo(Date requestedAt) {
         LocalDate day = requestedAt.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
         String dayToken = day.format(DAY_FORMAT);
-        String prefix = "STF-" + dayToken + "-";
+        String prefix = "WTF-" + dayToken + "-";
         int nextSeq = headerRepository.findTopByTransferNoStartingWithOrderByTransferNoDesc(prefix)
                 .map(WarehouseTransferHeader::getTransferNo)
                 .map(this::parseSeq)
