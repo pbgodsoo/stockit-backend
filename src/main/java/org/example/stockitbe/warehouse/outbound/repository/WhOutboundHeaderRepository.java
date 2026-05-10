@@ -1,4 +1,4 @@
-package org.example.stockitbe.warehouse.outbound;
+package org.example.stockitbe.warehouse.outbound.repository;
 
 import org.example.stockitbe.warehouse.outbound.model.OutboundSourceType;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundHeader;

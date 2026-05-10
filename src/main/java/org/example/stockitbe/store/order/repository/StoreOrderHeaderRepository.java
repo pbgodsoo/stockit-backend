@@ -1,4 +1,4 @@
-package org.example.stockitbe.store.order;
+package org.example.stockitbe.store.order.repository;
 
 import org.example.stockitbe.store.order.model.StoreOrderStatus;
 import org.example.stockitbe.store.order.model.entity.StoreOrderHeader;

@@ -1,4 +1,4 @@
-package org.example.stockitbe.store.order;
+package org.example.stockitbe.store.order.repository;
 
 import org.example.stockitbe.store.order.model.entity.StoreOrderItem;
 import org.springframework.data.jpa.repository.JpaRepository;

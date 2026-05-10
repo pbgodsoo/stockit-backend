@@ -113,7 +113,7 @@ public class Inventory extends BaseEntity {
     }
 
     /**
-     * 발주 SHIPPING 진입 시 가용재고 증가 (이슈 #169 — 발주 ↔ 인벤토리 연결 룰).
+     * 본사 발주 SHIPPING 진입 시 가용재고 증가 (이슈 #169 — 발주 ↔ 인벤토리 연결 룰).
      * 도착 전 예약 가용재고로, 실재고(quantity) 는 변하지 않는다.
      */
     public void increaseAvailable(int delta) {
@@ -122,7 +122,7 @@ public class Inventory extends BaseEntity {
     }
 
     /**
-     * 발주 COMPLETED (입고 확정) 시 가용재고를 실재고로 이동.
+     * 본사 발주 COMPLETED (입고 확정) 시 가용재고를 실재고로 이동.
      * available_quantity -= delta, quantity += delta.
      */
     public void moveAvailableToPhysical(int delta) {
@@ -168,5 +168,14 @@ public class Inventory extends BaseEntity {
         this.inTransitQuantity = n(this.inTransitQuantity) + moved;
         this.lastMovementAt = new Date();
         return moved;
+    }
+
+    // ------------- 매장 입고 확정 관련 ------------------
+    // 매장 입고 확정 시점에 실재고/가용재고를 동시에 증가시킨다.
+    public void increaseOnHandAndAvailable(int receivedQuantity) {
+        int safeReceived = Math.max(0, receivedQuantity);
+        this.quantity = n(this.quantity) + safeReceived;
+        this.availableQuantity = n(this.availableQuantity) + safeReceived;
+        this.lastMovementAt = new Date();
     }
 }
