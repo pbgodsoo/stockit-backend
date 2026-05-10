@@ -8,6 +8,8 @@ import org.example.stockitbe.hq.circularbuyer.model.CircularBuyer;
 import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
+import org.example.stockitbe.hq.warehousetransfer.WarehouseTransferHeaderRepository;
+import org.example.stockitbe.hq.warehousetransfer.model.WarehouseTransferHeader;
 import org.example.stockitbe.hq.inventory.InventoryService;
 import org.example.stockitbe.store.inbound.model.StoreInboundStatus;
 import org.example.stockitbe.store.inbound.model.entity.StoreInboundHeader;
@@ -17,6 +19,7 @@ import org.example.stockitbe.store.inbound.repository.StoreInboundStatusHistoryR
 import org.example.stockitbe.user.model.AuthUserDetails;
 import org.example.stockitbe.warehouse.outbound.model.OutboundDestinationType;
 import org.example.stockitbe.warehouse.outbound.model.OutboundStatus;
+import org.example.stockitbe.warehouse.outbound.model.OutboundSourceType;
 import org.example.stockitbe.warehouse.outbound.model.dto.WhOutboundDto;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundHeader;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundItem;
@@ -49,6 +52,7 @@ public class WhOutboundService {
     private final InfrastructureRepository infrastructureRepository;
     private final CircularBuyerRepository circularBuyerRepository;
     private final InventoryService inventoryService;
+    private final WarehouseTransferHeaderRepository warehouseTransferHeaderRepository;
 
     // 출고 목록 조회 함수
     @Transactional(readOnly = true)
@@ -164,6 +168,7 @@ public class WhOutboundService {
                         .reason(reason == null || reason.isBlank() ? "OUTBOUND_CONFIRM" : reason)
                         .build()
         );
+        syncTransferStatusFromOutbound(header, OutboundStatus.IN_TRANSIT);
 
         // 5) 최신 상세 정보를 반환한다.
         return detail(me, outboundNo);
@@ -194,6 +199,7 @@ public class WhOutboundService {
                         .reason(reason == null || reason.isBlank() ? "OUTBOUND_ARRIVED" : reason)
                         .build()
         );
+        syncTransferStatusFromOutbound(header, OutboundStatus.ARRIVED);
 
         // 4) 최신 상세 정보를 반환한다.
         inboundHeaderRepository.findByOutboundNo(header.getOutboundNo()).ifPresent(inbound -> {
@@ -214,6 +220,25 @@ public class WhOutboundService {
         });
 
         return detail(me, outboundNo);
+    }
+
+    // 매장발주/순환판매 출고는 제외하고, 재고이동 원천만 상태를 동기화한다.
+    private void syncTransferStatusFromOutbound(WhOutboundHeader header, OutboundStatus toStatus) {
+        if (header.getSourceType() != OutboundSourceType.WAREHOUSE_TRANSFER) return;
+        warehouseTransferHeaderRepository.findByTransferNo(header.getSourceRefNo()).ifPresent(transfer -> {
+            applyTransferStatus(transfer, toStatus);
+        });
+    }
+
+    // outbound 상태 전이를 transfer 상태로 미러링한다.
+    private void applyTransferStatus(WarehouseTransferHeader transfer, OutboundStatus toStatus) {
+        if (toStatus == OutboundStatus.IN_TRANSIT) {
+            transfer.markInTransit();
+            return;
+        }
+        if (toStatus == OutboundStatus.ARRIVED) {
+            transfer.markArrived();
+        }
     }
 
     // 로그인 사용자 기준 창고 ID 해석 함수

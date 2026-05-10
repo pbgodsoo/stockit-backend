@@ -58,10 +58,25 @@ public class WarehouseTransferHeader extends BaseEntity {
         this.transferNo = transferNo;
         this.fromWarehouseId = fromWarehouseId;
         this.toWarehouseId = toWarehouseId;
-        this.status = status == null ? WarehouseTransferStatus.REQUESTED : status;
+        this.status = status == null ? WarehouseTransferStatus.READY_TO_SHIP : status;
         this.requestedBy = requestedBy;
         this.requestedAt = requestedAt == null ? new Date() : requestedAt;
         this.reasonSummary = reasonSummary;
         this.memoSummary = memoSummary;
+    }
+
+    // 재고이동 실행 직후 출고 준비 상태로 전환한다.
+    public void markReadyToShip() {
+        this.status = WarehouseTransferStatus.READY_TO_SHIP;
+    }
+
+    // 출고 확정 시점에 배송중 상태로 전환한다.
+    public void markInTransit() {
+        this.status = WarehouseTransferStatus.IN_TRANSIT;
+    }
+
+    // 배송 완료 시점에 도착 상태로 전환한다.
+    public void markArrived() {
+        this.status = WarehouseTransferStatus.ARRIVED;
     }
 }
