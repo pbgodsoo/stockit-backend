@@ -430,8 +430,7 @@ public class InventoryService {
                                 .build()));
     }
 
-    // 입고 확정 시 매장 NORMAL 재고를 늘리는
-
+    // 입고 수량을 실제로 재고에 반영 : 입고 확정 시 매장 NORMAL 재고를 늘리는 함수
     @Transactional
     public void increaseOnHandAndAvailable(Long locationId, Long skuId, int quantity) {
         if (locationId == null || skuId == null || quantity <= 0) return;
