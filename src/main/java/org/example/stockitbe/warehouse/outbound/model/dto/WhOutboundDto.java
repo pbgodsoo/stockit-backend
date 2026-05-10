@@ -1,10 +1,11 @@
-package org.example.stockitbe.warehouse.outbound.model;
+package org.example.stockitbe.warehouse.outbound.model.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.example.stockitbe.store.inbound.model.StoreInboundStatus;
+import org.example.stockitbe.warehouse.outbound.model.OutboundStatus;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundHeader;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundItem;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundStatusHistory;
@@ -37,6 +38,7 @@ public class WhOutboundDto {
         private String warehouseName;
         private String destinationType;
         private Long destinationId;
+        private String destinationName;
         private OutboundStatus status;
         private Integer totalRequestedQuantity;
         private Date requestedAt;
@@ -58,6 +60,7 @@ public class WhOutboundDto {
         private String warehouseName;
         private String destinationType;
         private Long destinationId;
+        private String destinationName;
         private OutboundStatus status;
         private Integer totalRequestedQuantity;
         private Date requestedAt;
@@ -141,7 +144,12 @@ public class WhOutboundDto {
         private StoreInboundStatus inboundStatus;
     }
 
-    public static ListRes toListRes(WhOutboundHeader header, String warehouseCode, String warehouseName) {
+    public static ListRes toListRes(
+            WhOutboundHeader header,
+            String warehouseCode,
+            String warehouseName,
+            String destinationName
+    ) {
         return ListRes.builder()
                 .outboundNo(header.getOutboundNo())
                 .sourceType(header.getSourceType().name())
@@ -152,6 +160,7 @@ public class WhOutboundDto {
                 .warehouseName(warehouseName)
                 .destinationType(header.getDestinationType().name())
                 .destinationId(header.getDestinationId())
+                .destinationName(destinationName)
                 .status(header.getStatus())
                 .totalRequestedQuantity(header.getTotalRequestedQuantity())
                 .requestedAt(header.getRequestedAt())

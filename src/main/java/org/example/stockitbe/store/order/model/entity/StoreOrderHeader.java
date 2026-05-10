@@ -97,6 +97,14 @@ public class StoreOrderHeader extends BaseEntity {
         this.status = StoreOrderStatus.APPROVED;
     }
 
+    public void markCompleted() {
+        if (this.status == StoreOrderStatus.COMPLETED) return;
+        if (this.status != StoreOrderStatus.APPROVED) {
+            throw BaseException.from(BaseResponseStatus.STORE_ORDER_INVALID_STATUS_TRANSITION);
+        }
+        this.status = StoreOrderStatus.COMPLETED;
+    }
+
     private void validateRequestedOnly() {
         if (this.status != StoreOrderStatus.REQUESTED) {
             throw BaseException.from(BaseResponseStatus.STORE_ORDER_INVALID_STATUS_TRANSITION);

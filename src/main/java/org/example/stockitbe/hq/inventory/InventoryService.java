@@ -433,6 +433,28 @@ public class InventoryService {
                                 .build()));
     }
 
+    // 입고 수량을 실제로 재고에 반영 : 입고 확정 시 매장 NORMAL 재고를 늘리는 함수
+    @Transactional
+    public void increaseOnHandAndAvailable(Long locationId, Long skuId, int quantity) {
+        if (locationId == null || skuId == null || quantity <= 0) return;
+
+        inventoryRepository.findWithLockBySkuIdAndLocationIdAndInventoryStatus(
+                        skuId, locationId, InventoryStatus.NORMAL
+                )
+                .ifPresentOrElse(
+                        inv -> inv.increaseOnHandAndAvailable(quantity),
+                        () -> inventoryRepository.save(Inventory.builder()
+                                .skuId(skuId)
+                                .locationId(locationId)
+                                .inventoryStatus(InventoryStatus.NORMAL)
+                                .quantity(quantity)
+                                .reservedQuantity(0)
+                                .inTransitQuantity(0)
+                                .availableQuantity(quantity)
+                                .build())
+                );
+    }
+
     private List<InventoryDto.LocationOptionRes> buildLocationOptions(LocationType locationType) {
         return infrastructureRepository.findAll().stream()
                 .filter(i -> locationType == null || i.getLocationType() == locationType)

@@ -1,4 +1,4 @@
-package org.example.stockitbe.warehouse.outbound;
+package org.example.stockitbe.warehouse.outbound.repository;
 
 import org.example.stockitbe.warehouse.outbound.model.OutboundSourceType;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundHeader;
@@ -11,6 +11,7 @@ import java.util.Optional;
 
 public interface WhOutboundHeaderRepository extends JpaRepository<WhOutboundHeader, Long> {
     Optional<WhOutboundHeader> findByOutboundNo(String outboundNo);
+    List<WhOutboundHeader> findAllByOutboundNoIn(List<String> outboundNos);
     Optional<WhOutboundHeader> findBySourceTypeAndSourceRefNoAndSourceRefSeq(
             OutboundSourceType sourceType, String sourceRefNo, Integer sourceRefSeq
     );
