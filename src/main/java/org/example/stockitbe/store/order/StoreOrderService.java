@@ -54,44 +54,54 @@ public class StoreOrderService {
     private final StoreInboundHeaderRepository storeInboundHeaderRepository;
     private final StoreOrderApprovalOrchestrationService approvalOrchestrationService;
 
-    // 매장 발주 요청 생성
-    @Transactional
+    // 매장 발주 요청 생성 (Create)
     // 매장 발주를 신규 생성한다.
     // 라인 검증, 매장/창고 조회, 헤더·라인 저장, 상태 이력 기록을 순차적으로 수행한다.
+    @Transactional
     public StoreOrderDto.CreateRes create(StoreOrderDto.CreateReq dto, AuthUserDetails me) {
+        // 1) 요청 라인의 수량/필수값을 검증한다.
         validateCreateItems(dto.getItems());
+        // 2) 로그인 사용자 기준 매장과 기본 출고 창고를 해석한다.
         Infrastructure store = resolveStore(me);
         Infrastructure warehouse = lookupWarehouseFromStore(store);
         Date now = new Date();
 
+        // 3) 발주 헤더를 저장하고 PK 기반 주문번호를 부여한다.
         StoreOrderHeader header = createHeader(dto, store, warehouse, now);
         StoreOrderHeader saved = headerRepository.save(header);
         saved.assignOrderNo(generateOrderNo(saved.getId(), now));
+        // 4) 발주 라인을 저장하고 초기 상태 이력(REQUESTED)을 기록한다.
         saveCreateOrderItems(saved.getId(), dto.getItems(), buildCategoryLookup());
         appendOrderStatusHistory(saved.getId(), StoreOrderStatus.REQUESTED.name(), now,
                 safe(dto.getRequestedByMemberId()), dto.getRequestedByName(), null);
 
+        // 5) 생성 결과를 상세 응답 DTO로 조합해 반환한다.
         return buildCreateRes(saved);
     }
 
-    // 매장 발주 요청 수정
-    @Transactional
+    // 매장 발주 요청 수정 (Update)
     // 수정 가능한 발주를 업데이트한다.
     // 헤더 합계를 재계산하고 상세 라인을 전체 교체한 뒤 이력을 남긴다.
+    @Transactional
     public StoreOrderDto.UpdateRes update(String orderNo, StoreOrderDto.UpdateReq dto, AuthUserDetails me) {
+        // 1) 수정 요청 라인의 수량/필수값을 검증한다.
         validateUpdateItems(dto.getItems());
+        // 2) 로그인 매장 범위 내 발주인지 검증하고 대상 발주를 조회한다.
         Infrastructure store = resolveStore(me);
         StoreOrderHeader header = getOwnedOrderByOrderNo(orderNo, store.getId());
         Date now = new Date();
 
+        // 3) 헤더 집계값/메모를 갱신한다.
         header.updateRequested(
                 now,
                 dto.getItems().size(),
                 dto.getItems().stream().mapToInt(StoreOrderDto.UpdateLineReq::getRequestedQuantity).sum(),
                 trimToNull(dto.getMemo())
         );
+        // 4) 기존 라인을 삭제하고 새 라인으로 전체 교체한다.
         itemRepository.deleteAllByOrderHeaderId(header.getId());
         saveUpdateOrderItems(header.getId(), dto.getItems(), buildCategoryLookup());
+        // 5) 상태 이력을 적재하고 응답을 반환한다.
         appendOrderStatusHistory(header.getId(), StoreOrderStatus.REQUESTED.name(), now,
                 header.getRequestedByMemberId(), header.getRequestedByName(), "매장 발주 요청 수정");
 
@@ -103,22 +113,29 @@ public class StoreOrderService {
     // 발주를 취소한다.
     // 추적을 위해 취소 사유는 필수로 검증한다.
     public StoreOrderDto.CancelRes cancel(String orderNo, StoreOrderDto.CancelReq dto, AuthUserDetails me) {
+        // 1) 로그인 매장 범위 내 발주인지 검증하고 대상 발주를 조회한다.
         Infrastructure store = resolveStore(me);
         StoreOrderHeader header = getOwnedOrderByOrderNo(orderNo, store.getId());
+        // 2) 취소 사유를 필수 검증한다.
         String cancelReason = trimToNull(dto.getCancelReason());
         if (cancelReason == null) throw BaseException.from(BaseResponseStatus.STORE_ORDER_CANCEL_REASON_REQUIRED);
 
+        // 3) 상태를 CANCELLED로 전이하고 이력을 적재한다.
         header.markCancelled(cancelReason);
         appendOrderStatusHistory(header.getId(), StoreOrderStatus.CANCELLED.name(), new Date(),
                 safe(dto.getCancelledByMemberId()), blankTo(dto.getCancelledByName(), header.getRequestedByName()),
                 cancelReason);
+        // 4) 취소 반영 결과를 반환한다.
         return StoreOrderDto.CancelRes.from(buildCreateRes(header));
     }
 
+    // 발주 승인
     @Transactional
     public StoreOrderDto.ApproveRes approve(String orderNo, StoreOrderDto.ApproveReq dto, AuthUserDetails me) {
+        // 1) 로그인 매장 범위 내 발주인지 검증한다.
         Infrastructure store = resolveStore(me);
         StoreOrderHeader header = getOwnedOrderByOrderNo(orderNo, store.getId());
+        // 2) 공통 승인 내부 로직으로 위임한다.
         return approveInternal(
                 header,
                 safe(dto == null ? null : dto.getApprovedByMemberId()),
@@ -127,9 +144,12 @@ public class StoreOrderService {
         );
     }
 
+    // 배치 발주 승인
     @Transactional
     public StoreOrderDto.ApproveRes approveByBatch(String orderNo, String actorMemberId, String actorName, String reason) {
+        // 1) 배치 대상 발주를 조회한다.
         StoreOrderHeader header = getOrderByOrderNo(orderNo);
+        // 2) 공통 승인 내부 로직으로 위임한다.
         return approveInternal(header, safe(actorMemberId), blankTo(actorName, "SYSTEM"), blankTo(reason, "AUTO_BATCH_APPROVE"));
     }
 
@@ -138,6 +158,7 @@ public class StoreOrderService {
     // 발주 목록을 조회한다.
     // 매장/상태/기간/키워드 필터를 적용한다.
     public List<StoreOrderDto.ListRes> list(String status, LocalDate from, LocalDate to, String keyword, AuthUserDetails me) {
+        // 1) 로그인 매장 범위를 해석하고 필터 값을 정규화한다.
         Infrastructure store = resolveStore(me);
         Long storeIdFilter = store.getId();
         String safeKeyword = keyword == null ? "" : keyword.trim().toLowerCase(Locale.ROOT);
@@ -148,9 +169,11 @@ public class StoreOrderService {
         List<StoreOrderHeader> headers = headerRepository.findAllByOrderByRequestedAtDescIdDesc();
         if (headers.isEmpty()) return List.of();
 
+        // 2) 매장/라인 연관 데이터를 일괄 조회한다.
         Map<Long, Infrastructure> storeById = loadStoreMap(headers);
         Map<Long, List<StoreOrderItem>> itemsByHeader = loadItemsByHeader(headers);
 
+        // 3) 필터를 적용하고 목록 응답 DTO를 구성한다.
         List<StoreOrderDto.ListRes> result = new ArrayList<>();
         for (StoreOrderHeader header : headers) {
             if (!matchesHeaderFilter(header, storeIdFilter, statusFilter, fromDate, toDateExclusive)) continue;
@@ -175,7 +198,9 @@ public class StoreOrderService {
     // 발주 상세를 조회한다.
     // 헤더, 아이템, 상태 이력을 결합해 응답한다.
     public StoreOrderDto.DetailRes detail(String orderNo, AuthUserDetails me) {
+        // 1) 로그인 매장 범위를 해석한다.
         Infrastructure store = resolveStore(me);
+        // 2) 소유 발주 상세 응답을 조합해 반환한다.
         return StoreOrderDto.DetailRes.from(buildCreateRes(getOwnedOrderByOrderNo(orderNo, store.getId())));
     }
 
@@ -184,10 +209,12 @@ public class StoreOrderService {
     // 발주 분석 데이터를 조회한다.
     // 상태별 건수, 상위 SKU, 카테고리 분포를 집계한다.
     public StoreOrderDto.AnalyticsRes analytics(LocalDate from, LocalDate to, AuthUserDetails me) {
+        // 1) 기간 조건 기준 발주와 라인 데이터를 조회한다.
         List<StoreOrderDto.ListRes> orders = list(null, from, to, null, me);
         List<StoreOrderHeader> headers = orders.stream().map(o -> getOrderByOrderNo(o.getOrderId())).toList();
         Map<Long, List<StoreOrderItem>> itemsByHeader = loadItemsByHeader(headers);
 
+        // 2) 상태별 건수 집계를 계산한다.
         int requestedCount = 0;
         int approvedCount = 0;
         int completedCount = 0;
@@ -201,6 +228,7 @@ public class StoreOrderService {
 
         Map<String, SkuAgg> skuAgg = new HashMap<>();
         Map<String, CategoryAgg> categoryAgg = new HashMap<>();
+        // 3) SKU/카테고리별 요청수량 집계를 계산한다.
         for (StoreOrderHeader header : headers) {
             for (StoreOrderItem item : itemsByHeader.getOrDefault(header.getId(), List.of())) {
                 String skuKey = item.getSkuCode();
@@ -219,6 +247,7 @@ public class StoreOrderService {
             }
         }
 
+        // 4) 분석 응답 DTO를 구성해 반환한다.
         return StoreOrderDto.AnalyticsRes.builder()
                 .totalOrders(headers.size())
                 .totalRequestedQuantity(headers.stream().mapToInt(StoreOrderHeader::getTotalRequestedQuantity).sum())
@@ -425,17 +454,17 @@ public class StoreOrderService {
     }
 
     // 사용하는 메서드: approve, approveByBatch
-    // 발주 승인 핵심 처리.
-    // 1) 상태를 APPROVED로 전이
-    // 2) 출고/입고 오케스트레이션 실행
-    // 3) 발주 상태 이력 기록
+    // 발주 승인 핵심 처리
     private StoreOrderDto.ApproveRes approveInternal(StoreOrderHeader header, String actorMemberId, String actorName, String reason) {
+        // 1) 발주 상태를 APPROVED로 전이한다.
         Date now = new Date();
         header.markApproved();
 
+        // 2) 출고/입고 오케스트레이션을 실행한다.
         List<StoreOrderItem> items = itemRepository.findAllByOrderHeaderIdOrderByIdAsc(header.getId());
         approvalOrchestrationService.createOutboundInboundForApprovedOrder(header, items, actorMemberId, actorName, reason);
 
+        // 3) 승인 상태 이력을 적재하고 응답을 반환한다.
         appendOrderStatusHistory(header.getId(), StoreOrderStatus.APPROVED.name(), now,
                 actorMemberId, actorName, reason);
         return StoreOrderDto.ApproveRes.from(buildCreateRes(header));
