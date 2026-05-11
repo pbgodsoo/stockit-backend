@@ -7,7 +7,7 @@ metadata:
     app: stockit-be
     color: blue
 spec:
-  replicas: 2
+  replicas: 4
   selector:
     matchLabels:
       app: stockit-be
@@ -72,27 +72,30 @@ spec:
             httpGet:
               path: /actuator/health/readiness
               port: http
-            initialDelaySeconds: 10
+            initialDelaySeconds: 30
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
               port: http
-            initialDelaySeconds: 10
+            initialDelaySeconds: 60
             periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 5
           startupProbe:
             httpGet:
               path: /actuator/health
               port: http
             initialDelaySeconds: 30
             periodSeconds: 10
-            timeoutSeconds: 3
+            timeoutSeconds: 5
             failureThreshold: 30
           resources:
             requests:
               cpu: 250m
-              memory: 512Mi
+              memory: 1536Mi
             limits:
               cpu: 500m
-              memory: 1Gi
-#테스트
+              memory: 3Gi
