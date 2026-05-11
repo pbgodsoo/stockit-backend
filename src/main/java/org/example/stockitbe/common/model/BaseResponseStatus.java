@@ -113,7 +113,8 @@ public enum BaseResponseStatus {
     INVALID_INBOUND_STATUS_TRANSITION(false, 4702, "허용되지 않은 입고 상태 전환입니다."),
     INBOUND_ALREADY_EXISTS_FOR_SOURCE(false, 4703, "해당 발주/이동에 대한 입고가 이미 존재합니다."),
     INBOUND_NOT_CONFIRMABLE(false, 4704, "입고 확정 가능한 상태가 아닙니다."),
-    
+    INBOUND_OUTBOUND_NOT_FOUND(false, 4705, "입고에 연결된 출고 정보를 찾을 수 없습니다."),
+
     // 4900번대~ 창고 출고
     OUTBOUND_NOT_FOUND(false, 4900, "해당 출고 정보를 찾을 수 없습니다."),
     OUTBOUND_INVALID_STATUS_TRANSITION(false, 4901, "허용되지 않은 출고 상태 전환입니다."),
