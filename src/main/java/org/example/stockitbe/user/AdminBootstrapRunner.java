@@ -50,7 +50,7 @@ public class AdminBootstrapRunner implements CommandLineRunner {
                 "01000000002", "ST-SL-0001", "강남 플래그십점",
                 UserRole.STORE, encoded, now);
         createIfMissing("WH-A0001", "warehouse-admin@stockit.com", "창고 관리자",
-                "01000000003", "WH-IC-0001", "인천 송도 국제물류센터",
+                "01000000003", "WH-SL-0001", "서울 도심 풀필먼트 허브",
                 UserRole.WAREHOUSE, encoded, now);
     }
 
