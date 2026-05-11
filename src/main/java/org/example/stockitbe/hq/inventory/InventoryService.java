@@ -409,6 +409,21 @@ public class InventoryService {
     }
 
     /**
+     * 창고간 이동 입고 확정 시 송신 창고 inTransit 재고 차감.
+     * row 부재 시 무시 (정상 흐름에선 moveReservedToInTransit 가 이미 row 를 만들어둠).
+     * NORMAL 한정 — increaseAvailable/markPhysical 과 동일한 status 분리 룰.
+     */
+    @Transactional
+    public void reduceInTransit(Long locationId, String skuCode, int quantity) {
+        if (quantity <= 0) return;
+        ProductSku sku = productSkuRepository.findBySkuCode(skuCode)
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.PRODUCT_SKU_NOT_FOUND));
+
+        inventoryRepository.findBySkuIdAndLocationIdAndInventoryStatus(sku.getId(), locationId, InventoryStatus.NORMAL)
+                .ifPresent(inv -> inv.reduceInTransit(quantity));
+    }
+
+    /**
      * 발주 COMPLETED (입고 확정) 진입 시 가용재고를 실재고로 이동.
      * row 부재 시 신규 INSERT (가용재고 0, 실재고 quantity — SHIPPING 누락된 비정상 케이스 방어).
      */

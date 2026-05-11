@@ -10,14 +10,23 @@ import org.example.stockitbe.hq.inventory.InventoryService;
 import org.example.stockitbe.hq.purchaseorder.PurchaseOrderItemRepository;
 import org.example.stockitbe.hq.purchaseorder.PurchaseOrderRepository;
 import org.example.stockitbe.hq.purchaseorder.PurchaseOrderService;
+import org.example.stockitbe.hq.purchaseorder.PurchaseOrderStatusHistoryRepository;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrder;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderItem;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderStatus;
+import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderStatusHistory;
 import org.example.stockitbe.user.model.AuthUserDetails;
 import org.example.stockitbe.warehouse.inbound.model.InboundType;
 import org.example.stockitbe.warehouse.inbound.model.WhInboundDto;
 import org.example.stockitbe.warehouse.inbound.model.entity.WhInboundHeader;
 import org.example.stockitbe.warehouse.inbound.model.entity.WhInboundItem;
+import org.example.stockitbe.warehouse.outbound.model.OutboundStatus;
+import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundHeader;
+import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundItem;
+import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundStatusHistory;
+import org.example.stockitbe.warehouse.outbound.repository.WhOutboundHeaderRepository;
+import org.example.stockitbe.warehouse.outbound.repository.WhOutboundItemRepository;
+import org.example.stockitbe.warehouse.outbound.repository.WhOutboundStatusHistoryRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -38,16 +48,18 @@ import java.util.stream.Collectors;
  *
  * inbound 자체는 진행 단계 status 컬럼이 없다. 진행 단계의 진실 원천은 source 도메인 —
  *   - PURCHASE_ORDER : PurchaseOrder.status (READY_TO_SHIP/IN_TRANSIT/ARRIVED/COMPLETED)
- *   - WAREHOUSE_TRANSFER : WhOutbound.status (다른 팀원 합류 후 분기 추가)
+ *   - WAREHOUSE_TRANSFER : WhOutbound.status (READY_TO_SHIP/IN_TRANSIT/ARRIVED)
  *
  * inbound 의 책임:
- *   1. createFromPurchaseOrder — READY_TO_SHIP 시점 inbound row INSERT (멱등)
- *   2. confirmInbound — 도착 후 자산 확정 (completedAt + confirmedBy* + 실재고 인식 + PO mirror)
- *   3. findAll/findByCode — inbound + source LEFT JOIN read 로 status 응답 채움
+ *   1. createFromPurchaseOrder / createFromOutbound — source 시점 inbound row INSERT (멱등)
+ *   2. confirmInbound — 도착 후 자산 확정 (completedAt + confirmedBy* + 실재고 인식 + (PO 한정) source mirror)
+ *   3. findAll/findByCode — inbound + source LEFT JOIN read 로 status / statusHistory 응답 채움
  *
  * 인벤토리 hook:
- *   - 가용재고+ : PurchaseOrderService.startInTransit (PR #173 위치)
- *   - 실재고 인식 : confirmInbound 시점 (이번 사이클에 inbound 도메인으로 일원화)
+ *   - PURCHASE_ORDER 가용재고+   : PurchaseOrderService.startInTransit (PR #173 위치, ADR-024)
+ *   - WAREHOUSE_TRANSFER 가용재고+: WhOutboundService.confirm() 의 destinationType=WAREHOUSE 분기 (다른 팀원 영역)
+ *   - 실재고 인식                : confirmInbound 시점 (markPhysical)
+ *   - 송신측 inTransit−          : confirmInbound 의 WAREHOUSE_TRANSFER 분기 (reduceInTransit)
  */
 @Service
 @RequiredArgsConstructor
@@ -61,11 +73,14 @@ public class WhInboundService {
     private final PurchaseOrderService purchaseOrderService;
     private final PurchaseOrderItemRepository purchaseOrderItemRepository;
     private final PurchaseOrderRepository purchaseOrderRepository;
+    private final PurchaseOrderStatusHistoryRepository purchaseOrderStatusHistoryRepository;
+    private final WhOutboundHeaderRepository outboundHeaderRepository;
+    private final WhOutboundItemRepository outboundItemRepository;
+    private final WhOutboundStatusHistoryRepository outboundStatusHistoryRepository;
 
     /**
      * 본사 발주 입고 row 생성 (READY_TO_SHIP 진입 시점에 PurchaseOrderBatchService 가 호출).
      * 멱등 — 같은 sourceRefNo + PURCHASE_ORDER 이미 있으면 기존 return.
-     * inbound 자체 status 컬럼 없음 — 진행 단계는 PO.status 가 진실 원천 (응답은 join 으로 채움).
      */
     @Transactional
     public WhInboundHeader createFromPurchaseOrder(PurchaseOrder po) {
@@ -106,12 +121,70 @@ public class WhInboundService {
     }
 
     /**
+     * 창고간 이동 출고에 연동된 입고 row 생성 — WarehouseTransferService.execute() 의
+     * 다른 팀원 wiring 한 줄 (`whInboundService.createFromOutbound(savedOutbound)`) 에서 호출.
+     * 멱등 — 같은 outboundNo + WAREHOUSE_TRANSFER 이미 있으면 기존 return.
+     * 도착 창고(destinationId) 를 warehouse 로, 출발 창고명을 sourceName 으로 박는다.
+     */
+    @Transactional
+    public WhInboundHeader createFromOutbound(WhOutboundHeader outbound) {
+        Optional<WhInboundHeader> existing = headerRepository.findBySourceRefNoAndInboundType(
+                outbound.getOutboundNo(), InboundType.WAREHOUSE_TRANSFER);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+
+        Infrastructure destinationWarehouse = infrastructureRepository.findById(outbound.getDestinationId())
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.WAREHOUSE_NOT_FOUND));
+        String fromWarehouseName = infrastructureRepository.findById(outbound.getWarehouseId())
+                .map(Infrastructure::getName)
+                .orElse("");
+
+        List<WhOutboundItem> outItems = outboundItemRepository.findAllByOutboundHeaderIdOrderByIdAsc(outbound.getId());
+        long totalQuantity = outItems.stream()
+                .mapToInt(i -> i.getRequestedQuantity() == null ? 0 : i.getRequestedQuantity())
+                .sum();
+
+        WhInboundHeader.WhInboundHeaderBuilder headerBuilder = WhInboundHeader.builder()
+                .inboundType(InboundType.WAREHOUSE_TRANSFER)
+                .sourceRefNo(outbound.getOutboundNo())
+                .sourceRefId(outbound.getId())
+                .warehouse(destinationWarehouse)
+                .warehouseName(destinationWarehouse.getName())
+                .sourceName("창고간 이동 — " + fromWarehouseName)
+                .totalQuantity(totalQuantity)
+                .totalAmount(null);
+
+        // items 시점 복사 — unitPrice/subtotal 은 transfer 에서 의미 약함 (null 허용).
+        List<WhInboundItem> items = outItems.stream()
+                .map(i -> WhInboundItem.builder()
+                        .productCode(i.getProductCode())
+                        .productName(i.getProductName())
+                        .skuCode(i.getSkuCode())
+                        .color(i.getColor())
+                        .size(i.getSize())
+                        .quantity(i.getRequestedQuantity())
+                        .unitPrice(null)
+                        .subtotal(null)
+                        .build())
+                .toList();
+
+        return saveHeaderWithCodeRetry(headerBuilder, items);
+    }
+
+    /**
      * 입고 확정 (도착 후 자산 인식). 창고 [입고 확정] 매뉴얼 트리거.
      * 자기 창고 격리: me.locationCode 의 warehouseId 와 inbound.warehouseId 매칭. 불일치 시 INBOUND_NOT_FOUND.
-     * 책임:
-     *   1. inbound.markConfirmed → completedAt + confirmedBy* 박음
-     *   2. inventoryService.markPhysical → 실재고 인식 (가용 → 실재고 이동)
-     *   3. inboundType 분기 → source 도메인의 종료 단계 호출 (PO.markCompleted 또는 outbound 처리)
+     * 책임 (PURCHASE_ORDER):
+     *   1. PO.status==ARRIVED 검증
+     *   2. inbound.markConfirmed (completedAt + confirmedBy*)
+     *   3. inventoryService.markPhysical (수신 가용→실재고)
+     *   4. purchaseOrderService.completeFromInbound (PO 종료 단계 mirror)
+     * 책임 (WAREHOUSE_TRANSFER):
+     *   1. outbound.status==ARRIVED 검증
+     *   2. inbound.markConfirmed
+     *   3. inventoryService.markPhysical (수신 가용→실재고) + reduceInTransit (송신 inTransit−)
+     *   4. source mirror 없음 — outbound 의 ARRIVED 가 종료 단계
      */
     @Transactional
     public WhInboundHeader confirmInbound(String inboundCode, AuthUserDetails me) {
@@ -123,46 +196,58 @@ public class WhInboundService {
             throw BaseException.from(BaseResponseStatus.INBOUND_NOT_FOUND);
         }
 
-        // PO 의 status==ARRIVED 검증 — 입고 확정 전제. PURCHASE_ORDER 한정.
+        // source 도메인 별 ARRIVED 검증 + 송신 창고 ID 확보 (transfer 한정).
+        Long fromWarehouseId = null;
         if (inbound.getInboundType() == InboundType.PURCHASE_ORDER) {
             PurchaseOrder po = purchaseOrderRepository.findByCode(inbound.getSourceRefNo())
                     .orElseThrow(() -> BaseException.from(BaseResponseStatus.PURCHASE_ORDER_NOT_FOUND));
             if (po.getStatus() != PurchaseOrderStatus.ARRIVED) {
                 throw BaseException.from(BaseResponseStatus.INBOUND_NOT_CONFIRMABLE);
             }
+        } else if (inbound.getInboundType() == InboundType.WAREHOUSE_TRANSFER) {
+            WhOutboundHeader outbound = outboundHeaderRepository.findByOutboundNo(inbound.getSourceRefNo())
+                    .orElseThrow(() -> BaseException.from(BaseResponseStatus.INBOUND_OUTBOUND_NOT_FOUND));
+            if (outbound.getStatus() != OutboundStatus.ARRIVED) {
+                throw BaseException.from(BaseResponseStatus.INBOUND_NOT_CONFIRMABLE);
+            }
+            fromWarehouseId = outbound.getWarehouseId();
         }
 
         String byName = me.getName() + " (" + me.getLocationName() + ")";
         Date now = new Date();
         inbound.markConfirmed(now, me.getEmployeeCode(), byName);
 
-        // 인벤토리 실재고 인식
+        // 인벤토리 hook — 수신 실재고 인식 (양쪽 inboundType 공통)
         List<WhInboundItem> items = itemRepository.findAllByInboundHeaderIdOrderByIdAsc(inbound.getId());
         items.forEach(item -> inventoryService.markPhysical(
                 inbound.getWarehouse().getId(), item.getSkuCode(), item.getQuantity()));
 
-        // source 도메인 mirror — 종료 단계 박음
+        // 인벤토리 hook — 송신측 inTransit 차감 (WAREHOUSE_TRANSFER 한정)
+        if (inbound.getInboundType() == InboundType.WAREHOUSE_TRANSFER && fromWarehouseId != null) {
+            final Long fromId = fromWarehouseId;
+            items.forEach(item -> inventoryService.reduceInTransit(fromId, item.getSkuCode(), item.getQuantity()));
+        }
+
+        // source 도메인 mirror — PURCHASE_ORDER 만 종료 단계 박음.
+        // WAREHOUSE_TRANSFER 는 outbound 의 ARRIVED 가 종료 — mirror 없음.
         if (inbound.getInboundType() == InboundType.PURCHASE_ORDER) {
             purchaseOrderService.completeFromInbound(inbound.getSourceRefNo(), me);
         }
-        // WAREHOUSE_TRANSFER 분기는 다른 팀원 outbound 도메인 합류 후 별 사이클
 
         return inbound;
     }
 
     /**
-     * 자기 창고 입고 목록.
-     * inbound + PO LEFT JOIN read — status 필드를 PO.status 로 채움.
-     * REQUESTED/APPROVED/CANCELLED 상태의 PO 는 입고 화면에서 숨김 (READY_TO_SHIP 이상만 노출).
+     * 자기 창고 입고 목록 — PURCHASE_ORDER + WAREHOUSE_TRANSFER 둘 다 노출.
+     * source 도메인을 batch 조회해 effectiveStatus 산출.
+     * source 가 REQUESTED/APPROVED/CANCELLED 면 입고 화면에서 숨김 (null 반환).
      */
     @Transactional(readOnly = true)
     public List<WhInboundDto.ListRes> findAll(AuthUserDetails me, String statusFilter,
                                               LocalDate from, LocalDate to) {
         Long warehouseId = resolveWarehouseId(me.getLocationCode());
 
-        // inbound row 조회 (PURCHASE_ORDER 만 — transfer 합류 후 분기 추가)
-        List<WhInboundHeader> headers = headerRepository
-                .findAllByWarehouseIdAndInboundTypeOrderByCreatedAtDesc(warehouseId, InboundType.PURCHASE_ORDER);
+        List<WhInboundHeader> headers = headerRepository.findAllByWarehouseIdOrderByCreatedAtDesc(warehouseId);
 
         // 기간 필터
         if (from != null) {
@@ -176,15 +261,11 @@ public class WhInboundService {
 
         if (headers.isEmpty()) return List.of();
 
-        // PO 일괄 조회 (status 진실 원천)
-        Set<String> poCodes = headers.stream()
-                .map(WhInboundHeader::getSourceRefNo)
-                .collect(Collectors.toSet());
-        Map<String, PurchaseOrder> poByCode = purchaseOrderRepository.findAll().stream()
-                .filter(po -> poCodes.contains(po.getCode()))
-                .collect(Collectors.toMap(PurchaseOrder::getCode, Function.identity()));
+        // source 도메인 batch lookup (inboundType 분기)
+        Map<String, PurchaseOrder> poByCode = batchLoadPurchaseOrders(headers);
+        Map<String, WhOutboundHeader> outboundByNo = batchLoadOutbounds(headers);
 
-        // items batch 조회 (N+1 회피). LAZY proxy 의 getId() 는 추가 쿼리 X.
+        // items batch 조회 (N+1 회피)
         List<Long> headerIds = headers.stream().map(WhInboundHeader::getId).toList();
         Map<Long, List<WhInboundItem>> itemsByHeader = itemRepository
                 .findAllByInboundHeaderIdInOrderByIdAsc(headerIds).stream()
@@ -192,8 +273,7 @@ public class WhInboundService {
 
         return headers.stream()
                 .map(h -> {
-                    PurchaseOrder po = poByCode.get(h.getSourceRefNo());
-                    String effectiveStatus = resolveEffectiveStatus(h, po);
+                    String effectiveStatus = resolveEffectiveStatus(h, poByCode, outboundByNo);
                     if (effectiveStatus == null) return null;
                     if (statusFilter != null && !statusFilter.equals(effectiveStatus)) return null;
                     return WhInboundDto.ListRes.from(h, itemsByHeader.getOrDefault(h.getId(), List.of()), effectiveStatus);
@@ -204,7 +284,7 @@ public class WhInboundService {
 
     /**
      * 입고 단건 — 자기 창고 row 만 조회 가능.
-     * status 는 PO.status 와 inbound.completedAt 으로 산출.
+     * statusHistory 는 source 도메인 history join + inbound.completedAt 4단계째 append.
      */
     @Transactional(readOnly = true)
     public WhInboundDto.DetailRes findByCode(AuthUserDetails me, String inboundCode) {
@@ -217,18 +297,25 @@ public class WhInboundService {
         List<WhInboundItem> items = itemRepository
                 .findAllByInboundHeaderIdOrderByIdAsc(inbound.getId());
 
-        PurchaseOrder po = inbound.getInboundType() == InboundType.PURCHASE_ORDER
-                ? purchaseOrderRepository.findByCode(inbound.getSourceRefNo()).orElse(null)
-                : null;
-        String effectiveStatus = resolveEffectiveStatus(inbound, po);
+        String effectiveStatus;
+        List<WhInboundDto.StatusHistoryRes> history;
 
-        return WhInboundDto.DetailRes.from(inbound, items, effectiveStatus);
+        if (inbound.getInboundType() == InboundType.PURCHASE_ORDER) {
+            PurchaseOrder po = purchaseOrderRepository.findByCode(inbound.getSourceRefNo()).orElse(null);
+            effectiveStatus = resolvePoStatus(inbound, po);
+            history = buildPoHistory(inbound, po);
+        } else {
+            WhOutboundHeader outbound = outboundHeaderRepository.findByOutboundNo(inbound.getSourceRefNo()).orElse(null);
+            effectiveStatus = resolveOutboundStatus(inbound, outbound);
+            history = buildOutboundHistory(inbound, outbound);
+        }
+
+        return WhInboundDto.DetailRes.from(inbound, items, effectiveStatus, history);
     }
 
     /**
      * 기존 PO 입고 데이터 → inbound row 일괄 변환.
      * dev/시연 1회성. 멱등 — 이미 inbound row 있으면 skip.
-     * inbound 자체 status 컬럼 없음 — completedAt 만 PO.status==COMPLETED 인 경우 박음.
      */
     @Transactional
     public WhInboundDto.BackfillRes backfillFromPurchaseOrders() {
@@ -301,18 +388,25 @@ public class WhInboundService {
     // ─── helpers ─────────────────────────────────────────────────────────────
 
     /**
-     * inbound + source 도메인의 status 산출 룰:
-     *   - inbound.completedAt != null → "COMPLETED"
-     *   - else → source.status (PO.status 또는 outbound.status)
-     *   - source 가 REQUESTED/APPROVED/CANCELLED 이면 입고 화면에서 숨김 (null 반환)
+     * 목록용 effectiveStatus 산출 — inboundType 분기 후 PO/outbound 분기 status 룰 위임.
      */
-    private String resolveEffectiveStatus(WhInboundHeader inbound, PurchaseOrder po) {
-        if (inbound.getCompletedAt() != null) {
-            return "COMPLETED";
+    private String resolveEffectiveStatus(WhInboundHeader inbound,
+                                          Map<String, PurchaseOrder> poByCode,
+                                          Map<String, WhOutboundHeader> outboundByNo) {
+        if (inbound.getInboundType() == InboundType.PURCHASE_ORDER) {
+            return resolvePoStatus(inbound, poByCode.get(inbound.getSourceRefNo()));
         }
-        if (po == null) {
-            return null;
-        }
+        return resolveOutboundStatus(inbound, outboundByNo.get(inbound.getSourceRefNo()));
+    }
+
+    /**
+     * PO 기반 status 룰:
+     *   - inbound.completedAt != null → "COMPLETED"
+     *   - else → PO.status (READY_TO_SHIP/IN_TRANSIT/ARRIVED/COMPLETED 만 노출, 그 외 null=숨김)
+     */
+    private String resolvePoStatus(WhInboundHeader inbound, PurchaseOrder po) {
+        if (inbound.getCompletedAt() != null) return "COMPLETED";
+        if (po == null) return null;
         return switch (po.getStatus()) {
             case READY_TO_SHIP -> "READY_TO_SHIP";
             case IN_TRANSIT -> "IN_TRANSIT";
@@ -320,6 +414,81 @@ public class WhInboundService {
             case COMPLETED -> "COMPLETED";
             case REQUESTED, APPROVED, CANCELLED -> null;
         };
+    }
+
+    /**
+     * outbound 기반 status 룰:
+     *   - inbound.completedAt != null → "COMPLETED"
+     *   - else → outbound.status (READY_TO_SHIP/IN_TRANSIT/ARRIVED 그대로 노출)
+     */
+    private String resolveOutboundStatus(WhInboundHeader inbound, WhOutboundHeader outbound) {
+        if (inbound.getCompletedAt() != null) return "COMPLETED";
+        if (outbound == null) return null;
+        return switch (outbound.getStatus()) {
+            case READY_TO_SHIP -> "READY_TO_SHIP";
+            case IN_TRANSIT -> "IN_TRANSIT";
+            case ARRIVED -> "ARRIVED";
+        };
+    }
+
+    /**
+     * PO history 매핑 + inbound.completedAt 이 박혀있으면 마지막 COMPLETED 항목 append.
+     * note: PO history 의 PurchaseOrderStatus 중 화면에 안 보이는 단계(REQUESTED/APPROVED/CANCELLED)
+     *       도 그대로 노출 — 입고 화면 FE 가 필터링 책임 (PR #200 패턴).
+     */
+    private List<WhInboundDto.StatusHistoryRes> buildPoHistory(WhInboundHeader inbound, PurchaseOrder po) {
+        if (po == null) {
+            return appendCompletedIfAny(Collections.emptyList(), inbound);
+        }
+        List<PurchaseOrderStatusHistory> rows = purchaseOrderStatusHistoryRepository
+                .findAllByPurchaseOrderIdOrderByChangedAtAsc(po.getId());
+        List<WhInboundDto.StatusHistoryRes> mapped = rows.stream()
+                .map(WhInboundDto.StatusHistoryRes::fromPo)
+                .collect(Collectors.toCollection(ArrayList::new));
+        return appendCompletedIfAny(mapped, inbound);
+    }
+
+    /**
+     * outbound history 매핑 + inbound.completedAt 박힌 경우 마지막 COMPLETED append.
+     */
+    private List<WhInboundDto.StatusHistoryRes> buildOutboundHistory(WhInboundHeader inbound, WhOutboundHeader outbound) {
+        if (outbound == null) {
+            return appendCompletedIfAny(Collections.emptyList(), inbound);
+        }
+        List<WhOutboundStatusHistory> rows = outboundStatusHistoryRepository
+                .findAllByOutboundHeaderIdOrderByChangedAtAscIdAsc(outbound.getId());
+        List<WhInboundDto.StatusHistoryRes> mapped = rows.stream()
+                .map(WhInboundDto.StatusHistoryRes::fromOutbound)
+                .collect(Collectors.toCollection(ArrayList::new));
+        return appendCompletedIfAny(mapped, inbound);
+    }
+
+    private List<WhInboundDto.StatusHistoryRes> appendCompletedIfAny(
+            List<WhInboundDto.StatusHistoryRes> history, WhInboundHeader inbound) {
+        if (inbound.getCompletedAt() == null) return history;
+        history.add(WhInboundDto.StatusHistoryRes.completed(inbound.getCompletedAt(), inbound.getConfirmedByName()));
+        return history;
+    }
+
+    private Map<String, PurchaseOrder> batchLoadPurchaseOrders(List<WhInboundHeader> headers) {
+        Set<String> codes = headers.stream()
+                .filter(h -> h.getInboundType() == InboundType.PURCHASE_ORDER)
+                .map(WhInboundHeader::getSourceRefNo)
+                .collect(Collectors.toSet());
+        if (codes.isEmpty()) return Map.of();
+        return purchaseOrderRepository.findAll().stream()
+                .filter(po -> codes.contains(po.getCode()))
+                .collect(Collectors.toMap(PurchaseOrder::getCode, Function.identity()));
+    }
+
+    private Map<String, WhOutboundHeader> batchLoadOutbounds(List<WhInboundHeader> headers) {
+        List<String> outboundNos = headers.stream()
+                .filter(h -> h.getInboundType() == InboundType.WAREHOUSE_TRANSFER)
+                .map(WhInboundHeader::getSourceRefNo)
+                .toList();
+        if (outboundNos.isEmpty()) return Map.of();
+        return outboundHeaderRepository.findAllByOutboundNoIn(outboundNos).stream()
+                .collect(Collectors.toMap(WhOutboundHeader::getOutboundNo, Function.identity()));
     }
 
     private Long resolveWarehouseId(String locationCode) {

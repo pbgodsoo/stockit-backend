@@ -4,8 +4,10 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderStatusHistory;
 import org.example.stockitbe.warehouse.inbound.model.entity.WhInboundHeader;
 import org.example.stockitbe.warehouse.inbound.model.entity.WhInboundItem;
+import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundStatusHistory;
 
 import java.util.Date;
 import java.util.List;
@@ -104,9 +106,9 @@ public class WhInboundDto {
 
     /**
      * 입고 상세 응답. status 필드는 ListRes 와 동일 룰 (source join).
-     * statusHistory 는 폐기 — 진행 단계 history 는 PO.statusHistory 가 진실 원천이라
-     * 이번 사이클에선 빈 배열 노출 (FE 의 v-if 가드로 자동 hidden).
-     * 후속 사이클에서 PO.statusHistory 매핑 추가 가능.
+     * statusHistory 는 source 도메인 history join — PURCHASE_ORDER 면 PO history,
+     * WAREHOUSE_TRANSFER 면 outbound history. completedAt!=null 이면 service 가
+     * 마지막 COMPLETED 항목을 append 한다 (4단계째).
      */
     @Getter
     @NoArgsConstructor
@@ -129,7 +131,8 @@ public class WhInboundDto {
         private List<ItemRes> items;
         private List<StatusHistoryRes> statusHistory;
 
-        public static DetailRes from(WhInboundHeader header, List<WhInboundItem> items, String status) {
+        public static DetailRes from(WhInboundHeader header, List<WhInboundItem> items,
+                                     String status, List<StatusHistoryRes> statusHistory) {
             return DetailRes.builder()
                     .inboundCode(header.getInboundCode())
                     .inboundType(header.getInboundType().name())
@@ -145,14 +148,15 @@ public class WhInboundDto {
                     .confirmedByName(header.getConfirmedByName())
                     .memo(header.getMemo())
                     .items(items.stream().map(ItemRes::from).collect(Collectors.toList()))
-                    .statusHistory(List.of())
+                    .statusHistory(statusHistory == null ? List.of() : statusHistory)
                     .build();
         }
     }
 
     /**
-     * statusHistory 응답 형태 — 후속 사이클에서 PO.statusHistory 매핑할 때 사용.
-     * 이번 사이클은 DetailRes 에서 빈 배열만 노출.
+     * statusHistory 통일 shape — PO/outbound history 둘 다 같은 shape 으로 노출.
+     *   - PO history → status / changedAt / changedByName / note
+     *   - outbound history → status / changedAt / changedByName / reason
      */
     @Getter
     @NoArgsConstructor
@@ -163,6 +167,33 @@ public class WhInboundDto {
         private Date at;
         private String byName;
         private String note;
+
+        public static StatusHistoryRes fromPo(PurchaseOrderStatusHistory h) {
+            return StatusHistoryRes.builder()
+                    .status(h.getStatus().name())
+                    .at(h.getChangedAt())
+                    .byName(h.getChangedByName())
+                    .note(h.getNote())
+                    .build();
+        }
+
+        public static StatusHistoryRes fromOutbound(WhOutboundStatusHistory h) {
+            return StatusHistoryRes.builder()
+                    .status(h.getStatus().name())
+                    .at(h.getChangedAt())
+                    .byName(h.getChangedByName())
+                    .note(h.getReason())
+                    .build();
+        }
+
+        public static StatusHistoryRes completed(Date at, String byName) {
+            return StatusHistoryRes.builder()
+                    .status("COMPLETED")
+                    .at(at)
+                    .byName(byName)
+                    .note(null)
+                    .build();
+        }
     }
 
     @Getter

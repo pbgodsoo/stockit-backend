@@ -178,4 +178,12 @@ public class Inventory extends BaseEntity {
         this.availableQuantity = n(this.availableQuantity) + safeReceived;
         this.lastMovementAt = new Date();
     }
+
+    // ------------- 창고간 이동 입고 확정 관련 ------------------
+    // 수신 [입고 확정] 시점에 송신 창고 측 inTransit 재고를 차감 (음수 방어).
+    public void reduceInTransit(int delta) {
+        int safeDelta = Math.max(0, delta);
+        this.inTransitQuantity = Math.max(0, n(this.inTransitQuantity) - safeDelta);
+        this.lastMovementAt = new Date();
+    }
 }

@@ -7,7 +7,9 @@ import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
 import org.example.stockitbe.hq.inventory.InventoryRepository;
+import org.example.stockitbe.hq.inventory.InventoryService;
 import org.example.stockitbe.hq.inventory.model.InventoryStatusPolicy;
+import org.example.stockitbe.warehouse.inbound.WhInboundService;
 import org.example.stockitbe.hq.product.ProductMasterRepository;
 import org.example.stockitbe.hq.product.ProductSkuRepository;
 import org.example.stockitbe.hq.product.model.ProductMaster;
@@ -51,9 +53,11 @@ public class WarehouseTransferService {
     private final ProductSkuRepository productSkuRepository;
     private final ProductMasterRepository productMasterRepository;
     private final InventoryRepository inventoryRepository;
+    private final InventoryService inventoryService;
     private final WhOutboundHeaderRepository outboundHeaderRepository;
     private final WhOutboundItemRepository outboundItemRepository;
     private final WhOutboundStatusHistoryRepository outboundStatusHistoryRepository;
+    private final WhInboundService whInboundService;
     private final PlatformTransactionManager transactionManager;
 
     // 재고이동 실행
@@ -138,6 +142,13 @@ public class WarehouseTransferService {
                             .toAvailableAfter(toBefore + qty)
                             .build()
             ));
+
+            // 출발 창고 가용재고를 reserved 로 예약 (PO 매장발주 승인과 동일 패턴).
+            // 송신 [출고 확정] 시 moveReservedToInTransit 가 이 reserved 를 inTransit 으로 옮긴다.
+            int reserved = inventoryService.reserveForOutboundUpTo(context.fromWarehouse.getId(), sku.getId(), qty);
+            if (reserved != qty) {
+                throw BaseException.from(BaseResponseStatus.OUTBOUND_RESERVED_STOCK_NOT_ENOUGH);
+            }
 
             lineResults.add(WarehouseTransferDto.ExecuteLineResultRes.from(line, transferNo, "SUCCESS"));
         }
@@ -639,6 +650,10 @@ public class WarehouseTransferService {
                             .build()
             );
         }
+
+        // 4) 도착 창고 입고 도큐먼트 mirror INSERT — ERP GRN 패턴.
+        //    inbound 측이 멱등 보장 (findBySourceRefNoAndInboundType).
+        whInboundService.createFromOutbound(outbound);
     }
 
     // WH_TRANSFER 출고 헤더 멱등 upsert

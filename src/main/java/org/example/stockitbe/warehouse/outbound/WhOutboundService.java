@@ -147,11 +147,17 @@ public class WhOutboundService {
         }
 
         // 3) 출고 라인별로 예약재고를 이동중 재고로 전이한다.
+        //    destinationType=WAREHOUSE (창고간 이동) 인 경우 도착 창고 가용재고+ 도 같은 시점에 박는다.
+        //    — PO 의 startInTransit 시점에 도착 창고 가용+ 와 동일 패턴 (ADR-024).
         List<WhOutboundItem> items = outboundItemRepository.findAllByOutboundHeaderIdOrderByIdAsc(header.getId());
+        boolean toWarehouse = header.getDestinationType() == OutboundDestinationType.WAREHOUSE;
         for (WhOutboundItem item : items) {
             int moved = inventoryService.moveReservedToInTransit(header.getWarehouseId(), item.getSkuId(), item.getRequestedQuantity());
             if (moved != item.getRequestedQuantity()) {
                 throw BaseException.from(BaseResponseStatus.OUTBOUND_RESERVED_STOCK_NOT_ENOUGH);
+            }
+            if (toWarehouse) {
+                inventoryService.increaseAvailable(header.getDestinationId(), item.getSkuCode(), item.getRequestedQuantity());
             }
         }
 
