@@ -18,6 +18,7 @@ spec:
         app: stockit-be
         color: blue
     spec:
+      terminationGracePeriodSeconds: 25
       containers:
         - name: stockit-be
           image: sunyeoplee/stockit-backend:latest
@@ -84,6 +85,13 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 5
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - sleep 7
           startupProbe:
             httpGet:
               path: /actuator/health
