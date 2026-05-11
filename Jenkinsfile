@@ -111,7 +111,7 @@ spec:
                           exit 1
                         fi
 
-                        TARGET_REPLICAS=2
+                        TARGET_REPLICAS=5
                         SOURCE_REPLICAS=0
 
                         echo "[BlueGreen] active=\${ACTIVE_COLOR}, target=\${TARGET_COLOR}"
@@ -127,7 +127,7 @@ spec:
 
                         ./kubectl rollout status deployment/stockit-be-\${TARGET_COLOR} \
                           --namespace=${K8S_NAMESPACE} \
-                          --timeout=420s
+                          --timeout=900s
 
                         ./kubectl patch svc stockit-be \
                           --namespace=${K8S_NAMESPACE} \
@@ -164,7 +164,7 @@ spec:
                         fi
 
                         ./kubectl scale deployment/stockit-be-\${ACTIVE_COLOR} \
-                          --replicas=2 \
+                          --replicas=5 \
                           --namespace=${K8S_NAMESPACE}
 
                         if [ -n "\${TARGET_COLOR}" ]; then

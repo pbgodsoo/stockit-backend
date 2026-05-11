@@ -26,12 +26,12 @@ services:
     image: pbgodsoo/stockit-be:latest
     container_name: stockit-be
     restart: unless-stopped
-    mem_limit: 3g
+    mem_limit: 5g
     depends_on:
       mariadb:
         condition: service_healthy
     environment:
-      JAVA_TOOL_OPTIONS: "-Xms1g -Xmx2g"
+      JAVA_TOOL_OPTIONS: "-Xms1g -Xmx3g"
       SPRING_PROFILES_ACTIVE: prod
       DB_URL: jdbc:mariadb://mariadb:3306/stockit
       DB_USER: stockit
