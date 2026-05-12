@@ -74,6 +74,7 @@ public enum BaseResponseStatus {
     PURCHASE_ORDER_VENDOR_PRODUCT_MISMATCH(false, 4303, "발주 공급처와 품목의 공급처가 일치하지 않습니다."),
     PURCHASE_ORDER_CANCEL_REASON_REQUIRED(false, 4304, "발주 취소 사유는 필수입니다."),
     PURCHASE_ORDER_SKU_PRODUCT_MISMATCH(false, 4305, "발주 품목의 SKU가 공급처 계약 제품의 옵션이 아닙니다."),
+    PURCHASE_ORDER_BATCH_EMPTY(false, 4306, "분할 발주에 품목이 없습니다."),
 
     // 4400번대~ 순환재고 거래처 (ADR-020 / ADR-021)
     CIRCULAR_BUYER_NOT_FOUND(false, 4400, "순환재고 거래처를 찾을 수 없습니다."),

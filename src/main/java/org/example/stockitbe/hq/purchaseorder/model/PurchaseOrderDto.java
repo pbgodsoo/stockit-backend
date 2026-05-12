@@ -84,6 +84,30 @@ public class PurchaseOrderDto {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
+    public static class BatchCreateReq {
+        @NotBlank
+        private String warehouseCode;
+        private String memberId;
+        private String memberName;
+        @Valid
+        @NotEmpty
+        private List<ItemReq> items;
+    }
+
+    @Getter
+    @AllArgsConstructor
+    @Builder
+    public static class BatchCreateRes {
+        private List<DetailRes> orders;     // vendorName ASC 정렬
+        private Integer vendorCount;
+        private Integer itemCount;
+        private Long totalAmount;
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     public static class UpdateReq {
         @NotBlank
         private String warehouseCode;
