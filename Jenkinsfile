@@ -124,7 +124,7 @@ spec:
                           ./kubectl get endpoints stockit-be \
                             --namespace=${K8S_NAMESPACE} \
                             -o jsonpath='{range .subsets[*].addresses[*]}{.ip}{"\n"}{end}' 2>/dev/null | \
-                            grep -cE '^[0-9a-fA-F:.]+$' || true
+                            grep -cE '^[0-9a-fA-F:.]+\$' || true
                         }
 
                         log "[BlueGreen] active=\${ACTIVE_COLOR}, target=\${TARGET_COLOR}"
