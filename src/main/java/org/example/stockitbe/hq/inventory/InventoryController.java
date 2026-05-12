@@ -16,6 +16,7 @@ import java.util.List;
 public class InventoryController {
 
     private final InventoryService inventoryService;
+    private final InventoryQueryService inventoryQueryService;
 
     @GetMapping("/company-wide")
     public BaseResponse<InventoryDto.CompanyWidePageRes> getCompanyWide(
@@ -26,7 +27,7 @@ public class InventoryController {
             @RequestParam(required = false) InventoryStatus status,
             @RequestParam(required = false) String keyword
     ) {
-        return BaseResponse.success(inventoryService.findCompanyWide(locationType, locationIds, parentCategory, childCategory, status, keyword));
+        return BaseResponse.success(inventoryQueryService.findCompanyWide(locationType, locationIds, parentCategory, childCategory, status, keyword));
     }
 
     @GetMapping("/company-wide/{itemCode}/skus")
@@ -39,7 +40,7 @@ public class InventoryController {
             @RequestParam(required = false) InventoryStatus status,
             @RequestParam(required = false) String keyword
     ) {
-        return BaseResponse.success(inventoryService.findCompanyWideSkuDetails(itemCode, locationType, locationIds, parentCategory, childCategory, status, keyword));
+        return BaseResponse.success(inventoryQueryService.findCompanyWideSkuDetails(itemCode, locationType, locationIds, parentCategory, childCategory, status, keyword));
     }
 
     @PostMapping("/circular-candidates/refresh")
