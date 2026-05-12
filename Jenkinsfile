@@ -123,8 +123,8 @@ spec:
                         get_ready_endpoint_count() {
                           ./kubectl get endpoints stockit-be \
                             --namespace=${K8S_NAMESPACE} \
-                            -o jsonpath='{range .subsets[*].addresses[*]}{.targetRef.name}{"\n"}{end}' 2>/dev/null | \
-                            grep -c "stockit-be-\${TARGET_COLOR}" || true
+                            -o jsonpath='{range .subsets[*].addresses[*]}{.ip}{"\n"}{end}' 2>/dev/null | \
+                            grep -cE '^[0-9a-fA-F:.]+\$' || true
                         }
 
                         log "[BlueGreen] active=\${ACTIVE_COLOR}, target=\${TARGET_COLOR}"
