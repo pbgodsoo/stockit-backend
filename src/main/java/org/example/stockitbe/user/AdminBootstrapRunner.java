@@ -43,13 +43,13 @@ public class AdminBootstrapRunner implements CommandLineRunner {
         String encoded = passwordEncoder.encode(adminPassword);
         LocalDateTime now = LocalDateTime.now();
 
-        createIfMissing("HQ-A0001", "hq-admin@stockit.com", "본사 관리자",
+        createIfMissing("hq0001", "hq-admin@stockit.com", "김본사",
                 "01000000001", "HQ-CENTER", "본사 본부",
                 UserRole.HQ, encoded, now);
-        createIfMissing("ST-A0001", "store-admin@stockit.com", "매장 관리자",
+        createIfMissing("st0001", "store-admin@stockit.com", "김매장",
                 "01000000002", "ST-SL-0001", "강남 플래그십점",
                 UserRole.STORE, encoded, now);
-        createIfMissing("WH-A0001", "warehouse-admin@stockit.com", "창고 관리자",
+        createIfMissing("wh0001", "warehouse-admin@stockit.com", "김창고",
                 "01000000003", "WH-SL-0001", "서울 도심 풀필먼트 허브",
                 UserRole.WAREHOUSE, encoded, now);
     }
