@@ -41,6 +41,13 @@ public class PurchaseOrderController {
         return BaseResponse.success(service.create(req, me));
     }
 
+    @PostMapping("/batch")
+    public BaseResponse<PurchaseOrderDto.BatchCreateRes> createBatch(
+            @AuthenticationPrincipal AuthUserDetails me,
+            @Valid @RequestBody PurchaseOrderDto.BatchCreateReq req) {
+        return BaseResponse.success(service.createBatch(req, me));
+    }
+
     @PatchMapping("/{code}")
     public BaseResponse<PurchaseOrderDto.DetailRes> update(@PathVariable String code,
                                                              @Valid @RequestBody PurchaseOrderDto.UpdateReq req) {

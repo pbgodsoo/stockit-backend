@@ -29,8 +29,10 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -101,7 +103,7 @@ public class PurchaseOrderService {
         Vendor vendor = lookupVendor(req.getVendorCode());
         Infrastructure warehouse = lookupWarehouse(req.getWarehouseCode());
 
-        // items 의 vendorProduct 모두 조회 + vendor 일치 검증
+        // items 의 vendorProduct 모두 조회 + vendor 일치 검증 (한 발주 = 한 vendor 정책)
         List<VendorProduct> vendorProducts = req.getItems().stream()
                 .map(itemReq -> {
                     VendorProduct vp = lookupVendorProduct(itemReq.getVendorProductCode());
@@ -122,27 +124,132 @@ public class PurchaseOrderService {
             }
         }
 
-        long totalAmount = 0L;
-        for (int i = 0; i < req.getItems().size(); i++) {
-            totalAmount += skus.get(i).getUnitPrice() * req.getItems().get(i).getQuantity();
-        }
-
         String code = generateCode();
-        PurchaseOrder entity = req.toEntity(vendor, warehouse, code, totalAmount);
-
-        // 자식 items 메모리 동기화 — replaceItems 가 부모-자식 양방향 + totalAmount 재계산.
-        List<PurchaseOrderItem> items = new ArrayList<>();
-        for (int i = 0; i < req.getItems().size(); i++) {
-            items.add(req.getItems().get(i).toEntity(vendorProducts.get(i), skus.get(i)));
-        }
-        entity.replaceItems(items);
-
-        // 부모 save → cascade=ALL 이 자식 INSERT 자동 처리.
-        PurchaseOrder saved = purchaseOrderRepository.save(entity);
-
-        appendHistory(saved, null, me);
+        PurchaseOrder saved = buildAndSaveOrder(
+                vendor, warehouse, req.getItems(), vendorProducts, skus,
+                code, req.getMemberId(), req.getMemberName(), me);
 
         return buildDetailRes(saved);
+    }
+
+    /**
+     * 멀티 공급처 장바구니 → 공급처별 자동 분할 발주 N건 생성.
+     *
+     * vendorProductCode → Vendor 매핑으로 자동 그룹핑. 1건이라도 실패하면 단일 @Transactional 롤백으로
+     * N건 모두 미생성. FE 는 단일 items 배열만 보낸다 (vendorCode 없음).
+     *
+     * 응답 orders 는 vendorName ASC 정렬 (FE 표시 안정성).
+     */
+    @Transactional
+    public PurchaseOrderDto.BatchCreateRes createBatch(PurchaseOrderDto.BatchCreateReq req, AuthUserDetails me) {
+        if (req.getItems() == null || req.getItems().isEmpty()) {
+            throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_BATCH_EMPTY);
+        }
+
+        Infrastructure warehouse = lookupWarehouse(req.getWarehouseCode());
+
+        int n = req.getItems().size();
+        List<VendorProduct> vendorProducts = new ArrayList<>(n);
+        List<ProductSku> skus = new ArrayList<>(n);
+        for (PurchaseOrderDto.ItemReq itemReq : req.getItems()) {
+            VendorProduct vp = lookupVendorProduct(itemReq.getVendorProductCode());
+            ProductSku sku = lookupSku(itemReq.getSkuCode());
+            if (!sku.getProductCode().equals(vp.getProductCode())) {
+                throw BaseException.from(BaseResponseStatus.PURCHASE_ORDER_SKU_PRODUCT_MISMATCH);
+            }
+            vendorProducts.add(vp);
+            skus.add(sku);
+        }
+
+        // vendor.id 로 그룹핑 — LinkedHashMap 으로 첫 등장 순서 보존 (디버깅 친화)
+        Map<Long, List<Integer>> groupedIndices = new LinkedHashMap<>();
+        Map<Long, Vendor> vendorById = new HashMap<>();
+        for (int i = 0; i < n; i++) {
+            Vendor vendor = vendorProducts.get(i).getVendor();
+            Long vid = vendor.getId();
+            vendorById.putIfAbsent(vid, vendor);
+            groupedIndices.computeIfAbsent(vid, k -> new ArrayList<>()).add(i);
+        }
+
+        // 코드 시퀀스 base 1회 계산 — 같은 트랜잭션 내 미커밋 INSERT 가 countByCodeStartingWith 에 잡히지 않아
+        // generateCode() N번 호출 시 모두 같은 NNNNN 받아 UNIQUE 제약 위반. base + i 인라인으로 회피.
+        String today = LocalDate.now().format(CODE_DATE_FORMAT);
+        String prefix = "PO-" + today + "-";
+        long baseSeq = purchaseOrderRepository.countByCodeStartingWith(prefix) + 1;
+
+        List<PurchaseOrder> savedOrders = new ArrayList<>();
+        int groupIdx = 0;
+        for (Map.Entry<Long, List<Integer>> entry : groupedIndices.entrySet()) {
+            Vendor vendor = vendorById.get(entry.getKey());
+            List<Integer> indices = entry.getValue();
+            List<PurchaseOrderDto.ItemReq> groupItems = new ArrayList<>(indices.size());
+            List<VendorProduct> groupVps = new ArrayList<>(indices.size());
+            List<ProductSku> groupSkus = new ArrayList<>(indices.size());
+            for (Integer idx : indices) {
+                groupItems.add(req.getItems().get(idx));
+                groupVps.add(vendorProducts.get(idx));
+                groupSkus.add(skus.get(idx));
+            }
+            String code = String.format("%s%05d", prefix, baseSeq + groupIdx);
+            PurchaseOrder saved = buildAndSaveOrder(
+                    vendor, warehouse, groupItems, groupVps, groupSkus,
+                    code, req.getMemberId(), req.getMemberName(), me);
+            savedOrders.add(saved);
+            groupIdx++;
+        }
+
+        savedOrders.sort(Comparator.comparing(PurchaseOrder::getVendorName));
+
+        List<PurchaseOrderDto.DetailRes> details = savedOrders.stream()
+                .map(this::buildDetailRes)
+                .toList();
+        long totalAmount = savedOrders.stream().mapToLong(PurchaseOrder::getTotalAmount).sum();
+        int itemCount = savedOrders.stream().mapToInt(po -> po.getItems().size()).sum();
+
+        return PurchaseOrderDto.BatchCreateRes.builder()
+                .orders(details)
+                .vendorCount(savedOrders.size())
+                .itemCount(itemCount)
+                .totalAmount(totalAmount)
+                .build();
+    }
+
+    /**
+     * 발주 한 건 entity 빌드 + save + REQUESTED 이력 추가.
+     * 단일 create / batch createBatch 두 흐름에서 공유 — @Transactional self-invocation 회피 위해
+     * private helper 추출 (Spring AOP 가 같은 클래스 self-invocation 에서 트랜잭션 전파 보장하지 않을 수 있음).
+     */
+    private PurchaseOrder buildAndSaveOrder(
+            Vendor vendor,
+            Infrastructure warehouse,
+            List<PurchaseOrderDto.ItemReq> items,
+            List<VendorProduct> vendorProducts,
+            List<ProductSku> skus,
+            String code,
+            String memberId,
+            String memberName,
+            AuthUserDetails me) {
+        PurchaseOrder entity = PurchaseOrder.builder()
+                .code(code)
+                .vendor(vendor)
+                .vendorName(vendor.getName())
+                .vendorContactName(vendor.getContactName())
+                .warehouse(warehouse)
+                .warehouseName(warehouse.getName())
+                .memberId(memberId)
+                .memberName(memberName)
+                .totalAmount(0L)   // replaceItems 가 재계산
+                .build();
+
+        List<PurchaseOrderItem> poItems = new ArrayList<>(items.size());
+        for (int i = 0; i < items.size(); i++) {
+            poItems.add(items.get(i).toEntity(vendorProducts.get(i), skus.get(i)));
+        }
+        entity.replaceItems(poItems);
+
+        PurchaseOrder saved = purchaseOrderRepository.save(entity);
+        appendHistory(saved, null, me);
+        return saved;
     }
 
     @Transactional
