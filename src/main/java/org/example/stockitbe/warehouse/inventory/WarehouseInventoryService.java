@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class WarehouseInventoryService {
+    private static final List<String> MAIN_CATEGORY_ORDER = List.of("상의", "바지", "치마", "아우터");
 
     private final InfrastructureRepository infrastructureRepository;
     private final InventoryRepository inventoryRepository;
@@ -82,17 +83,17 @@ public class WarehouseInventoryService {
         grouped.values().forEach(acc -> acc.safetyStock = acc.skuIds.size() * n(context.masterByCode.get(acc.itemCode).getWarehouseSafetyStock()));
 
         return grouped.values().stream()
-                .map(acc -> WarehouseInventoryDto.ItemRes.builder()
-                        .itemCode(acc.itemCode)
-                        .parentCategory(acc.parentCategory)
-                        .childCategory(acc.childCategory)
-                        .itemName(acc.itemName)
-                        .actualStock(acc.actualStock)
-                        .availableStock(acc.availableStock)
-                        .safetyStock(acc.safetyStock)
-                        .status(resolveStatus(acc.availableStock, acc.safetyStock))
-                        .updatedAt(acc.updatedAt)
-                        .build())
+                .map(acc -> WarehouseInventoryDto.ItemRes.from(
+                        acc.itemCode,
+                        acc.parentCategory,
+                        acc.childCategory,
+                        acc.itemName,
+                        acc.actualStock,
+                        acc.availableStock,
+                        acc.safetyStock,
+                        resolveStatus(acc.availableStock, acc.safetyStock),
+                        acc.updatedAt
+                ))
                 .sorted(Comparator
                         .comparing(WarehouseInventoryDto.ItemRes::getParentCategory, this::compareMainCategory)
                         .thenComparing(WarehouseInventoryDto.ItemRes::getChildCategory, Comparator.nullsLast(String::compareTo))
@@ -124,16 +125,16 @@ public class WarehouseInventoryService {
         }
 
         return grouped.values().stream()
-                .map(acc -> WarehouseInventoryDto.SkuRes.builder()
-                        .skuCode(acc.skuCode)
-                        .color(acc.color)
-                        .size(acc.size)
-                        .actualStock(acc.actualStock)
-                        .availableStock(acc.availableStock)
-                        .safetyStock(acc.safetyStock)
-                        .status(resolveStatus(acc.availableStock, acc.safetyStock))
-                        .updatedAt(acc.updatedAt)
-                        .build())
+                .map(acc -> WarehouseInventoryDto.SkuRes.from(
+                        acc.skuCode,
+                        acc.color,
+                        acc.size,
+                        acc.actualStock,
+                        acc.availableStock,
+                        acc.safetyStock,
+                        resolveStatus(acc.availableStock, acc.safetyStock),
+                        acc.updatedAt
+                ))
                 .sorted(Comparator
                         .comparing(WarehouseInventoryDto.SkuRes::getColor, Comparator.nullsLast(String::compareTo))
                         .thenComparing(WarehouseInventoryDto.SkuRes::getSize, Comparator.nullsLast(String::compareTo)))
@@ -153,16 +154,16 @@ public class WarehouseInventoryService {
 
         int available = n(inventory.getAvailableQuantity());
         int safety = n(master.getWarehouseSafetyStock());
-        return WarehouseInventoryDto.SkuRes.builder()
-                .skuCode(sku.getSkuCode())
-                .color(sku.getColor())
-                .size(sku.getSize())
-                .actualStock(n(inventory.getQuantity()))
-                .availableStock(available)
-                .safetyStock(safety)
-                .status(resolveStatus(available, safety))
-                .updatedAt(inventory.getUpdatedAt())
-                .build();
+        return WarehouseInventoryDto.SkuRes.from(
+                sku.getSkuCode(),
+                sku.getColor(),
+                sku.getSize(),
+                n(inventory.getQuantity()),
+                available,
+                safety,
+                resolveStatus(available, safety),
+                inventory.getUpdatedAt()
+        );
     }
 
     private Context buildContext(List<Inventory> inventories) {
@@ -193,11 +194,10 @@ public class WarehouseInventoryService {
     }
 
     private int compareMainCategory(String a, String b) {
-        List<String> order = List.of("상의", "바지", "치마", "아우터");
-        int ai = order.indexOf(a);
-        int bi = order.indexOf(b);
-        ai = ai < 0 ? order.size() : ai;
-        bi = bi < 0 ? order.size() : bi;
+        int ai = MAIN_CATEGORY_ORDER.indexOf(a);
+        int bi = MAIN_CATEGORY_ORDER.indexOf(b);
+        ai = ai < 0 ? MAIN_CATEGORY_ORDER.size() : ai;
+        bi = bi < 0 ? MAIN_CATEGORY_ORDER.size() : bi;
         if (ai != bi) return Integer.compare(ai, bi);
         return String.valueOf(a).compareTo(String.valueOf(b));
     }

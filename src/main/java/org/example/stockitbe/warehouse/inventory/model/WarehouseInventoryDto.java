@@ -19,6 +19,28 @@ public class WarehouseInventoryDto {
         private Integer safetyStock;
         private String status;
         private Date updatedAt;
+
+        public static ItemRes from(String itemCode,
+                                   String parentCategory,
+                                   String childCategory,
+                                   String itemName,
+                                   int actualStock,
+                                   int availableStock,
+                                   int safetyStock,
+                                   String status,
+                                   Date updatedAt) {
+            return ItemRes.builder()
+                    .itemCode(itemCode)
+                    .parentCategory(parentCategory)
+                    .childCategory(childCategory)
+                    .itemName(itemName)
+                    .actualStock(actualStock)
+                    .availableStock(availableStock)
+                    .safetyStock(safetyStock)
+                    .status(status)
+                    .updatedAt(updatedAt)
+                    .build();
+        }
     }
 
     @Getter
@@ -32,5 +54,25 @@ public class WarehouseInventoryDto {
         private Integer safetyStock;
         private String status;
         private Date updatedAt;
+
+        public static SkuRes from(String skuCode,
+                                  String color,
+                                  String size,
+                                  int actualStock,
+                                  int availableStock,
+                                  int safetyStock,
+                                  String status,
+                                  Date updatedAt) {
+            return SkuRes.builder()
+                    .skuCode(skuCode)
+                    .color(color)
+                    .size(size)
+                    .actualStock(actualStock)
+                    .availableStock(availableStock)
+                    .safetyStock(safetyStock)
+                    .status(status)
+                    .updatedAt(updatedAt)
+                    .build();
+        }
     }
 }
