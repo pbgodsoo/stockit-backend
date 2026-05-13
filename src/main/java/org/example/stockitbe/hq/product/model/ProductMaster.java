@@ -11,9 +11,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "product_master", uniqueConstraints = {
+@Table(name = "product_master",
+    uniqueConstraints = {
         @UniqueConstraint(name = "uk_product_master_code", columnNames = "code")
-})
+    },
+    // category_code 인덱스 — 전사재고 5-way JOIN 의 product_master ↔ category 단계 가속.
+    indexes = {
+        @Index(name = "idx_product_master_category_code", columnList = "category_code")
+    }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ProductMaster extends BaseEntity {

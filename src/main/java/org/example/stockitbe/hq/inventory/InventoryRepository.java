@@ -1,8 +1,13 @@
 package org.example.stockitbe.hq.inventory;
 
 import jakarta.persistence.LockModeType;
+import org.example.stockitbe.hq.inventory.model.CompanyWideAggregateRow;
 import org.example.stockitbe.hq.inventory.model.Inventory;
 import org.example.stockitbe.hq.inventory.model.InventoryStatus;
+import org.example.stockitbe.hq.inventory.model.ItemSafetyStockRow;
+import org.example.stockitbe.warehouse.inventory.model.WarehouseAggregateRow;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -137,4 +142,211 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
                                    @Param("toDt") Date toDt,
                                    @Param("scope") String scope,
                                    @Param("locationCode") String locationCode);
+
+    /**
+     * 전사 재고(품목 단위) 집계 페이지네이션.
+     * GROUP BY product_master.code 로 itemCode 단위 합산 후 LIMIT/OFFSET.
+     * safetyStock + UI status 라벨은 호출자(서비스) 가 페이지 후 메모리에서 계산.
+     *
+     * locationIds 가 비어있을 때 IN 절 SQL 에러를 피하기 위해 hasLocationIds 플래그 + 더미 리스트 패턴.
+     */
+    @Query(value = """
+        SELECT
+            pm.code AS itemCode,
+            pm.name AS itemName,
+            COALESCE(pc.name, cc.name) AS parentCategory,
+            cc.name AS childCategory,
+            COALESCE(SUM(i.quantity), 0) AS actualStock,
+            COALESCE(SUM(i.available_quantity), 0) AS availableStock,
+            MAX(i.update_date) AS updatedAt
+        FROM inventory i
+        JOIN product_sku ps ON ps.id = i.sku_id
+        JOIN product_master pm ON pm.code = ps.product_code
+        JOIN infrastructure inf ON inf.id = i.location_id
+        LEFT JOIN category cc ON cc.code = pm.category_code
+        LEFT JOIN category pc ON pc.id = cc.parent_id
+        WHERE i.inventory_status IN ('NORMAL', 'CIRCULAR_CANDIDATE')
+          AND (:locationType IS NULL OR inf.location_type = :locationType)
+          AND (:hasLocationIds = false OR inf.id IN (:locationIds))
+          AND (:status IS NULL OR i.inventory_status = :status)
+          AND (:parentCategory IS NULL OR COALESCE(pc.name, cc.name) = :parentCategory)
+          AND (:childCategory IS NULL OR cc.name = :childCategory)
+          AND (:keyword IS NULL OR (
+               LOWER(pm.code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(pm.name) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(ps.sku_code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(inf.code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(inf.name) LIKE CONCAT('%', LOWER(:keyword), '%')
+          ))
+        GROUP BY pm.code, pm.name, cc.name, pc.name
+        ORDER BY pm.code ASC
+        """,
+        countQuery = """
+        SELECT COUNT(*) FROM (
+          SELECT pm.code
+          FROM inventory i
+          JOIN product_sku ps ON ps.id = i.sku_id
+          JOIN product_master pm ON pm.code = ps.product_code
+          JOIN infrastructure inf ON inf.id = i.location_id
+          LEFT JOIN category cc ON cc.code = pm.category_code
+          LEFT JOIN category pc ON pc.id = cc.parent_id
+          WHERE i.inventory_status IN ('NORMAL', 'CIRCULAR_CANDIDATE')
+            AND (:locationType IS NULL OR inf.location_type = :locationType)
+            AND (:hasLocationIds = false OR inf.id IN (:locationIds))
+            AND (:status IS NULL OR i.inventory_status = :status)
+            AND (:parentCategory IS NULL OR COALESCE(pc.name, cc.name) = :parentCategory)
+            AND (:childCategory IS NULL OR cc.name = :childCategory)
+            AND (:keyword IS NULL OR (
+                 LOWER(pm.code) LIKE CONCAT('%', LOWER(:keyword), '%')
+              OR LOWER(pm.name) LIKE CONCAT('%', LOWER(:keyword), '%')
+              OR LOWER(ps.sku_code) LIKE CONCAT('%', LOWER(:keyword), '%')
+              OR LOWER(inf.code) LIKE CONCAT('%', LOWER(:keyword), '%')
+              OR LOWER(inf.name) LIKE CONCAT('%', LOWER(:keyword), '%')
+            ))
+          GROUP BY pm.code
+        ) sub
+        """,
+        nativeQuery = true)
+    Page<CompanyWideAggregateRow> findCompanyWideAggregated(
+            @Param("locationType") String locationType,
+            @Param("hasLocationIds") boolean hasLocationIds,
+            @Param("locationIds") List<Long> locationIds,
+            @Param("status") String status,
+            @Param("parentCategory") String parentCategory,
+            @Param("childCategory") String childCategory,
+            @Param("keyword") String keyword,
+            Pageable pageable
+    );
+
+    /**
+     * 전사 재고 페이지 후 itemCode 별 safetyStock 집계.
+     * (sku, location) DISTINCT 별로 location_type 따라 store/warehouse safety_stock 합산.
+     * 메인 페이지 query 와 같은 outer 필터 (locationType, locationIds, status) 적용.
+     */
+    @Query(value = """
+        SELECT sub.code AS itemCode, COALESCE(SUM(sub.safety_per), 0) AS safetyStock
+        FROM (
+          SELECT DISTINCT pm.code AS code, i.sku_id, i.location_id,
+                 CASE WHEN inf.location_type = 'WAREHOUSE'
+                      THEN COALESCE(pm.warehouse_safety_stock, 0)
+                      ELSE COALESCE(pm.store_safety_stock, 0)
+                 END AS safety_per
+          FROM inventory i
+          JOIN product_sku ps ON ps.id = i.sku_id
+          JOIN product_master pm ON pm.code = ps.product_code
+          JOIN infrastructure inf ON inf.id = i.location_id
+          WHERE pm.code IN (:itemCodes)
+            AND i.inventory_status IN ('NORMAL', 'CIRCULAR_CANDIDATE')
+            AND (:locationType IS NULL OR inf.location_type = :locationType)
+            AND (:hasLocationIds = false OR inf.id IN (:locationIds))
+            AND (:status IS NULL OR i.inventory_status = :status)
+        ) sub
+        GROUP BY sub.code
+        """,
+        nativeQuery = true)
+    List<ItemSafetyStockRow> aggregateSafetyStockByItemCode(
+            @Param("itemCodes") List<String> itemCodes,
+            @Param("locationType") String locationType,
+            @Param("hasLocationIds") boolean hasLocationIds,
+            @Param("locationIds") List<Long> locationIds,
+            @Param("status") String status
+    );
+
+    /**
+     * 창고 재고(품목 단위) 집계 페이지네이션.
+     * 단일 창고(locationId) 기준, GROUP BY product_master.code.
+     * safetyStock = COUNT(DISTINCT sku_id) * pm.warehouse_safety_stock 으로 SQL 단계 계산.
+     * status UI 라벨(품절/부족/정상) 도 SQL CASE 로 계산해 HAVING 으로 필터.
+     * 정렬 = 메인 카테고리 우선순위 (상의/바지/치마/아우터) + childCategory + itemName.
+     */
+    @Query(value = """
+        SELECT
+            pm.code AS itemCode,
+            pm.name AS itemName,
+            COALESCE(pc.name, cc.name) AS parentCategory,
+            cc.name AS childCategory,
+            COALESCE(SUM(i.quantity), 0) AS actualStock,
+            COALESCE(SUM(i.available_quantity), 0) AS availableStock,
+            (COUNT(DISTINCT i.sku_id) * COALESCE(pm.warehouse_safety_stock, 0)) AS safetyStock,
+            CASE
+                WHEN COALESCE(SUM(i.available_quantity), 0) <= 0 THEN '품절'
+                WHEN COALESCE(SUM(i.available_quantity), 0) <
+                     (COUNT(DISTINCT i.sku_id) * COALESCE(pm.warehouse_safety_stock, 0))
+                  THEN '부족'
+                ELSE '정상'
+            END AS status,
+            MAX(i.update_date) AS updatedAt
+        FROM inventory i
+        JOIN product_sku ps ON ps.id = i.sku_id
+        JOIN product_master pm ON pm.code = ps.product_code
+        LEFT JOIN category cc ON cc.code = pm.category_code
+        LEFT JOIN category pc ON pc.id = cc.parent_id
+        WHERE i.location_id = :locationId
+          AND i.inventory_status IN ('NORMAL', 'CIRCULAR_CANDIDATE')
+          AND (:parentCategory IS NULL OR COALESCE(pc.name, cc.name) = :parentCategory)
+          AND (:childCategory IS NULL OR cc.name = :childCategory)
+          AND (:keyword IS NULL OR (
+               LOWER(pm.code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(pm.name) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(ps.sku_code) LIKE CONCAT('%', LOWER(:keyword), '%')
+          ))
+        GROUP BY pm.code, pm.name, pm.warehouse_safety_stock, cc.name, pc.name
+        HAVING (:status IS NULL OR (
+            CASE
+                WHEN COALESCE(SUM(i.available_quantity), 0) <= 0 THEN '품절'
+                WHEN COALESCE(SUM(i.available_quantity), 0) <
+                     (COUNT(DISTINCT i.sku_id) * COALESCE(pm.warehouse_safety_stock, 0))
+                  THEN '부족'
+                ELSE '정상'
+            END
+        ) = :status)
+        ORDER BY
+            CASE COALESCE(pc.name, cc.name)
+                WHEN '상의' THEN 1
+                WHEN '바지' THEN 2
+                WHEN '치마' THEN 3
+                WHEN '아우터' THEN 4
+                ELSE 5
+            END ASC,
+            cc.name ASC,
+            pm.name ASC
+        """,
+        countQuery = """
+        SELECT COUNT(*) FROM (
+          SELECT pm.code
+          FROM inventory i
+          JOIN product_sku ps ON ps.id = i.sku_id
+          JOIN product_master pm ON pm.code = ps.product_code
+          LEFT JOIN category cc ON cc.code = pm.category_code
+          LEFT JOIN category pc ON pc.id = cc.parent_id
+          WHERE i.location_id = :locationId
+            AND i.inventory_status IN ('NORMAL', 'CIRCULAR_CANDIDATE')
+            AND (:parentCategory IS NULL OR COALESCE(pc.name, cc.name) = :parentCategory)
+            AND (:childCategory IS NULL OR cc.name = :childCategory)
+            AND (:keyword IS NULL OR (
+                 LOWER(pm.code) LIKE CONCAT('%', LOWER(:keyword), '%')
+              OR LOWER(pm.name) LIKE CONCAT('%', LOWER(:keyword), '%')
+              OR LOWER(ps.sku_code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            ))
+          GROUP BY pm.code, pm.warehouse_safety_stock
+          HAVING (:status IS NULL OR (
+              CASE
+                  WHEN COALESCE(SUM(i.available_quantity), 0) <= 0 THEN '품절'
+                  WHEN COALESCE(SUM(i.available_quantity), 0) <
+                       (COUNT(DISTINCT i.sku_id) * COALESCE(pm.warehouse_safety_stock, 0))
+                    THEN '부족'
+                  ELSE '정상'
+              END
+          ) = :status)
+        ) sub
+        """,
+        nativeQuery = true)
+    Page<WarehouseAggregateRow> findWarehouseAggregated(
+            @Param("locationId") Long locationId,
+            @Param("parentCategory") String parentCategory,
+            @Param("childCategory") String childCategory,
+            @Param("status") String status,
+            @Param("keyword") String keyword,
+            Pageable pageable
+    );
 }

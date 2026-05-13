@@ -8,9 +8,15 @@ import lombok.NoArgsConstructor;
 import org.example.stockitbe.common.model.BaseEntity;
 
 @Entity
-@Table(name = "category", uniqueConstraints = {
+@Table(name = "category",
+    uniqueConstraints = {
         @UniqueConstraint(name = "uk_category_code", columnNames = "code")
-})
+    },
+    // parent_id 인덱스 — 전사재고 query 의 self-join (parent ← child) 가속.
+    indexes = {
+        @Index(name = "idx_category_parent_id", columnList = "parent_id")
+    }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Category extends BaseEntity {

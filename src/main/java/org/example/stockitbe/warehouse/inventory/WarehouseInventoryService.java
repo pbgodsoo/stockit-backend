@@ -1,6 +1,5 @@
 package org.example.stockitbe.warehouse.inventory;
 
-import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.model.BaseResponseStatus;
@@ -16,7 +15,11 @@ import org.example.stockitbe.hq.product.ProductMasterRepository;
 import org.example.stockitbe.hq.product.ProductSkuRepository;
 import org.example.stockitbe.hq.product.model.ProductMaster;
 import org.example.stockitbe.hq.product.model.ProductSku;
+import org.example.stockitbe.warehouse.inventory.model.WarehouseAggregateRow;
 import org.example.stockitbe.warehouse.inventory.model.WarehouseInventoryDto;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,7 +29,6 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class WarehouseInventoryService {
-    private static final List<String> MAIN_CATEGORY_ORDER = List.of("상의", "바지", "치마", "아우터");
 
     private final InfrastructureRepository infrastructureRepository;
     private final InventoryRepository inventoryRepository;
@@ -34,73 +36,44 @@ public class WarehouseInventoryService {
     private final ProductMasterRepository productMasterRepository;
     private final CategoryRepository categoryRepository;
 
-    // 창고 재고 품목 목록 조회
-    // 품목 단위로 실재고/가용재고/안전재고를 집계해 반환한다.
+    // 창고 재고 품목 페이지 목록 조회
+    // 품목 단위로 실재고/가용재고/안전재고를 native @Query GROUP BY 로 집계 + LIMIT/OFFSET.
     @Transactional(readOnly = true)
-    public List<WarehouseInventoryDto.ItemRes> getItems(String locationCode) {
+    public WarehouseInventoryDto.ItemPageRes getItems(String locationCode,
+                                                      String parentCategory,
+                                                      String childCategory,
+                                                      String status,
+                                                      String keyword,
+                                                      Pageable pageable) {
         Infrastructure warehouse = resolveWarehouse(locationCode);
-        List<Inventory> inventories = inventoryRepository.findAllByLocationId(warehouse.getId());
-        if (inventories.isEmpty()) {
-            return List.of();
-        }
+        String safeParent = (parentCategory == null || parentCategory.isBlank()) ? null : parentCategory.trim();
+        String safeChild = (childCategory == null || childCategory.isBlank()) ? null : childCategory.trim();
+        String safeStatus = (status == null || status.isBlank()) ? null : status.trim();
+        String safeKeyword = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
 
-        Context context = buildContext(inventories);
-        Map<String, ItemAccumulator> grouped = new HashMap<>();
+        // sort 무시(native @Query 안에 ORDER BY 박혀 있음) — page/size 만 사용
+        Pageable safePageable = PageRequest.of(
+                Math.max(pageable.getPageNumber(), 0),
+                Math.max(pageable.getPageSize(), 1)
+        );
 
-        for (Inventory inventory : inventories) {
-            if (!InventoryStatusPolicy.QUERY_ALLOWED_STATUSES.contains(inventory.getInventoryStatus())) continue;
-            ProductSku sku = context.skuById.get(inventory.getSkuId());
-            if (sku == null) continue;
+        Page<WarehouseAggregateRow> rows = inventoryRepository.findWarehouseAggregated(
+                warehouse.getId(), safeParent, safeChild, safeStatus, safeKeyword, safePageable
+        );
 
-            ProductMaster master = context.masterByCode.get(sku.getProductCode());
-            if (master == null) continue;
+        Page<WarehouseInventoryDto.ItemRes> mapped = rows.map(row -> WarehouseInventoryDto.ItemRes.from(
+                row.getItemCode(),
+                row.getParentCategory(),
+                row.getChildCategory(),
+                row.getItemName(),
+                n(row.getActualStock()),
+                n(row.getAvailableStock()),
+                n(row.getSafetyStock()),
+                row.getStatus(),
+                row.getUpdatedAt()
+        ));
 
-            Category child = context.categoryByCode.get(master.getCategoryCode());
-            if (child == null) continue;
-
-            Category parent = child.getParentId() == null ? child : context.categoryById.get(child.getParentId());
-            String parentCategory = parent == null ? child.getName() : parent.getName();
-            String childCategory = child.getName();
-            String itemCode = master.getCode();
-
-            ItemAccumulator acc = grouped.computeIfAbsent(itemCode, key -> ItemAccumulator.builder()
-                    .itemCode(itemCode)
-                    .parentCategory(parentCategory)
-                    .childCategory(childCategory)
-                    .itemName(master.getName())
-                    .actualStock(0)
-                    .availableStock(0)
-                    .safetyStock(0)
-                    .updatedAt(inventory.getUpdatedAt())
-                    .build());
-
-            acc.actualStock += n(inventory.getQuantity());
-            acc.availableStock += n(inventory.getAvailableQuantity());
-            acc.skuIds.add(sku.getId());
-            if (acc.updatedAt == null || (inventory.getUpdatedAt() != null && inventory.getUpdatedAt().after(acc.updatedAt))) {
-                acc.updatedAt = inventory.getUpdatedAt();
-            }
-        }
-
-        grouped.values().forEach(acc -> acc.safetyStock = acc.skuIds.size() * n(context.masterByCode.get(acc.itemCode).getWarehouseSafetyStock()));
-
-        return grouped.values().stream()
-                .map(acc -> WarehouseInventoryDto.ItemRes.from(
-                        acc.itemCode,
-                        acc.parentCategory,
-                        acc.childCategory,
-                        acc.itemName,
-                        acc.actualStock,
-                        acc.availableStock,
-                        acc.safetyStock,
-                        resolveStatus(acc.availableStock, acc.safetyStock),
-                        acc.updatedAt
-                ))
-                .sorted(Comparator
-                        .comparing(WarehouseInventoryDto.ItemRes::getParentCategory, this::compareMainCategory)
-                        .thenComparing(WarehouseInventoryDto.ItemRes::getChildCategory, Comparator.nullsLast(String::compareTo))
-                        .thenComparing(WarehouseInventoryDto.ItemRes::getItemName, Comparator.nullsLast(String::compareTo)))
-                .toList();
+        return WarehouseInventoryDto.ItemPageRes.from(mapped);
     }
 
     // 창고 재고 SKU 목록 조회
@@ -204,16 +177,6 @@ public class WarehouseInventoryService {
         return "정상";
     }
 
-    // 메인 카테고리 우선순위 기준으로 정렬 순서를 계산한다.
-    private int compareMainCategory(String a, String b) {
-        int ai = MAIN_CATEGORY_ORDER.indexOf(a);
-        int bi = MAIN_CATEGORY_ORDER.indexOf(b);
-        ai = ai < 0 ? MAIN_CATEGORY_ORDER.size() : ai;
-        bi = bi < 0 ? MAIN_CATEGORY_ORDER.size() : bi;
-        if (ai != bi) return Integer.compare(ai, bi);
-        return String.valueOf(a).compareTo(String.valueOf(b));
-    }
-
     private int n(Integer value) {
         return value == null ? 0 : value;
     }
@@ -224,20 +187,6 @@ public class WarehouseInventoryService {
             Map<Long, Category> categoryById,
             Map<String, Category> categoryByCode
     ) {
-    }
-
-    @Builder
-    private static class ItemAccumulator {
-        private String itemCode;
-        private String parentCategory;
-        private String childCategory;
-        private String itemName;
-        private int actualStock;
-        private int availableStock;
-        private int safetyStock;
-        private Date updatedAt;
-        @Builder.Default
-        private Set<Long> skuIds = new HashSet<>();
     }
 
     private static class SkuAccumulator {

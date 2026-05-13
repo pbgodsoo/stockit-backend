@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import org.example.stockitbe.hq.product.model.ProductMaster;
 import org.example.stockitbe.hq.product.model.ProductSku;
+import org.springframework.data.domain.Page;
 
 import java.util.Date;
 import java.util.List;
@@ -61,6 +62,27 @@ public class InventoryDto {
     public static class CompanyWidePageRes {
         private List<CompanyWideRes> items;
         private List<LocationOptionRes> locationOptions;
+        private Integer page;
+        private Integer size;
+        private Long totalElements;
+        private Integer totalPages;
+        private Boolean hasNext;
+        private Boolean hasPrevious;
+
+        // 페이지 결과 + 위치 옵션 목록을 응답 DTO로 변환한다.
+        public static CompanyWidePageRes from(Page<CompanyWideRes> page,
+                                              List<LocationOptionRes> locationOptions) {
+            return CompanyWidePageRes.builder()
+                    .items(page.getContent())
+                    .locationOptions(locationOptions)
+                    .page(page.getNumber())
+                    .size(page.getSize())
+                    .totalElements(page.getTotalElements())
+                    .totalPages(page.getTotalPages())
+                    .hasNext(page.hasNext())
+                    .hasPrevious(page.hasPrevious())
+                    .build();
+        }
     }
 
     // 순환재고 후보 목록 행 DTO
