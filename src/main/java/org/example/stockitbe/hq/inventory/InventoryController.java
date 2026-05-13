@@ -5,6 +5,8 @@ import org.example.stockitbe.common.model.BaseResponse;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
 import org.example.stockitbe.hq.inventory.model.InventoryDto;
 import org.example.stockitbe.hq.inventory.model.InventoryStatus;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 
@@ -28,9 +30,10 @@ public class InventoryController {
             @RequestParam(required = false) String parentCategory,
             @RequestParam(required = false) String childCategory,
             @RequestParam(required = false) InventoryStatus status,
-            @RequestParam(required = false) String keyword
+            @RequestParam(required = false) String keyword,
+            @PageableDefault(size = 20) Pageable pageable
     ) {
-        return BaseResponse.success(inventoryQueryService.findCompanyWide(locationType, locationIds, parentCategory, childCategory, status, keyword));
+        return BaseResponse.success(inventoryQueryService.findCompanyWide(locationType, locationIds, parentCategory, childCategory, status, keyword, pageable));
     }
 
     // 전사 재고 SKU 상세 조회 API

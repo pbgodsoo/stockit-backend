@@ -10,9 +10,17 @@ import org.example.stockitbe.common.model.BaseEntity;
 import java.util.Date;
 
 @Entity
-@Table(name = "inventory", uniqueConstraints = {
+@Table(name = "inventory",
+    uniqueConstraints = {
         @UniqueConstraint(name = "uk_inventory_sku_location_status", columnNames = {"sku_id", "location_id", "inventory_status"})
-})
+    },
+    // (location_id, inventory_status) 복합 인덱스 — 창고 재고 조회 핵심 필터.
+    // 단일 (location_id) 보다 status IN (...) 까지 cover 가능.
+    // 기존 uk 의 prefix 가 sku_id 라 location 단독 검색은 자동 활용 안 됨.
+    indexes = {
+        @Index(name = "idx_inventory_location_status", columnList = "location_id, inventory_status")
+    }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 // 재고 엔티티
