@@ -23,6 +23,8 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+// 본사 재고 조회 전용 서비스
+// 전사 재고 목록/상세 조회와 위치 옵션 조회 데이터를 조합한다.
 public class InventoryQueryService {
 
     private final InventoryRepository inventoryRepository;
@@ -31,6 +33,7 @@ public class InventoryQueryService {
     private final CategoryRepository categoryRepository;
     private final InfrastructureRepository infrastructureRepository;
 
+    // 전사 재고(품목 단위) 목록을 조회한다.
     @Transactional(readOnly = true)
     public InventoryDto.CompanyWidePageRes findCompanyWide(LocationType locationType,
                                                             List<Long> locationIds,
@@ -135,6 +138,7 @@ public class InventoryQueryService {
                 .build();
     }
 
+    // 전사 재고 SKU 상세를 조회한다.
     @Transactional(readOnly = true)
     public List<InventoryDto.CompanyWideSkuDetailRes> findCompanyWideSkuDetails(String itemCode,
                                                                                  LocationType locationType,
@@ -214,6 +218,7 @@ public class InventoryQueryService {
                 .toList();
     }
 
+    // locationType 조건에 맞는 위치 옵션 목록을 생성한다.
     private List<InventoryDto.LocationOptionRes> buildLocationOptions(LocationType locationType) {
         return infrastructureRepository.findAll().stream()
                 .filter(i -> locationType == null || i.getLocationType() == locationType)
@@ -226,16 +231,19 @@ public class InventoryQueryService {
                 .toList();
     }
 
+    // null-safe 정수 변환
     private int n(Integer value) {
         return value == null ? 0 : value;
     }
 
+    // 가용재고/안전재고 기준 UI 상태 라벨 계산
     private String toUiStatus(int available, int safety) {
         if (available <= 0) return "품절";
         if (available < safety) return "부족";
         return "정상";
     }
 
+    // 품목 단위 재고 집계 보조 객체
     private static class Aggregate {
         private final ProductMaster master;
         private final String parentCategory;
@@ -254,6 +262,7 @@ public class InventoryQueryService {
         }
     }
 
+    // SKU 단위 재고 집계 보조 객체
     private static class SkuAggregate {
         private final ProductSku sku;
         private int actualStock = 0;

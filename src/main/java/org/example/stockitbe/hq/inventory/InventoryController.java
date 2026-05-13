@@ -13,11 +13,14 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/hq/inventories")
 @RequiredArgsConstructor
+// 본사 관리자 재고 조회/순환재고 관리 컨트롤러
+// 전사 재고 조회, 순환재고 후보 관리, 순환재고 조회 API를 제공한다.
 public class InventoryController {
 
     private final InventoryService inventoryService;
     private final InventoryQueryService inventoryQueryService;
 
+    // 전사 재고(품목 단위) 목록 조회 API
     @GetMapping("/company-wide")
     public BaseResponse<InventoryDto.CompanyWidePageRes> getCompanyWide(
             @RequestParam(required = false) LocationType locationType,
@@ -30,6 +33,7 @@ public class InventoryController {
         return BaseResponse.success(inventoryQueryService.findCompanyWide(locationType, locationIds, parentCategory, childCategory, status, keyword));
     }
 
+    // 전사 재고 SKU 상세 조회 API
     @GetMapping("/company-wide/{itemCode}/skus")
     public BaseResponse<List<InventoryDto.CompanyWideSkuDetailRes>> getCompanyWideSkus(
             @PathVariable String itemCode,
@@ -43,11 +47,13 @@ public class InventoryController {
         return BaseResponse.success(inventoryQueryService.findCompanyWideSkuDetails(itemCode, locationType, locationIds, parentCategory, childCategory, status, keyword));
     }
 
+    // 순환재고 후보 리프레시 API
     @PostMapping("/circular-candidates/refresh")
     public BaseResponse<InventoryDto.CircularCandidateRefreshRes> refreshCircularCandidates() {
         return BaseResponse.success(inventoryService.refreshCircularCandidates());
     }
 
+    // 순환재고 후보 목록 조회 API
     @GetMapping("/circular-candidates")
     public BaseResponse<InventoryDto.CircularCandidatePageRes> getCircularCandidates(
             @RequestParam(defaultValue = "0") Integer page,
@@ -71,6 +77,7 @@ public class InventoryController {
         ));
     }
 
+    // 순환재고 목록 조회 API
     @GetMapping("/circular")
     public BaseResponse<InventoryDto.CircularInventoryPageRes> getCircularInventories(
             @RequestParam(defaultValue = "0") Integer page,
@@ -94,6 +101,8 @@ public class InventoryController {
         ));
     }
 
+    // 순환재고 후보 전환 API
+    // 요청한 후보 수량을 순환재고 상태로 전환한다.
     @PostMapping("/circular-candidates/convert")
     public BaseResponse<InventoryDto.CircularCandidateConvertRes> convertCircularCandidates(
             @RequestBody @Valid List<InventoryDto.CircularCandidateConvertItemReq> requests

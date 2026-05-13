@@ -15,6 +15,8 @@ import java.util.Date;
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+// 순환재고 후보 판정 조건 매핑 엔티티
+// 하나의 후보 재고(inventoryId)에 여러 조건 코드를 연결한다.
 public class InventoryCandidateCondition extends BaseEntity {
 
     @Id

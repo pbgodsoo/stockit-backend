@@ -13,6 +13,7 @@ import org.example.stockitbe.common.model.BaseEntity;
 @Table(name = "circular_material_price_policy")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+// 순환재고 소재별 kg 단가 정책 엔티티
 public class CircularMaterialPricePolicy extends BaseEntity {
 
     @Id
@@ -31,6 +32,7 @@ public class CircularMaterialPricePolicy extends BaseEntity {
     @Column(name = "active", nullable = false)
     private Boolean active;
 
+    // 소재 단가를 0 이상의 값으로 갱신한다.
     public void updatePrice(Integer nextPricePerKg) {
         this.pricePerKg = nextPricePerKg == null ? 0 : Math.max(0, nextPricePerKg);
     }

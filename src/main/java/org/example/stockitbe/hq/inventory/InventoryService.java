@@ -34,6 +34,8 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+// 본사 재고 관리 서비스
+// 재고 전이, 순환재고 후보/확정 처리, 순환재고 조회 및 소재 단가 정책을 관리한다.
 public class InventoryService {
 
     private final InventoryRepository inventoryRepository;
@@ -75,6 +77,7 @@ public class InventoryService {
             MAT_BLEND, "혼방"
     );
 
+    // 전사 재고 불균형 SKU를 계산해 반환한다.
     @Transactional(readOnly = true)
     public List<InventoryDto.ImbalancedSkuRes> findImbalancedSkus() {
         List<Inventory> inventories = inventoryRepository.findAll();
@@ -167,6 +170,8 @@ public class InventoryService {
                 )
                 .toList();
     }
+
+    // -------- 재고 전이/후킹 --------
 
     /** 특정 창고 SKU를 락으로 조회해 요청 수량만큼 출고 예약한다. */
     @Transactional
@@ -311,6 +316,9 @@ public class InventoryService {
         }
     }
 
+    // -------- 순환재고 후보 리프레시 --------
+
+    // 순환재고 후보 조건을 재평가하고 대상 재고를 후보 상태로 전환한다.
     @Transactional
     public InventoryDto.CircularCandidateRefreshRes refreshCircularCandidates() {
         Map<Long, Infrastructure> warehouseById = infrastructureRepository.findAll().stream()
@@ -413,6 +421,9 @@ public class InventoryService {
                 .build();
     }
 
+    // -------- 순환재고 조회 --------
+
+    // 순환재고 후보 목록을 필터/정렬/페이지 조건으로 조회한다.
     @Transactional(readOnly = true)
     public InventoryDto.CircularCandidatePageRes findCircularCandidates(Integer page,
                                                                          Integer size,
@@ -518,6 +529,7 @@ public class InventoryService {
         return buildCircularCandidatePage(filtered, safePage, safeSize, filtered.size());
     }
 
+    // 순환재고 확정 목록을 필터/정렬/페이지 조건으로 조회한다.
     @Transactional(readOnly = true)
     public InventoryDto.CircularInventoryPageRes findCircularInventories(Integer page,
                                                                          Integer size,
@@ -621,6 +633,7 @@ public class InventoryService {
         return buildCircularInventoryPage(filtered, safePage, safeSize, filtered.size());
     }
 
+    // 순환재고 페이지 응답 객체를 생성한다.
     private InventoryDto.CircularInventoryPageRes buildCircularInventoryPage(List<InventoryDto.CircularInventoryRes> rows,
                                                                              int page,
                                                                              int size,
@@ -641,6 +654,7 @@ public class InventoryService {
         );
     }
 
+    // 순환재고 후보 페이지 응답 객체를 생성한다.
     private InventoryDto.CircularCandidatePageRes buildCircularCandidatePage(List<InventoryDto.CircularCandidateRes> rows,
                                                                               int page,
                                                                               int size,
@@ -661,12 +675,14 @@ public class InventoryService {
         );
     }
 
+    // 요청 페이지 크기를 허용 값(20/50/100)으로 정규화한다.
     private int normalizePageSize(Integer size) {
         int requested = size == null ? 20 : size;
         if (requested == 50 || requested == 100) return requested;
         return 20;
     }
 
+    // 순환재고 정렬 파라미터를 Sort 스펙으로 변환한다.
     private Sort parseCircularSort(String sort) {
         String normalized = sort == null ? "" : sort.trim();
         if (normalized.isBlank()) return Sort.by(Sort.Order.asc("skuCode"));
@@ -681,6 +697,7 @@ public class InventoryService {
         return Sort.by(new Sort.Order(dir, field));
     }
 
+    // 순환재고 후보 정렬 파라미터를 Sort 스펙으로 변환한다.
     private Sort parseCandidateSort(String sort) {
         String normalized = sort == null ? "" : sort.trim();
         if (normalized.isBlank()) return Sort.by(Sort.Order.desc("convertibleStock"));
@@ -695,6 +712,7 @@ public class InventoryService {
         return Sort.by(new Sort.Order(dir, field));
     }
 
+    // 순환재고 목록 정렬 Comparator를 생성한다.
     private Comparator<InventoryDto.CircularInventoryRes> buildCircularComparator(Sort sortSpec) {
         Sort.Order order = sortSpec.stream().findFirst().orElse(Sort.Order.asc("skuCode"));
         Comparator<InventoryDto.CircularInventoryRes> comparator;
@@ -723,6 +741,7 @@ public class InventoryService {
         return comparator.thenComparing(row -> row.getSkuCode() == null ? "" : row.getSkuCode());
     }
 
+    // 순환재고 후보 목록 정렬 Comparator를 생성한다.
     private Comparator<InventoryDto.CircularCandidateRes> buildCandidateComparator(Sort sortSpec) {
         Sort.Order order = sortSpec.stream().findFirst().orElse(Sort.Order.desc("convertibleStock"));
         Comparator<InventoryDto.CircularCandidateRes> comparator;
@@ -745,6 +764,7 @@ public class InventoryService {
         return comparator.thenComparing(row -> row.getSkuCode() == null ? "" : row.getSkuCode());
     }
 
+    // 순환재고 키워드 검색 조건 일치 여부를 판단한다.
     private boolean matchesCircularKeyword(InventoryDto.CircularInventoryRes row, String keyword) {
         if (keyword == null || keyword.isBlank()) return true;
         String materialDetail = row.getMaterialCompositions() == null
@@ -757,11 +777,13 @@ public class InventoryService {
         return searchable.contains(keyword);
     }
 
+    // 순환재고 창고코드 필터 일치 여부를 판단한다.
     private boolean matchesWarehouseCodes(InventoryDto.CircularInventoryRes row, Set<String> warehouseCodes) {
         if (warehouseCodes == null || warehouseCodes.isEmpty()) return true;
         return warehouseCodes.contains(safeText(row.getWarehouseCode()).toUpperCase(Locale.ROOT));
     }
 
+    // 후보 키워드 검색 조건 일치 여부를 판단한다.
     private boolean matchesCandidateKeyword(InventoryDto.CircularCandidateRes row, String keyword) {
         if (keyword == null || keyword.isBlank()) return true;
         String searchable = String.join(" ", safeText(row.getSkuCode()), safeText(row.getItemCode()), safeText(row.getItemName()))
@@ -769,6 +791,7 @@ public class InventoryService {
         return searchable.contains(keyword);
     }
 
+    // 후보 카테고리 필터 일치 여부를 판단한다.
     private boolean matchesCandidateCategory(InventoryDto.CircularCandidateRes row, String parentCategory, String childCategory) {
         if (parentCategory != null && !parentCategory.isBlank() && !parentCategory.equals(safeText(row.getParentCategory()))) {
             return false;
@@ -779,17 +802,20 @@ public class InventoryService {
         return true;
     }
 
+    // 후보 창고 필터 일치 여부를 판단한다.
     private boolean matchesCandidateWarehouse(InventoryDto.CircularCandidateRes row, Set<String> warehouseCodes) {
         if (warehouseCodes == null || warehouseCodes.isEmpty()) return true;
         return warehouseCodes.contains(safeText(row.getWarehouseCode()).toUpperCase(Locale.ROOT));
     }
 
+    // 후보 조건코드 필터 일치 여부를 판단한다.
     private boolean matchesCandidateConditionCodes(InventoryDto.CircularCandidateRes row, Set<Integer> conditionCodes) {
         if (conditionCodes == null || conditionCodes.isEmpty()) return true;
         List<Integer> matched = row.getMatchedConditionCodes() == null ? List.of() : row.getMatchedConditionCodes();
         return conditionCodes.stream().allMatch(matched::contains);
     }
 
+    // 순환재고 소재 필터 일치 여부를 판단한다.
     private boolean matchesMaterialFilter(InventoryDto.CircularInventoryRes row,
                                           String materialGroup,
                                           String materialName,
@@ -805,10 +831,12 @@ public class InventoryService {
         );
     }
 
+    // null-safe 문자열 변환
     private String safeText(String value) {
         return value == null ? "" : value;
     }
 
+    // 소재명 별칭을 표준 한글명으로 정규화한다.
     private String normalizeMaterialName(String value) {
         String normalized = value == null ? "" : value.trim();
         String lower = normalized.toLowerCase(Locale.ROOT);
@@ -826,6 +854,9 @@ public class InventoryService {
         };
     }
 
+    // -------- 순환재고 단가 정책 --------
+
+    // 소재 단가 정책 목록을 조회한다.
     @Transactional(readOnly = true)
     public List<InventoryDto.CircularMaterialPriceRes> findCircularMaterialPrices() {
         return circularMaterialPricePolicyRepository.findAll().stream()
@@ -834,6 +865,7 @@ public class InventoryService {
                 .toList();
     }
 
+    // 소재 코드 기준 단가 정책을 수정한다.
     @Transactional
     public InventoryDto.CircularMaterialPriceRes updateCircularMaterialPrice(
             String materialCode,
@@ -846,6 +878,9 @@ public class InventoryService {
         return InventoryDto.CircularMaterialPriceRes.from(policy);
     }
 
+    // -------- 후보 -> 순환재고 전환 --------
+
+    // 순환재고 후보를 요청 수량만큼 순환재고로 전환한다.
     @Transactional
     public InventoryDto.CircularCandidateConvertRes convertCircularCandidates(List<InventoryDto.CircularCandidateConvertItemReq> requests) {
         if (requests == null || requests.isEmpty()) {
@@ -929,6 +964,9 @@ public class InventoryService {
         return InventoryDto.CircularCandidateConvertRes.from(requests.size(), convertedCount, results);
     }
 
+    // -------- 후보 판정/소재 계산 보조 메서드 --------
+
+    // 후보 판정 조건 코드를 계산한다.
     private List<Integer> evaluateCandidateConditions(Inventory inventory, ProductSku sku,
                                                       ProductMaster master,
                                                       Map<String, GroupAvailabilityAggregate> groupAvailability) {
@@ -955,6 +993,7 @@ public class InventoryService {
         return matchedCodes;
     }
 
+    // 상품+위치 단위 가용재고 집계를 생성한다.
     private Map<String, GroupAvailabilityAggregate> buildGroupAvailability(List<Inventory> inventories,
                                                                            Map<Long, ProductSku> skuById) {
         Map<String, GroupAvailabilityAggregate> grouped = new HashMap<>();
@@ -974,6 +1013,7 @@ public class InventoryService {
         return grouped;
     }
 
+    // 동일 상품/위치 내 사이즈 점유율을 계산한다.
     private double calculateSizeShare(Inventory inventory, ProductSku sku,
                                       Map<String, GroupAvailabilityAggregate> groupAvailability) {
         String groupKey = buildGroupKey(sku.getProductCode(), inventory.getLocationId());
@@ -984,6 +1024,7 @@ public class InventoryService {
         return (double) matched / aggregate.totalAvailable;
     }
 
+    // 동일 상품/위치 내 컬러 점유율을 계산한다.
     private double calculateColorShare(Inventory inventory, ProductSku sku,
                                        Map<String, GroupAvailabilityAggregate> groupAvailability) {
         String groupKey = buildGroupKey(sku.getProductCode(), inventory.getLocationId());
@@ -994,24 +1035,29 @@ public class InventoryService {
         return (double) matched / aggregate.totalAvailable;
     }
 
+    // null-safe 토큰 정규화
     private String normalizeToken(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
 
+    // 상품코드+위치 기반 그룹 키를 생성한다.
     private String buildGroupKey(String productCode, Long locationId) {
         return (productCode == null ? "" : productCode.trim()) + "::" + (locationId == null ? 0L : locationId);
     }
 
+    // 전환 가능한 재고 수량을 계산한다.
     private int calculateConvertibleStock(Inventory inventory) {
         return Math.max(0, n(inventory.getAvailableQuantity()));
     }
 
+    // 기준일로부터 경과 일수를 계산한다.
     private long daysSince(Date date) {
         if (date == null) return Long.MAX_VALUE;
         long millis = System.currentTimeMillis() - date.getTime();
         return millis < 0 ? 0 : millis / (1000L * 60 * 60 * 24);
     }
 
+    // 조건 코드의 표시 라벨을 반환한다.
     private String conditionLabel(Integer code) {
         if (code == null) return "";
         return switch (code) {
@@ -1022,16 +1068,19 @@ public class InventoryService {
         };
     }
 
+    // 활성 소재 단가 맵을 로딩한다.
     private Map<String, Integer> loadActiveMaterialPriceByCode() {
         return circularMaterialPricePolicyRepository.findAllByActiveTrueOrderByMaterialCodeAsc().stream()
                 .collect(Collectors.toMap(CircularMaterialPricePolicy::getMaterialCode, CircularMaterialPricePolicy::getPricePerKg));
     }
 
+    // 카테고리별 단위 중량(kg)을 해석한다.
     private double resolveCategoryUnitWeightKg(String childCategoryName) {
         if (childCategoryName == null) return DEFAULT_UNIT_WEIGHT_KG;
         return CATEGORY_UNIT_WEIGHT_KG.getOrDefault(childCategoryName.trim(), DEFAULT_UNIT_WEIGHT_KG);
     }
 
+    // 소재 구성을 기반으로 소재 유형 라벨을 결정한다.
     private String resolveMaterialTypeLabel(List<ProductMaterialComposition> compositions, Map<String, Material> materialByCode) {
         ProductMaterialType type = deriveMaterialType(compositions, materialByCode);
         if (type == ProductMaterialType.NATURAL_SINGLE) return "천연 단일 섬유";
@@ -1039,6 +1088,7 @@ public class InventoryService {
         return "혼방";
     }
 
+    // 소재 구성 엔티티를 응답 DTO로 변환한다.
     private List<InventoryDto.MaterialCompositionRes> toMaterialCompositionRes(List<ProductMaterialComposition> compositions,
                                                                                 Map<String, Material> materialByCode) {
         if (compositions == null) return List.of();
@@ -1055,6 +1105,7 @@ public class InventoryService {
                 .toList();
     }
 
+    // 소재 구성에 따른 kg 단가를 계산한다.
     private int resolveMaterialKgPrice(List<ProductMaterialComposition> compositions,
                                        Map<String, Material> materialByCode,
                                        Map<String, Integer> materialPriceByCode) {
@@ -1070,6 +1121,7 @@ public class InventoryService {
         return materialPriceByCode.getOrDefault(code, materialPriceByCode.getOrDefault(MAT_BLEND, 1000));
     }
 
+    // 소재 구성으로 상품 소재 유형을 판정한다.
     private ProductMaterialType deriveMaterialType(List<ProductMaterialComposition> compositions, Map<String, Material> materialByCode) {
         if (compositions == null || compositions.isEmpty()) return ProductMaterialType.BLEND;
         if (compositions.size() >= 2) return ProductMaterialType.BLEND;
@@ -1086,6 +1138,7 @@ public class InventoryService {
         return ProductMaterialType.BLEND;
     }
 
+    // 소재 코드의 한글명을 조회한다.
     private String resolveMaterialName(String code, Map<String, Material> materialByCode) {
         Material material = materialByCode.get(code);
         if (material == null || material.getNameKo() == null || material.getNameKo().isBlank()) {
@@ -1094,6 +1147,7 @@ public class InventoryService {
         return material.getNameKo();
     }
 
+    // 소수점 셋째 자리 반올림
     private double round3(double value) {
         return Math.round(value * 1000d) / 1000d;
     }

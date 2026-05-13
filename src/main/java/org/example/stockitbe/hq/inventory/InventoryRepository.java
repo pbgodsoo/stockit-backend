@@ -13,25 +13,31 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Date;
 
+// 재고 엔티티 조회/락 제어용 Repository
 public interface InventoryRepository extends JpaRepository<Inventory, Long> {
+    // 위치 기준 재고 목록 조회
     List<Inventory> findAllByLocationId(Long locationId);
+    // SKU 목록 기준 재고 조회
     List<Inventory> findAllBySkuIdIn(Collection<Long> skuIds);
+    // 상태 기준 재고 조회
     List<Inventory> findAllByInventoryStatus(InventoryStatus inventoryStatus);
 
+    // 단건 재고를 비관적 락으로 조회한다.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Inventory> findWithLockById(Long id);
 
+    // (sku, location, status) 단건 재고를 비관적 락으로 조회한다.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Inventory> findWithLockBySkuIdAndLocationIdAndInventoryStatus(Long skuId, Long locationId, InventoryStatus inventoryStatus);
 
+    // (sku, location) 기준 단건/목록 조회
     Optional<Inventory> findBySkuIdAndLocationId(Long skuId, Long locationId);
     List<Inventory> findAllBySkuIdAndLocationId(Long skuId, Long locationId);
 
-    // 같은 (sku, location) 에 status 별로 최대 3행 (NORMAL/CIRCULAR_CANDIDATE/CIRCULAR) 가 있을 수 있어
-    // 발주 hook 처럼 NORMAL 만 다뤄야 하는 경우 status 까지 좁혀 단일 결과를 보장.
+    // status 분리 저장 구조에서 특정 상태 행만 정확히 조회할 때 사용한다.
     Optional<Inventory> findBySkuIdAndLocationIdAndInventoryStatus(Long skuId, Long locationId, InventoryStatus inventoryStatus);
 
-    // 매장 판매 처리 시 동일 SKU 동시 차감을 제어하기 위한 락 조회
+    // 매장 판매 시 동시 차감을 제어하기 위한 락 조회
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select i from Inventory i where i.skuId = :skuId and i.locationId = :locationId")
     Optional<Inventory> findBySkuIdAndLocationIdForUpdate(@Param("skuId") Long skuId, @Param("locationId") Long locationId);

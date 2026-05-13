@@ -9,8 +9,10 @@ import org.example.stockitbe.hq.product.model.ProductSku;
 import java.util.Date;
 import java.util.List;
 
+// 본사 재고/순환재고 API 응답·요청 DTO 모음
 public class InventoryDto {
 
+    // 전사 재고(품목 단위) 응답 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -26,6 +28,7 @@ public class InventoryDto {
         private Date updatedAt;
     }
 
+    // 전사 재고 SKU 상세 응답 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -41,6 +44,7 @@ public class InventoryDto {
         private Date updatedAt;
     }
 
+    // 위치 필터 옵션 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -50,6 +54,7 @@ public class InventoryDto {
         private String name;
     }
 
+    // 전사 재고 페이지 응답 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -58,6 +63,7 @@ public class InventoryDto {
         private List<LocationOptionRes> locationOptions;
     }
 
+    // 순환재고 후보 목록 행 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -78,6 +84,7 @@ public class InventoryDto {
         private Date updatedAt;
         private List<Integer> matchedConditionCodes;
 
+        // 후보 재고 집계 필드를 응답 DTO로 변환한다.
         public static CircularCandidateRes from(Long inventoryId,
                                               ProductSku sku,
                                               ProductMaster master,
@@ -110,6 +117,7 @@ public class InventoryDto {
         }
     }
 
+    // 순환재고 후보 페이지 응답 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -122,6 +130,7 @@ public class InventoryDto {
         private Boolean hasNext;
         private Boolean hasPrevious;
 
+        // 페이지 계산 결과를 후보 페이지 응답으로 변환한다.
         public static CircularCandidatePageRes from(List<CircularCandidateRes> content,
                                                   int page,
                                                   int size,
@@ -141,6 +150,7 @@ public class InventoryDto {
         }
     }
 
+    // 후보 리프레시 결과 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -149,6 +159,7 @@ public class InventoryDto {
         private Integer convertedCount;
     }
 
+    // 후보 전환 요청 DTO
     @Getter
     @NoArgsConstructor
     @AllArgsConstructor
@@ -161,6 +172,7 @@ public class InventoryDto {
         private Integer convertQuantity;
     }
 
+    // 후보 전환 결과 행 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -170,6 +182,7 @@ public class InventoryDto {
         private Integer converted;
         private String reason;
 
+        // 전환 처리 결과를 응답 DTO로 변환한다.
         public static CircularCandidateConvertItemRes from(Long inventoryId, int requested, int converted, String reason) {
             return CircularCandidateConvertItemRes.builder()
                     .inventoryId(inventoryId)
@@ -180,6 +193,7 @@ public class InventoryDto {
         }
     }
 
+    // 후보 전환 요약 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -189,6 +203,7 @@ public class InventoryDto {
         private Integer skippedCount;
         private List<CircularCandidateConvertItemRes> items;
 
+        // 전환 처리 집계값을 요약 DTO로 변환한다.
         public static CircularCandidateConvertRes from(int requestedCount,
                                                      int convertedCount,
                                                      List<CircularCandidateConvertItemRes> items) {
@@ -201,6 +216,7 @@ public class InventoryDto {
         }
     }
 
+    // 순환재고 목록 행 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -223,6 +239,7 @@ public class InventoryDto {
         private Double totalWeightKg;
         private Long circularSalePrice;
 
+        // 순환재고 집계 필드를 응답 DTO로 변환한다.
         public static CircularInventoryRes from(Long inventoryId,
                                               ProductSku sku,
                                               ProductMaster master,
@@ -259,6 +276,7 @@ public class InventoryDto {
         }
     }
 
+    // 순환재고 페이지 응답 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -271,6 +289,7 @@ public class InventoryDto {
         private Boolean hasNext;
         private Boolean hasPrevious;
 
+        // 페이지 계산 결과를 순환재고 페이지 응답으로 변환한다.
         public static CircularInventoryPageRes from(List<CircularInventoryRes> content,
                                                   int page,
                                                   int size,
@@ -290,6 +309,7 @@ public class InventoryDto {
         }
     }
 
+    // 소재 구성 비율 응답 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -299,6 +319,7 @@ public class InventoryDto {
         private Integer ratio;
     }
 
+    // 순환재고 소재 단가 정책 응답 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -309,6 +330,7 @@ public class InventoryDto {
         private Integer pricePerKg;
         private Boolean active;
 
+        // 소재 단가 정책 엔티티를 응답 DTO로 변환한다.
         public static CircularMaterialPriceRes from(CircularMaterialPricePolicy policy) {
             return CircularMaterialPriceRes.builder()
                     .materialCode(policy.getMaterialCode())
@@ -320,6 +342,7 @@ public class InventoryDto {
         }
     }
 
+    // 순환재고 소재 단가 수정 요청 DTO
     @Getter
     @NoArgsConstructor
     @AllArgsConstructor
@@ -329,6 +352,7 @@ public class InventoryDto {
         private Integer pricePerKg;
     }
 
+    // 전사 재고 불균형 SKU 응답 DTO
     @Getter
     @Builder
     @AllArgsConstructor
@@ -344,6 +368,7 @@ public class InventoryDto {
         private Integer shortageWarehouseCount;
         private Integer totalShortageQty;
 
+        // 불균형 SKU 집계 필드를 응답 DTO로 변환한다.
         public static ImbalancedSkuRes from(ProductSku sku,
                                           ProductMaster master,
                                           String categoryLabel,
