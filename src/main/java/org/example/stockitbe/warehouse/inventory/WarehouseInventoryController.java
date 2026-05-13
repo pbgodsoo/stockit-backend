@@ -15,10 +15,13 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/warehouse/inventories")
+// 창고 재고 조회 컨트롤러
+// 로그인 사용자의 창고 기준 품목/SKU 재고 조회 API를 제공한다.
 public class WarehouseInventoryController {
 
     private final WarehouseInventoryService service;
 
+    // 창고 재고 품목 목록 조회 API
     @GetMapping
     public BaseResponse<List<WarehouseInventoryDto.ItemRes>> getWarehouseInventories(
             @AuthenticationPrincipal AuthUserDetails me
@@ -26,6 +29,8 @@ public class WarehouseInventoryController {
         return BaseResponse.success(service.getItems(me.getLocationCode()));
     }
 
+    // 창고 재고 SKU 목록 조회 API
+    // 지정 품목(itemCode) 내 SKU 단위 재고를 반환한다.
     @GetMapping("/{itemCode}/skus")
     public BaseResponse<List<WarehouseInventoryDto.SkuRes>> getWarehouseInventorySkus(
             @AuthenticationPrincipal AuthUserDetails me,

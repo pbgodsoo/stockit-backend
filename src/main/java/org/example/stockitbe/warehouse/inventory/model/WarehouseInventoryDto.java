@@ -7,6 +7,8 @@ import java.util.Date;
 
 public class WarehouseInventoryDto {
 
+    // 창고 재고 품목 목록 응답 DTO
+    // 품목(상품코드) 단위 집계 결과를 반환한다.
     @Getter
     @Builder
     public static class ItemRes {
@@ -20,6 +22,7 @@ public class WarehouseInventoryDto {
         private String status;
         private Date updatedAt;
 
+        // 품목 집계 필드를 응답 DTO로 변환한다.
         public static ItemRes from(String itemCode,
                                    String parentCategory,
                                    String childCategory,
@@ -43,6 +46,8 @@ public class WarehouseInventoryDto {
         }
     }
 
+    // 창고 재고 SKU 목록 응답 DTO
+    // 선택 품목 내 SKU 단위 집계 결과를 반환한다.
     @Getter
     @Builder
     public static class SkuRes {
@@ -55,6 +60,7 @@ public class WarehouseInventoryDto {
         private String status;
         private Date updatedAt;
 
+        // SKU 집계 필드를 응답 DTO로 변환한다.
         public static SkuRes from(String skuCode,
                                   String color,
                                   String size,
