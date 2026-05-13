@@ -2,6 +2,8 @@ package org.example.stockitbe.hq.purchaseorder;
 
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrder;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -22,6 +24,10 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Lo
     @Override
     @EntityGraph(attributePaths = {"vendor", "warehouse"})
     List<PurchaseOrder> findAll(Specification<PurchaseOrder> spec);
+
+    @Override
+    @EntityGraph(attributePaths = {"vendor", "warehouse"})
+    Page<PurchaseOrder> findAll(Specification<PurchaseOrder> spec, Pageable pageable);
 
     long countByCodeStartingWith(String prefix);
 

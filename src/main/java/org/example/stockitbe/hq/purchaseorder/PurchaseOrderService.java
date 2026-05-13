@@ -21,6 +21,8 @@ import org.example.stockitbe.hq.vendor.VendorRepository;
 import org.example.stockitbe.hq.vendor.model.Vendor;
 import org.example.stockitbe.hq.vendor.model.VendorProduct;
 import org.example.stockitbe.user.model.AuthUserDetails;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,8 +56,8 @@ public class PurchaseOrderService {
     private final InventoryService inventoryService;
 
     @Transactional(readOnly = true)
-    public List<PurchaseOrderDto.ListRes> findAll(String vendorCode, PurchaseOrderStatus status,
-                                                    LocalDate from, LocalDate to) {
+    public Page<PurchaseOrderDto.ListRes> findAll(String vendorCode, PurchaseOrderStatus status,
+                                                    LocalDate from, LocalDate to, Pageable pageable) {
         Long vendorIdFilter = null;
         if (vendorCode != null && !vendorCode.isBlank()) {
             Vendor vendor = lookupVendor(vendorCode);
@@ -64,12 +66,12 @@ public class PurchaseOrderService {
 
         Specification<PurchaseOrder> spec = buildSpec(vendorIdFilter, status, from, to);
         // @EntityGraph(vendor, warehouse) — 단일 LEFT JOIN 으로 fetch.
-        List<PurchaseOrder> orders = purchaseOrderRepository.findAll(spec);
-        if (orders.isEmpty()) {
-            return List.of();
+        Page<PurchaseOrder> pagePo = purchaseOrderRepository.findAll(spec, pageable);
+        if (pagePo.isEmpty()) {
+            return Page.empty(pageable);
         }
 
-        Set<Long> orderIds = orders.stream().map(PurchaseOrder::getId).collect(Collectors.toSet());
+        Set<Long> orderIds = pagePo.getContent().stream().map(PurchaseOrder::getId).collect(Collectors.toSet());
         // batch 1회 조회 결과를 itemCountMap + productNamesMap 두 가지로 활용 (쿼리 0추가)
         List<PurchaseOrderItem> allItems = itemRepository.findAllByPurchaseOrderIdIn(orderIds);
         Map<Long, Long> itemCountMap = allItems.stream()
@@ -79,13 +81,11 @@ public class PurchaseOrderService {
                         it -> it.getPurchaseOrder().getId(),
                         Collectors.mapping(PurchaseOrderItem::getProductName, Collectors.toList())));
 
-        return orders.stream()
-                .map(po -> {
-                    int count = itemCountMap.getOrDefault(po.getId(), 0L).intValue();
-                    List<String> names = productNamesMap.getOrDefault(po.getId(), List.of());
-                    return PurchaseOrderDto.ListRes.from(po, po.getVendor(), po.getWarehouse().getCode(), count, names);
-                })
-                .toList();
+        return pagePo.map(po -> {
+            int count = itemCountMap.getOrDefault(po.getId(), 0L).intValue();
+            List<String> names = productNamesMap.getOrDefault(po.getId(), List.of());
+            return PurchaseOrderDto.ListRes.from(po, po.getVendor(), po.getWarehouse().getCode(), count, names);
+        });
     }
 
     @Transactional(readOnly = true)
@@ -479,7 +479,7 @@ public class PurchaseOrderService {
                 Date toDate = Date.from(to.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant());
                 predicates.add(cb.lessThan(root.get("createdAt"), toDate));
             }
-            query.orderBy(cb.desc(root.get("createdAt")));
+            // 정렬은 Pageable.sort 가 결정 (Controller @PageableDefault). Spec 안에 박지 마라 — count query 와 충돌·외부 sort 무력화.
             return cb.and(predicates.toArray(new Predicate[0]));
         };
     }

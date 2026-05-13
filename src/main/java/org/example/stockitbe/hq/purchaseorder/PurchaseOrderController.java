@@ -6,12 +6,15 @@ import org.example.stockitbe.common.model.BaseResponse;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderDto;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderStatus;
 import org.example.stockitbe.user.model.AuthUserDetails;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/hq/purchase-orders")
@@ -21,12 +24,13 @@ public class PurchaseOrderController {
     private final PurchaseOrderService service;
 
     @GetMapping
-    public BaseResponse<List<PurchaseOrderDto.ListRes>> list(
+    public BaseResponse<Page<PurchaseOrderDto.ListRes>> list(
             @RequestParam(required = false) String vendorCode,
             @RequestParam(required = false) PurchaseOrderStatus status,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return BaseResponse.success(service.findAll(vendorCode, status, from, to));
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return BaseResponse.success(service.findAll(vendorCode, status, from, to, pageable));
     }
 
     @GetMapping("/{code}")
