@@ -3,7 +3,7 @@ package org.example.stockitbe.hq.analytics.vendoranalytics;
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.hq.analytics.vendoranalytics.model.VendorAnalyticsDto;
 import org.example.stockitbe.hq.analytics.vendoranalytics.model.VendorPeriod;
-import org.example.stockitbe.hq.circularbuyer.CircularBuyerTransactionRepository;
+import org.example.stockitbe.hq.circularbuyer.repository.CircularBuyerTransactionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

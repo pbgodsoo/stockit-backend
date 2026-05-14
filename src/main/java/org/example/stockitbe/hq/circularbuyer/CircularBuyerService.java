@@ -6,6 +6,7 @@ import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.model.BaseResponseStatus;
 import org.example.stockitbe.hq.circularbuyer.model.CircularBuyer;
 import org.example.stockitbe.hq.circularbuyer.model.CircularBuyerDto;
+import org.example.stockitbe.hq.circularbuyer.repository.CircularBuyerRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;

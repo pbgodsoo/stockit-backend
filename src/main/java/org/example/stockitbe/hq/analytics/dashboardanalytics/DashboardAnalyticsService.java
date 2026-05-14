@@ -82,6 +82,7 @@ public class DashboardAnalyticsService {
                 // KPI 5카드
                 .totalRevenue(sales.getKpi().getTotalRevenue())
                 .totalRevenueTrendPct(sales.getKpi().getTotalRevenueTrendPct())
+                .totalSalesQty(sales.getKpi().getTotalQuantity())
                 .lockedValue(turnover.getInventoryHealth().getLockedValue())
                 .dangerSkuCount(turnover.getInventoryHealth().getDanger())
                 .totalSkuCount(turnover.getInventoryHealth().getTotalSku())

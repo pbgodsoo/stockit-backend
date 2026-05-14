@@ -54,6 +54,9 @@ public class DashboardAnalyticsDto {
         private String bestCategoryName;
         private BigDecimal bestCategoryAmount;
         private BigDecimal bestCategorySharePct;
+        private Long totalSalesQty;
+
+
 
         // 카드 2 (Turnover 점프): 재고 건강도
         private Long healthyCount;

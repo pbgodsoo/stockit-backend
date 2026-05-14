@@ -156,21 +156,27 @@ public class SalesAnalyticsService {
         Date t = toDate(to.plusDays(1).atStartOfDay());
         List<Object[]> rows = headerRepo.dailyRevenue(COMPLETED.name(), f, t, storeId);
 
-        Map<String, Long> byDay = new HashMap<>();
+        Map<String, Long> revByDay = new HashMap<>();
+        Map<String, Long> qtyByDay = new HashMap<>();
         for (Object[] r : rows) {
-            byDay.put(r[0].toString(), ((Number) r[1]).longValue());
+            String day = r[0].toString();
+            revByDay.put(day, ((Number) r[1]).longValue());
+            qtyByDay.put(day, ((Number) r[2]).longValue());
         }
         List<SalesAnalyticsDto.TrendPoint> result = new ArrayList<>();
         for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
             String key = d.format(DATE_FMT);
-            long rev = byDay.getOrDefault(key, 0L);
+            long rev = revByDay.getOrDefault(key, 0L);
+            long qty = qtyByDay.getOrDefault(key, 0L);
             result.add(SalesAnalyticsDto.TrendPoint.builder()
                     .label(d.format(LABEL_FMT))
                     .revenue(BigDecimal.valueOf(rev))
+                    .quantity(qty)
                     .build());
         }
         return result;
     }
+
 
     // ── Category Summary ──
     private List<SalesAnalyticsDto.CategorySummary> buildCategorySummary(

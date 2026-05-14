@@ -45,6 +45,7 @@ public class SalesAnalyticsDto {
     public static class TrendPoint {
         private String label;        // "04/14" or "2026-04" (period 따라)
         private BigDecimal revenue;  // 원 (FE 가 M 단위로 변환)
+        private long quantity;       // 개 (월별 판매 수량 — 본사 대시보드 차트용)
     }
 
     @Getter @Builder
