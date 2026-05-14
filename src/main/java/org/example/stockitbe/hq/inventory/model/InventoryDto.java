@@ -46,6 +46,7 @@ public class InventoryDto {
     }
 
     // 위치 필터 옵션 DTO
+    // region: 한글 지역명 (예: "서울"/"경기"). FE 거점 트리 지역 그룹화용.
     @Getter
     @Builder
     @AllArgsConstructor
@@ -53,6 +54,64 @@ public class InventoryDto {
         private Long id;
         private String code;
         private String name;
+        private String region;
+    }
+
+    // 전사 재고 SKU 단위 응답 DTO (모드 토글 SKU 모드용 — 마스터 무관 페이징)
+    // updatedAt 응답 X (FE 컬럼 제거 결정).
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class CompanyWideSkuRowRes {
+        private String skuCode;
+        private String itemCode;
+        private String itemName;
+        private String parentCategory;
+        private String childCategory;
+        private String color;
+        private String size;
+        private Integer actualStock;
+        private Integer availableStock;
+        private Integer safetyStock;
+        private String status;     // "정상"/"부족"/"품절" — SQL CASE 라벨
+    }
+
+    // 전사 재고 SKU facets 응답 DTO (칩 필터용 — 거점/카테고리/검색 조건 안의 distinct 색상/사이즈)
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class CompanyWideSkuFacetsRes {
+        private List<String> colors;
+        private List<String> sizes;
+    }
+
+    // 전사 재고 SKU 페이지 응답 DTO
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class CompanyWideSkuPageRes {
+        private List<CompanyWideSkuRowRes> items;
+        private List<LocationOptionRes> locationOptions;
+        private Integer page;
+        private Integer size;
+        private Long totalElements;
+        private Integer totalPages;
+        private Boolean hasNext;
+        private Boolean hasPrevious;
+
+        public static CompanyWideSkuPageRes from(Page<CompanyWideSkuRowRes> page,
+                                                 List<LocationOptionRes> locationOptions) {
+            return CompanyWideSkuPageRes.builder()
+                    .items(page.getContent())
+                    .locationOptions(locationOptions)
+                    .page(page.getNumber())
+                    .size(page.getSize())
+                    .totalElements(page.getTotalElements())
+                    .totalPages(page.getTotalPages())
+                    .hasNext(page.hasNext())
+                    .hasPrevious(page.hasPrevious())
+                    .build();
+        }
     }
 
     // 전사 재고 페이지 응답 DTO
