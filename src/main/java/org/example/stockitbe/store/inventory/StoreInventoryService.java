@@ -1,6 +1,5 @@
 package org.example.stockitbe.store.inventory;
 
-import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.model.BaseResponseStatus;
@@ -17,6 +16,11 @@ import org.example.stockitbe.hq.product.ProductSkuRepository;
 import org.example.stockitbe.hq.product.model.ProductMaster;
 import org.example.stockitbe.hq.product.model.ProductSku;
 import org.example.stockitbe.store.inventory.model.StoreInventoryDto;
+import org.example.stockitbe.store.inventory.model.StoreItemRow;
+import org.example.stockitbe.store.inventory.model.StoreSkuRow;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,7 +30,6 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class StoreInventoryService {
-    private static final List<String> MAIN_CATEGORY_ORDER = List.of("상의", "바지", "치마", "아우터");
 
     private final InfrastructureRepository infrastructureRepository;
     private final InventoryRepository inventoryRepository;
@@ -34,76 +37,100 @@ public class StoreInventoryService {
     private final ProductMasterRepository productMasterRepository;
     private final CategoryRepository categoryRepository;
 
-    // 매장 재고 품목 목록 조회
-    // 품목 단위로 실재고/가용재고/안전재고를 집계해 반환한다.
+    // 매장 재고 품목 페이지 목록 조회
+    // 품목 단위로 실재고/가용재고/안전재고를 native @Query GROUP BY 로 집계 + LIMIT/OFFSET.
     @Transactional(readOnly = true)
-    public List<StoreInventoryDto.ItemRes> getItems(String locationCode) {
+    public StoreInventoryDto.ItemPageRes getItems(String locationCode,
+                                                   String category,
+                                                   String status,
+                                                   String keyword,
+                                                   Pageable pageable) {
         Infrastructure store = resolveStore(locationCode);
-        List<Inventory> inventories = inventoryRepository.findAllByLocationId(store.getId());
-        if (inventories.isEmpty()) {
-            return List.of();
-        }
+        String safeCategory = blankToNull(category);
+        String safeStatus = blankToNull(status);
+        String safeKeyword = blankToNull(keyword);
 
-        Context context = buildContext(inventories);
-        Map<String, ItemAccumulator> grouped = new HashMap<>();
+        // sort 무시(native @Query 안에 ORDER BY 박혀 있음) — page/size 만 사용
+        Pageable safePageable = PageRequest.of(
+                Math.max(pageable.getPageNumber(), 0),
+                Math.max(pageable.getPageSize(), 1)
+        );
 
-        for (Inventory inventory : inventories) {
-            if (!InventoryStatusPolicy.QUERY_ALLOWED_STATUSES.contains(inventory.getInventoryStatus())) continue;
-            ProductSku sku = context.skuById.get(inventory.getSkuId());
-            if (sku == null) continue;
+        Page<StoreItemRow> rows = inventoryRepository.findStoreAggregated(
+                store.getId(), safeCategory, safeStatus, safeKeyword, safePageable
+        );
 
-            ProductMaster master = context.masterByCode.get(sku.getProductCode());
-            if (master == null) continue;
+        Page<StoreInventoryDto.ItemRes> mapped = rows.map(row -> StoreInventoryDto.ItemRes.from(
+                row.getItemCode(),
+                row.getParentCategory(),
+                row.getChildCategory(),
+                row.getItemName(),
+                n(row.getActualStock()),
+                n(row.getAvailableStock()),
+                n(row.getSafetyStock()),
+                row.getStatus()
+        ));
 
-            Category child = context.categoryByCode.get(master.getCategoryCode());
-            if (child == null) continue;
-
-            Category parent = child.getParentId() == null ? child : context.categoryById.get(child.getParentId());
-            String parentCategory = parent == null ? child.getName() : parent.getName();
-            String childCategory = child.getName();
-            String itemCode = master.getCode();
-
-            ItemAccumulator acc = grouped.computeIfAbsent(itemCode, key -> ItemAccumulator.builder()
-                    .itemCode(itemCode)
-                    .parentCategory(parentCategory)
-                    .childCategory(childCategory)
-                    .itemName(master.getName())
-                    .actualStock(0)
-                    .availableStock(0)
-                    .safetyStock(0)
-                    .updatedAt(inventory.getUpdatedAt())
-                    .build());
-
-            acc.actualStock += n(inventory.getQuantity());
-            acc.availableStock += n(inventory.getAvailableQuantity());
-            acc.skuIds.add(sku.getId());
-            if (acc.updatedAt == null || (inventory.getUpdatedAt() != null && inventory.getUpdatedAt().after(acc.updatedAt))) {
-                acc.updatedAt = inventory.getUpdatedAt();
-            }
-        }
-
-        grouped.values().forEach(acc -> acc.safetyStock = acc.skuIds.size() * n(context.masterByCode.get(acc.itemCode).getStoreSafetyStock()));
-
-        return grouped.values().stream()
-                .map(acc -> StoreInventoryDto.ItemRes.from(
-                        acc.itemCode,
-                        acc.parentCategory,
-                        acc.childCategory,
-                        acc.itemName,
-                        acc.actualStock,
-                        acc.availableStock,
-                        acc.safetyStock,
-                        resolveStatus(acc.actualStock, acc.safetyStock),
-                        acc.updatedAt
-                ))
-                .sorted(Comparator
-                        .comparing(StoreInventoryDto.ItemRes::getParentCategory, this::compareMainCategory)
-                        .thenComparing(StoreInventoryDto.ItemRes::getChildCategory, Comparator.nullsLast(String::compareTo))
-                        .thenComparing(StoreInventoryDto.ItemRes::getItemName, Comparator.nullsLast(String::compareTo)))
-                .toList();
+        return StoreInventoryDto.ItemPageRes.from(mapped);
     }
 
-    // 매장 재고 SKU 목록 조회
+    // 매장 재고 SKU 단위 페이지 조회 (모드 토글 SKU 모드 — 마스터 무관 모든 SKU 한 표).
+    // GROUP BY ps.id 로 SKU 단위 합산, status HAVING 으로 필터.
+    @Transactional(readOnly = true)
+    public StoreInventoryDto.SkuPageRes findSkus(String locationCode,
+                                                  String category,
+                                                  String status,
+                                                  String color,
+                                                  String skuSize,
+                                                  String keyword,
+                                                  Pageable pageable) {
+        Infrastructure store = resolveStore(locationCode);
+        Pageable safePageable = PageRequest.of(
+                Math.max(pageable.getPageNumber(), 0),
+                Math.max(pageable.getPageSize(), 1)
+        );
+
+        Page<StoreSkuRow> rows = inventoryRepository.findStoreSkus(
+                store.getId(),
+                blankToNull(category),
+                blankToNull(status),
+                blankToNull(color),
+                blankToNull(skuSize),
+                blankToNull(keyword),
+                safePageable
+        );
+
+        Page<StoreInventoryDto.SkuRowRes> mapped = rows.map(row -> StoreInventoryDto.SkuRowRes.from(
+                row.getSkuCode(),
+                row.getItemCode(),
+                row.getItemName(),
+                row.getParentCategory(),
+                row.getChildCategory(),
+                row.getColor(),
+                row.getSize(),
+                n(row.getActualStock()),
+                n(row.getAvailableStock()),
+                n(row.getSafetyStock()),
+                row.getStatus()
+        ));
+
+        return StoreInventoryDto.SkuPageRes.from(mapped);
+    }
+
+    // 매장 재고 SKU 칩 필터 facets — 같은 거점/카테고리/검색 조건 안의 가능한 색상/사이즈 distinct.
+    @Transactional(readOnly = true)
+    public StoreInventoryDto.SkuFacetsRes findSkuFacets(String locationCode,
+                                                         String category,
+                                                         String keyword) {
+        Infrastructure store = resolveStore(locationCode);
+        String safeCategory = blankToNull(category);
+        String safeKeyword = blankToNull(keyword);
+        List<String> colors = inventoryRepository.findStoreSkuColors(store.getId(), safeCategory, safeKeyword);
+        List<String> sizes = inventoryRepository.findStoreSkuSizes(store.getId(), safeCategory, safeKeyword);
+        return new StoreInventoryDto.SkuFacetsRes(colors, sizes);
+    }
+
+    // 매장 재고 SKU 목록 조회 (옛 /{itemCode}/skus 라우트 호환용 — FE 라우트 폐기 PR 머지 후 cleanup 예정)
     // 선택 품목(itemCode) 내 SKU 단위 재고를 조회한다.
     @Transactional(readOnly = true)
     public List<StoreInventoryDto.SkuRes> getItemSkus(String locationCode, String itemCode) {
@@ -154,12 +181,7 @@ public class StoreInventoryService {
         ProductMaster master = context.masterByCode.get(sku.getProductCode());
         if (master == null) return null;
 
-        Category child = context.categoryByCode.get(master.getCategoryCode());
-        if (child == null) return null;
-
-        String resolvedItemCode = master.getCode();
-
-        if (!Objects.equals(resolvedItemCode, itemCode)) {
+        if (!Objects.equals(master.getCode(), itemCode)) {
             return null;
         }
 
@@ -209,18 +231,12 @@ public class StoreInventoryService {
         return "정상";
     }
 
-    // 메인 카테고리 우선순위 기준으로 정렬 순서를 계산한다.
-    private int compareMainCategory(String a, String b) {
-        int ai = MAIN_CATEGORY_ORDER.indexOf(a);
-        int bi = MAIN_CATEGORY_ORDER.indexOf(b);
-        ai = ai < 0 ? MAIN_CATEGORY_ORDER.size() : ai;
-        bi = bi < 0 ? MAIN_CATEGORY_ORDER.size() : bi;
-        if (ai != bi) return Integer.compare(ai, bi);
-        return String.valueOf(a).compareTo(String.valueOf(b));
-    }
-
     private int n(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    private String blankToNull(String value) {
+        return (value == null || value.isBlank()) ? null : value.trim();
     }
 
     private record Context(
@@ -229,20 +245,6 @@ public class StoreInventoryService {
             Map<Long, Category> categoryById,
             Map<String, Category> categoryByCode
     ) {
-    }
-
-    @Builder
-    private static class ItemAccumulator {
-        private String itemCode;
-        private String parentCategory;
-        private String childCategory;
-        private String itemName;
-        private int actualStock;
-        private int availableStock;
-        private int safetyStock;
-        private Date updatedAt;
-        @Builder.Default
-        private Set<Long> skuIds = new HashSet<>();
     }
 
     private static class SkuAccumulator {
@@ -254,7 +256,7 @@ public class StoreInventoryService {
         private int availableStock = 0;
         private Date updatedAt;
 
-        private SkuAccumulator(String skuCode, String color, String size, int safetyStock, Date updatedAt) {
+        SkuAccumulator(String skuCode, String color, String size, int safetyStock, Date updatedAt) {
             this.skuCode = skuCode;
             this.color = color;
             this.size = size;

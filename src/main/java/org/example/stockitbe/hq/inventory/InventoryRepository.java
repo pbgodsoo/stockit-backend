@@ -6,6 +6,8 @@ import org.example.stockitbe.hq.inventory.model.CompanyWideSkuRow;
 import org.example.stockitbe.hq.inventory.model.Inventory;
 import org.example.stockitbe.hq.inventory.model.InventoryStatus;
 import org.example.stockitbe.hq.inventory.model.ItemSafetyStockRow;
+import org.example.stockitbe.store.inventory.model.StoreItemRow;
+import org.example.stockitbe.store.inventory.model.StoreSkuRow;
 import org.example.stockitbe.warehouse.inventory.model.WarehouseAggregateRow;
 import org.example.stockitbe.warehouse.inventory.model.WarehouseSkuRow;
 import org.springframework.data.domain.Page;
@@ -657,6 +659,246 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
         ORDER BY ps.size ASC
         """, nativeQuery = true)
     List<String> findWarehouseSkuSizes(
+            @Param("locationId") Long locationId,
+            @Param("category") String category,
+            @Param("keyword") String keyword
+    );
+
+    /**
+     * 매장 재고(품목 단위) 집계 페이지네이션.
+     * 단일 매장(locationId) 기준, GROUP BY product_master.code.
+     * safetyStock = COUNT(DISTINCT sku_id) * pm.store_safety_stock 으로 SQL 단계 계산 (창고 패턴 차용 — pm.warehouse_safety_stock 만 store_safety_stock 으로 교체).
+     * status UI 라벨(품절/부족/정상) 도 SQL CASE 로 계산해 HAVING 으로 필터.
+     * category 단일 파라미터: 부모/자식 한글 이름 매칭 (FE 호환).
+     * 정렬 = 메인 카테고리 우선순위 (상의/바지/치마/아우터) + childCategory + itemName.
+     * updatedAt 응답 X (운영 추적용 DB 컬럼은 유지).
+     */
+    @Query(value = """
+        SELECT
+            pm.code AS itemCode,
+            pm.name AS itemName,
+            COALESCE(pc.name, cc.name) AS parentCategory,
+            cc.name AS childCategory,
+            COALESCE(SUM(i.quantity), 0) AS actualStock,
+            COALESCE(SUM(i.available_quantity), 0) AS availableStock,
+            (COUNT(DISTINCT i.sku_id) * COALESCE(pm.store_safety_stock, 0)) AS safetyStock,
+            CASE
+                WHEN COALESCE(SUM(i.available_quantity), 0) <= 0 THEN '품절'
+                WHEN COALESCE(SUM(i.available_quantity), 0) <
+                     (COUNT(DISTINCT i.sku_id) * COALESCE(pm.store_safety_stock, 0))
+                  THEN '부족'
+                ELSE '정상'
+            END AS status
+        FROM inventory i
+        JOIN product_sku ps ON ps.id = i.sku_id
+        JOIN product_master pm ON pm.code = ps.product_code
+        LEFT JOIN category cc ON cc.code = pm.category_code
+        LEFT JOIN category pc ON pc.id = cc.parent_id
+        WHERE i.location_id = :locationId
+          AND i.inventory_status IN ('NORMAL', 'CIRCULAR_CANDIDATE')
+          AND (:category IS NULL OR pc.name = :category OR cc.name = :category)
+          AND (:keyword IS NULL OR (
+               LOWER(pm.code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(pm.name) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(ps.sku_code) LIKE CONCAT('%', LOWER(:keyword), '%')
+          ))
+        GROUP BY pm.code, pm.name, pm.store_safety_stock, cc.name, pc.name
+        HAVING (:status IS NULL OR (
+            CASE
+                WHEN COALESCE(SUM(i.available_quantity), 0) <= 0 THEN '품절'
+                WHEN COALESCE(SUM(i.available_quantity), 0) <
+                     (COUNT(DISTINCT i.sku_id) * COALESCE(pm.store_safety_stock, 0))
+                  THEN '부족'
+                ELSE '정상'
+            END
+        ) = :status)
+        ORDER BY
+            CASE COALESCE(pc.name, cc.name)
+                WHEN '상의' THEN 1
+                WHEN '바지' THEN 2
+                WHEN '치마' THEN 3
+                WHEN '아우터' THEN 4
+                ELSE 5
+            END ASC,
+            cc.name ASC,
+            pm.name ASC
+        """,
+        countQuery = """
+        SELECT COUNT(*) FROM (
+          SELECT pm.code
+          FROM inventory i
+          JOIN product_sku ps ON ps.id = i.sku_id
+          JOIN product_master pm ON pm.code = ps.product_code
+          LEFT JOIN category cc ON cc.code = pm.category_code
+          LEFT JOIN category pc ON pc.id = cc.parent_id
+          WHERE i.location_id = :locationId
+            AND i.inventory_status IN ('NORMAL', 'CIRCULAR_CANDIDATE')
+            AND (:category IS NULL OR pc.name = :category OR cc.name = :category)
+            AND (:keyword IS NULL OR (
+                 LOWER(pm.code) LIKE CONCAT('%', LOWER(:keyword), '%')
+              OR LOWER(pm.name) LIKE CONCAT('%', LOWER(:keyword), '%')
+              OR LOWER(ps.sku_code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            ))
+          GROUP BY pm.code, pm.store_safety_stock
+          HAVING (:status IS NULL OR (
+              CASE
+                  WHEN COALESCE(SUM(i.available_quantity), 0) <= 0 THEN '품절'
+                  WHEN COALESCE(SUM(i.available_quantity), 0) <
+                       (COUNT(DISTINCT i.sku_id) * COALESCE(pm.store_safety_stock, 0))
+                    THEN '부족'
+                  ELSE '정상'
+              END
+          ) = :status)
+        ) sub
+        """,
+        nativeQuery = true)
+    Page<StoreItemRow> findStoreAggregated(
+            @Param("locationId") Long locationId,
+            @Param("category") String category,
+            @Param("status") String status,
+            @Param("keyword") String keyword,
+            Pageable pageable
+    );
+
+    /**
+     * 매장 재고 SKU 단위 페이지네이션 (모드 토글 SKU 모드용 — 마스터 무관 모든 SKU 한 표).
+     * 단일 매장(locationId) 기준, GROUP BY ps.id.
+     * safetyStock = pm.store_safety_stock (매장 단일이라 row 단위 SUM 불필요 — sku 마다 1 row).
+     * status UI 라벨(품절/부족/정상) 은 SQL CASE 로 계산해 HAVING 으로 필터.
+     * 카테고리 단일 파라미터: 부모 또는 자식 한글 이름 매칭 (FE CategoryFilter 호환).
+     * skuSize 파라미터명 — Spring Pageable size 와 충돌 방지.
+     */
+    @Query(value = """
+        SELECT
+            ps.sku_code AS skuCode,
+            pm.code AS itemCode,
+            pm.name AS itemName,
+            COALESCE(pc.name, cc.name) AS parentCategory,
+            cc.name AS childCategory,
+            ps.color AS color,
+            ps.size AS size,
+            COALESCE(SUM(i.quantity), 0) AS actualStock,
+            COALESCE(SUM(i.available_quantity), 0) AS availableStock,
+            COALESCE(pm.store_safety_stock, 0) AS safetyStock,
+            CASE
+                WHEN COALESCE(SUM(i.available_quantity), 0) <= 0 THEN '품절'
+                WHEN COALESCE(SUM(i.available_quantity), 0) < COALESCE(pm.store_safety_stock, 0) THEN '부족'
+                ELSE '정상'
+            END AS status
+        FROM inventory i
+        JOIN product_sku ps ON ps.id = i.sku_id
+        JOIN product_master pm ON pm.code = ps.product_code
+        LEFT JOIN category cc ON cc.code = pm.category_code
+        LEFT JOIN category pc ON pc.id = cc.parent_id
+        WHERE i.location_id = :locationId
+          AND i.inventory_status IN ('NORMAL', 'CIRCULAR_CANDIDATE')
+          AND (:category IS NULL OR pc.name = :category OR cc.name = :category)
+          AND (:color IS NULL OR ps.color = :color)
+          AND (:skuSize IS NULL OR ps.size = :skuSize)
+          AND (:keyword IS NULL OR (
+               LOWER(ps.sku_code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(pm.code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(pm.name) LIKE CONCAT('%', LOWER(:keyword), '%')
+          ))
+        GROUP BY ps.id, ps.sku_code, pm.code, pm.name, pm.store_safety_stock, cc.name, pc.name, ps.color, ps.size
+        HAVING (:status IS NULL OR (
+            CASE
+                WHEN COALESCE(SUM(i.available_quantity), 0) <= 0 THEN '품절'
+                WHEN COALESCE(SUM(i.available_quantity), 0) < COALESCE(pm.store_safety_stock, 0) THEN '부족'
+                ELSE '정상'
+            END
+        ) = :status)
+        ORDER BY ps.sku_code ASC
+        """,
+        countQuery = """
+        SELECT COUNT(*) FROM (
+            SELECT ps.id
+            FROM inventory i
+            JOIN product_sku ps ON ps.id = i.sku_id
+            JOIN product_master pm ON pm.code = ps.product_code
+            LEFT JOIN category cc ON cc.code = pm.category_code
+            LEFT JOIN category pc ON pc.id = cc.parent_id
+            WHERE i.location_id = :locationId
+              AND i.inventory_status IN ('NORMAL', 'CIRCULAR_CANDIDATE')
+              AND (:category IS NULL OR pc.name = :category OR cc.name = :category)
+              AND (:color IS NULL OR ps.color = :color)
+              AND (:skuSize IS NULL OR ps.size = :skuSize)
+              AND (:keyword IS NULL OR (
+                   LOWER(ps.sku_code) LIKE CONCAT('%', LOWER(:keyword), '%')
+                OR LOWER(pm.code) LIKE CONCAT('%', LOWER(:keyword), '%')
+                OR LOWER(pm.name) LIKE CONCAT('%', LOWER(:keyword), '%')
+              ))
+            GROUP BY ps.id, pm.store_safety_stock
+            HAVING (:status IS NULL OR (
+                CASE
+                    WHEN COALESCE(SUM(i.available_quantity), 0) <= 0 THEN '품절'
+                    WHEN COALESCE(SUM(i.available_quantity), 0) < COALESCE(pm.store_safety_stock, 0) THEN '부족'
+                    ELSE '정상'
+                END
+            ) = :status)
+        ) sub
+        """,
+        nativeQuery = true)
+    Page<StoreSkuRow> findStoreSkus(
+            @Param("locationId") Long locationId,
+            @Param("category") String category,
+            @Param("status") String status,
+            @Param("color") String color,
+            @Param("skuSize") String skuSize,
+            @Param("keyword") String keyword,
+            Pageable pageable
+    );
+
+    /**
+     * 매장 재고 SKU 칩 필터용 distinct 색상 — facets endpoint.
+     * 같은 거점/카테고리/검색 필터 조건 안에서 가능한 색상 목록 반환.
+     */
+    @Query(value = """
+        SELECT DISTINCT ps.color
+        FROM inventory i
+        JOIN product_sku ps ON ps.id = i.sku_id
+        JOIN product_master pm ON pm.code = ps.product_code
+        LEFT JOIN category cc ON cc.code = pm.category_code
+        LEFT JOIN category pc ON pc.id = cc.parent_id
+        WHERE i.location_id = :locationId
+          AND i.inventory_status IN ('NORMAL', 'CIRCULAR_CANDIDATE')
+          AND (:category IS NULL OR pc.name = :category OR cc.name = :category)
+          AND (:keyword IS NULL OR (
+               LOWER(ps.sku_code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(pm.code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(pm.name) LIKE CONCAT('%', LOWER(:keyword), '%')
+          ))
+          AND ps.color IS NOT NULL
+        ORDER BY ps.color ASC
+        """, nativeQuery = true)
+    List<String> findStoreSkuColors(
+            @Param("locationId") Long locationId,
+            @Param("category") String category,
+            @Param("keyword") String keyword
+    );
+
+    /**
+     * 매장 재고 SKU 칩 필터용 distinct 사이즈 — facets endpoint.
+     */
+    @Query(value = """
+        SELECT DISTINCT ps.size
+        FROM inventory i
+        JOIN product_sku ps ON ps.id = i.sku_id
+        JOIN product_master pm ON pm.code = ps.product_code
+        LEFT JOIN category cc ON cc.code = pm.category_code
+        LEFT JOIN category pc ON pc.id = cc.parent_id
+        WHERE i.location_id = :locationId
+          AND i.inventory_status IN ('NORMAL', 'CIRCULAR_CANDIDATE')
+          AND (:category IS NULL OR pc.name = :category OR cc.name = :category)
+          AND (:keyword IS NULL OR (
+               LOWER(ps.sku_code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(pm.code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(pm.name) LIKE CONCAT('%', LOWER(:keyword), '%')
+          ))
+          AND ps.size IS NOT NULL
+        ORDER BY ps.size ASC
+        """, nativeQuery = true)
+    List<String> findStoreSkuSizes(
             @Param("locationId") Long locationId,
             @Param("category") String category,
             @Param("keyword") String keyword
