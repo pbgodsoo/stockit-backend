@@ -7,6 +7,7 @@ import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
 import org.example.stockitbe.hq.inventory.model.CompanyWideAggregateRow;
+import org.example.stockitbe.hq.inventory.model.CompanyWideSkuRow;
 import org.example.stockitbe.hq.inventory.model.Inventory;
 import org.example.stockitbe.hq.inventory.model.InventoryDto;
 import org.example.stockitbe.hq.inventory.model.InventoryStatus;
@@ -47,6 +48,7 @@ public class InventoryQueryService {
                                                             List<Long> locationIds,
                                                             String parentCategory,
                                                             String childCategory,
+                                                            String category,
                                                             InventoryStatus status,
                                                             String keyword,
                                                             Pageable pageable) {
@@ -58,6 +60,7 @@ public class InventoryQueryService {
         String safeKeyword = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
         String safeParent = (parentCategory == null || parentCategory.isBlank()) ? null : parentCategory.trim();
         String safeChild = (childCategory == null || childCategory.isBlank()) ? null : childCategory.trim();
+        String safeCategory = (category == null || category.isBlank()) ? null : category.trim();
 
         // sort 무시(native @Query 안에 ORDER BY 박혀 있음) — page/size 만 사용
         Pageable safePageable = PageRequest.of(
@@ -67,7 +70,7 @@ public class InventoryQueryService {
 
         Page<CompanyWideAggregateRow> rows = inventoryRepository.findCompanyWideAggregated(
                 locationTypeStr, hasLocationIds, safeLocationIds, statusStr,
-                safeParent, safeChild, safeKeyword, safePageable
+                safeParent, safeChild, safeCategory, safeKeyword, safePageable
         );
 
         List<InventoryDto.LocationOptionRes> locationOptions = buildLocationOptions(locationType);
@@ -185,6 +188,7 @@ public class InventoryQueryService {
     }
 
     // locationType 조건에 맞는 위치 옵션 목록을 생성한다.
+    // region(한글 지역명) 필드 포함 — FE 거점 트리 지역 그룹화용.
     private List<InventoryDto.LocationOptionRes> buildLocationOptions(LocationType locationType) {
         return infrastructureRepository.findAll().stream()
                 .filter(i -> locationType == null || i.getLocationType() == locationType)
@@ -193,8 +197,97 @@ public class InventoryQueryService {
                         .id(i.getId())
                         .code(i.getCode())
                         .name(i.getName())
+                        .region(i.getRegion())
                         .build())
                 .toList();
+    }
+
+    // 전사 재고 SKU 단위 페이지 목록을 조회한다 (모드 토글 SKU 모드).
+    // 마스터 무관 모든 SKU 한 표 + 색상/사이즈 필터. status 필터는 BE HAVING 미적용,
+    //   FE/Service 측 후처리 (페이징 정확성은 약간 양보 — 사이클 후속 정교화).
+    // 주의: skuSize 파라미터명 — Spring Pageable 의 size 와 충돌 방지.
+    @Transactional(readOnly = true)
+    public InventoryDto.CompanyWideSkuPageRes findCompanyWideSkus(LocationType locationType,
+                                                                    List<Long> locationIds,
+                                                                    String parentCategory,
+                                                                    String childCategory,
+                                                                    String status,
+                                                                    String color,
+                                                                    String skuSize,
+                                                                    String keyword,
+                                                                    Pageable pageable) {
+        String locationTypeStr = locationType == null ? null : locationType.name();
+        boolean hasLocationIds = locationIds != null && !locationIds.isEmpty();
+        List<Long> safeLocationIds = hasLocationIds ? locationIds : List.of(-1L);
+        String safeParent = (parentCategory == null || parentCategory.isBlank()) ? null : parentCategory.trim();
+        String safeChild = (childCategory == null || childCategory.isBlank()) ? null : childCategory.trim();
+        String safeStatus = (status == null || status.isBlank()) ? null : status.trim();
+        String safeColor = (color == null || color.isBlank()) ? null : color.trim();
+        String safeSkuSize = (skuSize == null || skuSize.isBlank()) ? null : skuSize.trim();
+        String safeKeyword = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
+
+        Pageable safePageable = PageRequest.of(
+                Math.max(pageable.getPageNumber(), 0),
+                Math.max(pageable.getPageSize(), 1)
+        );
+
+        Page<CompanyWideSkuRow> rows = inventoryRepository.findCompanyWideSkus(
+                locationTypeStr, hasLocationIds, safeLocationIds,
+                safeParent, safeChild, safeColor, safeSkuSize, safeKeyword, safePageable
+        );
+
+        Page<InventoryDto.CompanyWideSkuRowRes> mapped = rows.map(row -> InventoryDto.CompanyWideSkuRowRes.builder()
+                .skuCode(row.getSkuCode())
+                .itemCode(row.getItemCode())
+                .itemName(row.getItemName())
+                .parentCategory(row.getParentCategory() == null ? "" : row.getParentCategory())
+                .childCategory(row.getChildCategory() == null ? "" : row.getChildCategory())
+                .color(row.getColor())
+                .size(row.getSize())
+                .actualStock(n(row.getActualStock()))
+                .availableStock(n(row.getAvailableStock()))
+                .safetyStock(n(row.getSafetyStock()))
+                .status(row.getStatus())
+                .build());
+
+        // status 필터는 페이지 후 클라이언트 측 후처리 (페이징 부정확 양해 — TODO: HAVING 정교화)
+        if (safeStatus != null) {
+            List<InventoryDto.CompanyWideSkuRowRes> filtered = mapped.getContent().stream()
+                    .filter(r -> safeStatus.equals(r.getStatus()))
+                    .toList();
+            Page<InventoryDto.CompanyWideSkuRowRes> filteredPage = new org.springframework.data.domain.PageImpl<>(
+                    filtered, mapped.getPageable(), mapped.getTotalElements()
+            );
+            List<InventoryDto.LocationOptionRes> locationOptions = buildLocationOptions(locationType);
+            return InventoryDto.CompanyWideSkuPageRes.from(filteredPage, locationOptions);
+        }
+
+        List<InventoryDto.LocationOptionRes> locationOptions = buildLocationOptions(locationType);
+        return InventoryDto.CompanyWideSkuPageRes.from(mapped, locationOptions);
+    }
+
+    // 전사 재고 SKU 칩 필터용 facets — 거점/카테고리/검색 조건 안의 가능한 색상/사이즈 목록.
+    @Transactional(readOnly = true)
+    public InventoryDto.CompanyWideSkuFacetsRes findCompanyWideSkuFacets(LocationType locationType,
+                                                                          List<Long> locationIds,
+                                                                          String parentCategory,
+                                                                          String childCategory,
+                                                                          String keyword) {
+        String locationTypeStr = locationType == null ? null : locationType.name();
+        boolean hasLocationIds = locationIds != null && !locationIds.isEmpty();
+        List<Long> safeLocationIds = hasLocationIds ? locationIds : List.of(-1L);
+        String safeParent = (parentCategory == null || parentCategory.isBlank()) ? null : parentCategory.trim();
+        String safeChild = (childCategory == null || childCategory.isBlank()) ? null : childCategory.trim();
+        String safeKeyword = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
+
+        List<String> colors = inventoryRepository.findCompanyWideSkuColors(
+                locationTypeStr, hasLocationIds, safeLocationIds, safeParent, safeChild, safeKeyword);
+        List<String> sizes = inventoryRepository.findCompanyWideSkuSizes(
+                locationTypeStr, hasLocationIds, safeLocationIds, safeParent, safeChild, safeKeyword);
+        return InventoryDto.CompanyWideSkuFacetsRes.builder()
+                .colors(colors)
+                .sizes(sizes)
+                .build();
     }
 
     // null-safe 정수 변환

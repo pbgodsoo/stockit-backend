@@ -2,6 +2,7 @@ package org.example.stockitbe.hq.inventory;
 
 import jakarta.persistence.LockModeType;
 import org.example.stockitbe.hq.inventory.model.CompanyWideAggregateRow;
+import org.example.stockitbe.hq.inventory.model.CompanyWideSkuRow;
 import org.example.stockitbe.hq.inventory.model.Inventory;
 import org.example.stockitbe.hq.inventory.model.InventoryStatus;
 import org.example.stockitbe.hq.inventory.model.ItemSafetyStockRow;
@@ -171,12 +172,12 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
           AND (:status IS NULL OR i.inventory_status = :status)
           AND (:parentCategory IS NULL OR COALESCE(pc.name, cc.name) = :parentCategory)
           AND (:childCategory IS NULL OR cc.name = :childCategory)
+          AND (:parentCategory IS NULL OR pc.name = :parentCategory)
+          AND (:childCategory IS NULL OR cc.name = :childCategory)
           AND (:keyword IS NULL OR (
                LOWER(pm.code) LIKE CONCAT('%', LOWER(:keyword), '%')
             OR LOWER(pm.name) LIKE CONCAT('%', LOWER(:keyword), '%')
             OR LOWER(ps.sku_code) LIKE CONCAT('%', LOWER(:keyword), '%')
-            OR LOWER(inf.code) LIKE CONCAT('%', LOWER(:keyword), '%')
-            OR LOWER(inf.name) LIKE CONCAT('%', LOWER(:keyword), '%')
           ))
         GROUP BY pm.code, pm.name, cc.name, pc.name
         ORDER BY pm.code ASC
@@ -196,6 +197,8 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
             AND (:status IS NULL OR i.inventory_status = :status)
             AND (:parentCategory IS NULL OR COALESCE(pc.name, cc.name) = :parentCategory)
             AND (:childCategory IS NULL OR cc.name = :childCategory)
+            AND (:parentCategory IS NULL OR pc.name = :parentCategory)
+          AND (:childCategory IS NULL OR cc.name = :childCategory)
             AND (:keyword IS NULL OR (
                  LOWER(pm.code) LIKE CONCAT('%', LOWER(:keyword), '%')
               OR LOWER(pm.name) LIKE CONCAT('%', LOWER(:keyword), '%')
@@ -214,8 +217,169 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
             @Param("status") String status,
             @Param("parentCategory") String parentCategory,
             @Param("childCategory") String childCategory,
+            @Param("category") String category,
             @Param("keyword") String keyword,
             Pageable pageable
+    );
+
+    /**
+     * 전사 재고 SKU 단위 페이지네이션 (모드 토글 SKU 모드용 — 마스터 무관 모든 SKU 한 표).
+     * GROUP BY ps.id 로 SKU 단위 합산. status 라벨(품절/부족/정상) 은 SQL CASE 로 계산해 HAVING 으로 필터.
+     * safetyStock = row 단위 SUM (location_type 별 store/warehouse safety_stock) — 같은 location 의
+     *   NORMAL+CIRCULAR_CANDIDATE 두 row 가 있으면 비례적으로 곱해지지만 available 도 같이 합산되어
+     *   status 라벨 결과는 일관. 마스터(`findCompanyWideAggregated`) 와 동일한 단순화 패턴.
+     * 카테고리 단일 파라미터: 부모 또는 자식 한글 이름 매칭 (FE CategoryFilter 호환).
+     */
+    @Query(value = """
+        SELECT
+            ps.sku_code AS skuCode,
+            pm.code AS itemCode,
+            pm.name AS itemName,
+            COALESCE(pc.name, cc.name) AS parentCategory,
+            cc.name AS childCategory,
+            ps.color AS color,
+            ps.size AS size,
+            COALESCE(SUM(i.quantity), 0) AS actualStock,
+            COALESCE(SUM(i.available_quantity), 0) AS availableStock,
+            COALESCE(SUM(
+                CASE WHEN inf.location_type = 'WAREHOUSE'
+                     THEN COALESCE(pm.warehouse_safety_stock, 0)
+                     ELSE COALESCE(pm.store_safety_stock, 0)
+                END
+            ), 0) AS safetyStock,
+            CASE
+                WHEN COALESCE(SUM(i.available_quantity), 0) <= 0 THEN '품절'
+                WHEN COALESCE(SUM(i.available_quantity), 0) < COALESCE(SUM(
+                    CASE WHEN inf.location_type = 'WAREHOUSE'
+                         THEN COALESCE(pm.warehouse_safety_stock, 0)
+                         ELSE COALESCE(pm.store_safety_stock, 0)
+                    END
+                ), 0) THEN '부족'
+                ELSE '정상'
+            END AS status
+        FROM inventory i
+        JOIN product_sku ps ON ps.id = i.sku_id
+        JOIN product_master pm ON pm.code = ps.product_code
+        JOIN infrastructure inf ON inf.id = i.location_id
+        LEFT JOIN category cc ON cc.code = pm.category_code
+        LEFT JOIN category pc ON pc.id = cc.parent_id
+        WHERE i.inventory_status IN ('NORMAL', 'CIRCULAR_CANDIDATE')
+          AND (:locationType IS NULL OR inf.location_type = :locationType)
+          AND (:hasLocationIds = false OR inf.id IN (:locationIds))
+          AND (:parentCategory IS NULL OR pc.name = :parentCategory)
+          AND (:childCategory IS NULL OR cc.name = :childCategory)
+          AND (:color IS NULL OR ps.color = :color)
+          AND (:skuSize IS NULL OR ps.size = :skuSize)
+          AND (:keyword IS NULL OR (
+               LOWER(ps.sku_code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(pm.code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(pm.name) LIKE CONCAT('%', LOWER(:keyword), '%')
+          ))
+        GROUP BY ps.id, ps.sku_code, pm.code, pm.name, cc.name, pc.name, ps.color, ps.size
+        ORDER BY ps.sku_code ASC
+        """,
+        countQuery = """
+        SELECT COUNT(*) FROM (
+            SELECT ps.id
+            FROM inventory i
+            JOIN product_sku ps ON ps.id = i.sku_id
+            JOIN product_master pm ON pm.code = ps.product_code
+            JOIN infrastructure inf ON inf.id = i.location_id
+            LEFT JOIN category cc ON cc.code = pm.category_code
+            LEFT JOIN category pc ON pc.id = cc.parent_id
+            WHERE i.inventory_status IN ('NORMAL', 'CIRCULAR_CANDIDATE')
+              AND (:locationType IS NULL OR inf.location_type = :locationType)
+              AND (:hasLocationIds = false OR inf.id IN (:locationIds))
+              AND (:parentCategory IS NULL OR pc.name = :parentCategory)
+          AND (:childCategory IS NULL OR cc.name = :childCategory)
+              AND (:color IS NULL OR ps.color = :color)
+              AND (:skuSize IS NULL OR ps.size = :skuSize)
+              AND (:keyword IS NULL OR (
+                   LOWER(ps.sku_code) LIKE CONCAT('%', LOWER(:keyword), '%')
+                OR LOWER(pm.code) LIKE CONCAT('%', LOWER(:keyword), '%')
+                OR LOWER(pm.name) LIKE CONCAT('%', LOWER(:keyword), '%')
+              ))
+            GROUP BY ps.id
+        ) sub
+        """,
+        nativeQuery = true)
+    Page<CompanyWideSkuRow> findCompanyWideSkus(
+            @Param("locationType") String locationType,
+            @Param("hasLocationIds") boolean hasLocationIds,
+            @Param("locationIds") List<Long> locationIds,
+            @Param("parentCategory") String parentCategory,
+            @Param("childCategory") String childCategory,
+            @Param("color") String color,
+            @Param("skuSize") String skuSize,
+            @Param("keyword") String keyword,
+            Pageable pageable
+    );
+
+    /**
+     * 전사 재고 SKU 칩 필터용 distinct 색상 — facets endpoint.
+     * 같은 거점/카테고리/검색 필터 조건 안에서 가능한 색상 목록 반환.
+     */
+    @Query(value = """
+        SELECT DISTINCT ps.color
+        FROM inventory i
+        JOIN product_sku ps ON ps.id = i.sku_id
+        JOIN product_master pm ON pm.code = ps.product_code
+        JOIN infrastructure inf ON inf.id = i.location_id
+        LEFT JOIN category cc ON cc.code = pm.category_code
+        LEFT JOIN category pc ON pc.id = cc.parent_id
+        WHERE i.inventory_status IN ('NORMAL', 'CIRCULAR_CANDIDATE')
+          AND (:locationType IS NULL OR inf.location_type = :locationType)
+          AND (:hasLocationIds = false OR inf.id IN (:locationIds))
+          AND (:parentCategory IS NULL OR pc.name = :parentCategory)
+          AND (:childCategory IS NULL OR cc.name = :childCategory)
+          AND (:keyword IS NULL OR (
+               LOWER(ps.sku_code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(pm.code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(pm.name) LIKE CONCAT('%', LOWER(:keyword), '%')
+          ))
+          AND ps.color IS NOT NULL
+        ORDER BY ps.color ASC
+        """, nativeQuery = true)
+    List<String> findCompanyWideSkuColors(
+            @Param("locationType") String locationType,
+            @Param("hasLocationIds") boolean hasLocationIds,
+            @Param("locationIds") List<Long> locationIds,
+            @Param("parentCategory") String parentCategory,
+            @Param("childCategory") String childCategory,
+            @Param("keyword") String keyword
+    );
+
+    /**
+     * 전사 재고 SKU 칩 필터용 distinct 사이즈 — facets endpoint.
+     */
+    @Query(value = """
+        SELECT DISTINCT ps.size
+        FROM inventory i
+        JOIN product_sku ps ON ps.id = i.sku_id
+        JOIN product_master pm ON pm.code = ps.product_code
+        JOIN infrastructure inf ON inf.id = i.location_id
+        LEFT JOIN category cc ON cc.code = pm.category_code
+        LEFT JOIN category pc ON pc.id = cc.parent_id
+        WHERE i.inventory_status IN ('NORMAL', 'CIRCULAR_CANDIDATE')
+          AND (:locationType IS NULL OR inf.location_type = :locationType)
+          AND (:hasLocationIds = false OR inf.id IN (:locationIds))
+          AND (:parentCategory IS NULL OR pc.name = :parentCategory)
+          AND (:childCategory IS NULL OR cc.name = :childCategory)
+          AND (:keyword IS NULL OR (
+               LOWER(ps.sku_code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(pm.code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(pm.name) LIKE CONCAT('%', LOWER(:keyword), '%')
+          ))
+          AND ps.size IS NOT NULL
+        ORDER BY ps.size ASC
+        """, nativeQuery = true)
+    List<String> findCompanyWideSkuSizes(
+            @Param("locationType") String locationType,
+            @Param("hasLocationIds") boolean hasLocationIds,
+            @Param("locationIds") List<Long> locationIds,
+            @Param("parentCategory") String parentCategory,
+            @Param("childCategory") String childCategory,
+            @Param("keyword") String keyword
     );
 
     /**
