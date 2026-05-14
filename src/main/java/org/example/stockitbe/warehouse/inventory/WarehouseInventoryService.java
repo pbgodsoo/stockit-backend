@@ -17,6 +17,7 @@ import org.example.stockitbe.hq.product.model.ProductMaster;
 import org.example.stockitbe.hq.product.model.ProductSku;
 import org.example.stockitbe.warehouse.inventory.model.WarehouseAggregateRow;
 import org.example.stockitbe.warehouse.inventory.model.WarehouseInventoryDto;
+import org.example.stockitbe.warehouse.inventory.model.WarehouseSkuRow;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -42,14 +43,16 @@ public class WarehouseInventoryService {
     public WarehouseInventoryDto.ItemPageRes getItems(String locationCode,
                                                       String parentCategory,
                                                       String childCategory,
+                                                      String category,
                                                       String status,
                                                       String keyword,
                                                       Pageable pageable) {
         Infrastructure warehouse = resolveWarehouse(locationCode);
-        String safeParent = (parentCategory == null || parentCategory.isBlank()) ? null : parentCategory.trim();
-        String safeChild = (childCategory == null || childCategory.isBlank()) ? null : childCategory.trim();
-        String safeStatus = (status == null || status.isBlank()) ? null : status.trim();
-        String safeKeyword = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
+        String safeParent = blankToNull(parentCategory);
+        String safeChild = blankToNull(childCategory);
+        String safeCategory = blankToNull(category);
+        String safeStatus = blankToNull(status);
+        String safeKeyword = blankToNull(keyword);
 
         // sort 무시(native @Query 안에 ORDER BY 박혀 있음) — page/size 만 사용
         Pageable safePageable = PageRequest.of(
@@ -58,7 +61,7 @@ public class WarehouseInventoryService {
         );
 
         Page<WarehouseAggregateRow> rows = inventoryRepository.findWarehouseAggregated(
-                warehouse.getId(), safeParent, safeChild, safeStatus, safeKeyword, safePageable
+                warehouse.getId(), safeParent, safeChild, safeCategory, safeStatus, safeKeyword, safePageable
         );
 
         Page<WarehouseInventoryDto.ItemRes> mapped = rows.map(row -> WarehouseInventoryDto.ItemRes.from(
@@ -69,15 +72,70 @@ public class WarehouseInventoryService {
                 n(row.getActualStock()),
                 n(row.getAvailableStock()),
                 n(row.getSafetyStock()),
-                row.getStatus(),
-                row.getUpdatedAt()
+                row.getStatus()
         ));
 
         return WarehouseInventoryDto.ItemPageRes.from(mapped);
     }
 
-    // 창고 재고 SKU 목록 조회
-    // 선택 품목(itemCode) 내 SKU 단위 재고를 조회한다.
+    // 창고 재고 SKU 단위 페이지 조회 (모드 토글 SKU 모드 — 마스터 무관 모든 SKU 한 표).
+    // GROUP BY ps.id 로 SKU 단위 합산, status HAVING 으로 필터.
+    @Transactional(readOnly = true)
+    public WarehouseInventoryDto.SkuPageRes findSkus(String locationCode,
+                                                     String category,
+                                                     String status,
+                                                     String color,
+                                                     String skuSize,
+                                                     String keyword,
+                                                     Pageable pageable) {
+        Infrastructure warehouse = resolveWarehouse(locationCode);
+        Pageable safePageable = PageRequest.of(
+                Math.max(pageable.getPageNumber(), 0),
+                Math.max(pageable.getPageSize(), 1)
+        );
+
+        Page<WarehouseSkuRow> rows = inventoryRepository.findWarehouseSkus(
+                warehouse.getId(),
+                blankToNull(category),
+                blankToNull(status),
+                blankToNull(color),
+                blankToNull(skuSize),
+                blankToNull(keyword),
+                safePageable
+        );
+
+        Page<WarehouseInventoryDto.SkuRowRes> mapped = rows.map(row -> WarehouseInventoryDto.SkuRowRes.from(
+                row.getSkuCode(),
+                row.getItemCode(),
+                row.getItemName(),
+                row.getParentCategory(),
+                row.getChildCategory(),
+                row.getColor(),
+                row.getSize(),
+                n(row.getActualStock()),
+                n(row.getAvailableStock()),
+                n(row.getSafetyStock()),
+                row.getStatus()
+        ));
+
+        return WarehouseInventoryDto.SkuPageRes.from(mapped);
+    }
+
+    // 창고 재고 SKU 칩 필터 facets — 같은 거점/카테고리/검색 조건 안의 가능한 색상/사이즈 distinct.
+    @Transactional(readOnly = true)
+    public WarehouseInventoryDto.SkuFacetsRes findSkuFacets(String locationCode,
+                                                            String category,
+                                                            String keyword) {
+        Infrastructure warehouse = resolveWarehouse(locationCode);
+        String safeCategory = blankToNull(category);
+        String safeKeyword = blankToNull(keyword);
+        List<String> colors = inventoryRepository.findWarehouseSkuColors(warehouse.getId(), safeCategory, safeKeyword);
+        List<String> sizes = inventoryRepository.findWarehouseSkuSizes(warehouse.getId(), safeCategory, safeKeyword);
+        return new WarehouseInventoryDto.SkuFacetsRes(colors, sizes);
+    }
+
+    // 창고 재고 SKU 목록 조회 (옛 /{itemCode}/skus 라우트 호환용)
+    // 선택 품목(itemCode) 내 SKU 단위 재고를 조회한다. FE 라우트 폐기 PR 머지 후 cleanup 예정.
     @Transactional(readOnly = true)
     public List<WarehouseInventoryDto.SkuRes> getItemSkus(String locationCode, String itemCode) {
         Infrastructure warehouse = resolveWarehouse(locationCode);
@@ -179,6 +237,10 @@ public class WarehouseInventoryService {
 
     private int n(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    private String blankToNull(String value) {
+        return (value == null || value.isBlank()) ? null : value.trim();
     }
 
     private record Context(
