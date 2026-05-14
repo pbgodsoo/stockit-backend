@@ -34,9 +34,10 @@ public interface StoreSaleHeaderRepository extends JpaRepository<StoreSaleHeader
     Long countActiveStores(@Param("status") StoreSaleStatus status,
                            @Param("from") Date from, @Param("to") Date to);
 
-    // 일자별 매출
+    // 일자별 매출 + 판매 수량
     @Query(value = "SELECT DATE(h.sold_at) AS day, " +
-            "       COALESCE(SUM(h.total_amount), 0) AS revenue " +
+            "       COALESCE(SUM(h.total_amount), 0) AS revenue, " +
+            "       COALESCE(SUM(h.total_quantity), 0) AS quantity " +
             "FROM store_sale_header h " +
             "WHERE h.status = :status " +
             "  AND h.sold_at >= :from AND h.sold_at < :to " +

@@ -3,6 +3,7 @@ package org.example.stockitbe.hq.circularbuyer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.stockitbe.hq.circularbuyer.model.CircularBuyer;
+import org.example.stockitbe.hq.circularbuyer.repository.CircularBuyerRepository;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

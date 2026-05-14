@@ -1,4 +1,4 @@
-package org.example.stockitbe.hq.circularbuyer;
+package org.example.stockitbe.hq.circularbuyer.repository;
 
 import jakarta.persistence.LockModeType;
 import org.example.stockitbe.hq.circularbuyer.model.CircularBuyer;

@@ -1,4 +1,4 @@
-package org.example.stockitbe.hq.circularbuyer;
+package org.example.stockitbe.hq.circularbuyer.repository;
 
 import org.example.stockitbe.hq.circularbuyer.model.CircularBuyerTransaction;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -100,4 +100,44 @@ public interface CircularBuyerTransactionRepository extends JpaRepository<Circul
         ORDER BY total_amount DESC
         """, nativeQuery = true)
     List<Object[]> aggregateByMaterial(@Param("from") Date from, @Param("to") Date to);
+
+
+
+    /**
+     * 지정 연도의 월별 수익/거래 건수 집계.
+     * 결과 컬럼: month(1~12), revenue(SUM total_amount), cnt(COUNT)
+     */
+    @Query(value = """
+        SELECT MONTH(t.transacted_at) AS m,
+               COALESCE(SUM(t.total_amount), 0) AS revenue,
+               COUNT(t.id) AS cnt
+        FROM circular_buyer_transaction t
+        WHERE YEAR(t.transacted_at) = :year
+        GROUP BY MONTH(t.transacted_at)
+        ORDER BY MONTH(t.transacted_at)
+        """, nativeQuery = true)
+    List<Object[]> aggregateMonthlyRevenue(@Param("year") int year);
+
+
+    /**
+     * 점수 페이지용 — 지정 연도의 거래 이벤트 + 거래처 첫 거래일(neyBuyer 판정용).
+     * 결과 컬럼: id, transacted_at, company_name, material_code, weight_kg, first_tx_at
+     */
+    @Query(value = """
+        SELECT t.id,
+               t.transacted_at,
+               b.company_name,
+               t.material_code,
+               t.weight_kg,
+               (SELECT MIN(t2.transacted_at)
+                  FROM circular_buyer_transaction t2
+                 WHERE t2.buyer_id = t.buyer_id) AS first_tx_at
+        FROM circular_buyer_transaction t
+        JOIN circular_buyer b ON b.id = t.buyer_id
+        WHERE YEAR(t.transacted_at) = :year
+        ORDER BY t.transacted_at DESC
+        """, nativeQuery = true)
+    List<Object[]> findEventsForYear(@Param("year") int year);
+
+
 }
