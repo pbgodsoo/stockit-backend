@@ -3,7 +3,7 @@ package org.example.stockitbe.warehouse.outbound;
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.model.BaseResponseStatus;
-import org.example.stockitbe.hq.circularbuyer.CircularBuyerRepository;
+import org.example.stockitbe.hq.circularbuyer.repository.CircularBuyerRepository;
 import org.example.stockitbe.hq.circularbuyer.model.CircularBuyer;
 import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
