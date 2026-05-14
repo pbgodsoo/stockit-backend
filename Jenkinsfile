@@ -113,18 +113,11 @@ spec:
 
                         TARGET_REPLICAS=4
                         SOURCE_REPLICAS=0
-                        ENDPOINT_WAIT_TIMEOUT=60
+                        ENDPOINT_WAIT_TIMEOUT=300
                         SCALE_STEP_WAIT_SECONDS=15
 
                         log() {
                           echo "[\$(date '+%Y-%m-%d %H:%M:%S %z')] \$*"
-                        }
-
-                        get_ready_endpoint_count() {
-                          ./kubectl get endpoints stockit-be \
-                            --namespace=${K8S_NAMESPACE} \
-                            -o jsonpath='{range .subsets[*].addresses[*]}{.targetRef.name}{"\n"}{end}' 2>/dev/null | \
-                            grep -c "stockit-be-\${TARGET_COLOR}" || true
                         }
 
                         log "[BlueGreen] active=\${ACTIVE_COLOR}, target=\${TARGET_COLOR}"
@@ -150,29 +143,21 @@ spec:
                           --namespace=${K8S_NAMESPACE} \
                           -p "{\\\"spec\\\":{\\\"selector\\\":{\\\"app\\\":\\\"stockit-be\\\",\\\"color\\\":\\\"\${TARGET_COLOR}\\\"}}}"
 
-                        log "[BlueGreen] waiting for endpoint stabilization (timeout=\${ENDPOINT_WAIT_TIMEOUT}s)"
-                        START_TS=\$(date +%s)
-                        while true; do
-                          READY_COUNT=\$(get_ready_endpoint_count)
-                          NOW_TS=\$(date +%s)
-                          ELAPSED=\$((NOW_TS - START_TS))
-                          log "[BlueGreen] target ready endpoints=\${READY_COUNT}, elapsed=\${ELAPSED}s"
-
-                          if [ "\${READY_COUNT}" -ge "\${TARGET_REPLICAS}" ]; then
-                            log "[BlueGreen] endpoint stabilization complete"
-                            break
-                          fi
-
-                          if [ "\${ELAPSED}" -ge "\${ENDPOINT_WAIT_TIMEOUT}" ]; then
-                            log "[BlueGreen][ERROR] endpoint stabilization timeout"
-                            ./kubectl get endpoints stockit-be --namespace=${K8S_NAMESPACE} -o wide || true
-                            ./kubectl get deploy stockit-be-\${TARGET_COLOR} --namespace=${K8S_NAMESPACE} -o wide || true
-                            ./kubectl get pods -l app=stockit-be,color=\${TARGET_COLOR} --namespace=${K8S_NAMESPACE} -o wide || true
-                            exit 1
-                          fi
-
-                          sleep 2
-                        done
+                        log "[BlueGreen] waiting for target pods Ready (timeout=\${ENDPOINT_WAIT_TIMEOUT}s)"
+                        if ! ./kubectl wait pod \
+                          -l app=stockit-be,color=\${TARGET_COLOR} \
+                          --namespace=${K8S_NAMESPACE} \
+                          --for=condition=Ready \
+                          --timeout=\${ENDPOINT_WAIT_TIMEOUT}s; then
+                          log "[BlueGreen][ERROR] target pod readiness timeout"
+                          ./kubectl get endpoints stockit-be --namespace=${K8S_NAMESPACE} -o wide || true
+                          ./kubectl get deploy stockit-be-\${TARGET_COLOR} --namespace=${K8S_NAMESPACE} -o wide || true
+                          ./kubectl get pods -l app=stockit-be,color=\${TARGET_COLOR} --namespace=${K8S_NAMESPACE} -o wide || true
+                          exit 1
+                        fi
+                        log "[BlueGreen] target pods are Ready"
+                        ./kubectl get pods -l app=stockit-be,color=\${TARGET_COLOR} --namespace=${K8S_NAMESPACE} -o wide
+                        ./kubectl get endpoints stockit-be --namespace=${K8S_NAMESPACE} -o wide
 
                         log "[BlueGreen] scale-down old color in steps: \${ACTIVE_COLOR} 4 -> 2"
                         ./kubectl scale deployment/stockit-be-\${ACTIVE_COLOR} \
