@@ -35,11 +35,8 @@ public class CircularBuyer extends BaseEntity {
 
     // 생산품 키워드 배열 — JSON 컬럼 (정규화 X, 검색 빈도 낮음)
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "product_types", columnDefinition = "json")
-    private List<String> productTypes;
-
-    @Column(name = "product_note", columnDefinition = "TEXT")
-    private String productNote;
+    @Column(name = "factory_product", columnDefinition = "json")
+    private List<String> factoryProduct;
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
@@ -54,6 +51,9 @@ public class CircularBuyer extends BaseEntity {
     @Column(name = "phone", nullable = false, length = 32)
     private String phone;
 
+    @Column(name = "address", nullable = false, length = 256)
+    private String address;
+
     // 파트너 유형 — local_small / social_enterprise / general. 점수 가산 룰은 사이클 3 (거래 이력 합류 후) 에서.
     @Column(name = "partner_type", nullable = false, length = 32)
     @ColumnDefault("'general'")
@@ -66,38 +66,38 @@ public class CircularBuyer extends BaseEntity {
 
     @Builder
     private CircularBuyer(String code, String companyName, String industryGroup,
-                           List<String> productTypes, String productNote, String description,
+                           List<String> factoryProduct, String description,
                            String primaryMaterialFit, String managerName, String phone,
-                           String partnerType, List<Double> embedding) {
+                           String address, String partnerType, List<Double> embedding) {
         this.code = code;
         this.companyName = companyName;
         this.industryGroup = industryGroup;
-        this.productTypes = productTypes;
-        this.productNote = productNote;
+        this.factoryProduct = factoryProduct;
         this.description = description;
         this.primaryMaterialFit = primaryMaterialFit;
         this.managerName = managerName;
         this.phone = phone;
+        this.address = address;
         this.partnerType = partnerType;
         this.embedding = embedding;
     }
 
     /**
      * 거래처 정보 수정. embedding 은 별도 메소드.
-     * 의미 필드(companyName/industryGroup/productTypes/productNote/description/primaryMaterialFit) 변경 시 임베딩 재생성 룰은 Service 책임.
+     * 의미 필드(companyName/industryGroup/factoryProduct/description/primaryMaterialFit/address) 변경 시 임베딩 재생성 룰은 Service 책임.
      * partnerType 은 의미 필드가 아님 — 임베딩 재생성 트리거 X.
      */
-    public void updateProfile(String companyName, String industryGroup, List<String> productTypes,
-                               String productNote, String description, String primaryMaterialFit,
-                               String managerName, String phone, String partnerType) {
+    public void updateProfile(String companyName, String industryGroup, List<String> factoryProduct,
+                              String description, String primaryMaterialFit,
+                              String managerName, String phone, String address, String partnerType) {
         if (companyName != null) this.companyName = companyName;
         if (industryGroup != null) this.industryGroup = industryGroup;
-        if (productTypes != null) this.productTypes = productTypes;
-        if (productNote != null) this.productNote = productNote;
+        if (factoryProduct != null) this.factoryProduct = factoryProduct;
         if (description != null) this.description = description;
         if (primaryMaterialFit != null) this.primaryMaterialFit = primaryMaterialFit;
         if (managerName != null) this.managerName = managerName;
         if (phone != null) this.phone = phone;
+        if (address != null) this.address = address;
         if (partnerType != null) this.partnerType = partnerType;
     }
 

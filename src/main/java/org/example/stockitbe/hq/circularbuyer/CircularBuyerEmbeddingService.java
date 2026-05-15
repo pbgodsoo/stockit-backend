@@ -28,16 +28,16 @@ public class CircularBuyerEmbeddingService {
      * 의미 필드를 합쳐 임베딩 입력 텍스트 빌드. null 안전 (null 필드는 빈 문자열).
      */
     public String buildEmbeddingText(CircularBuyer v) {
-        String productTypes = v.getProductTypes() != null
-                ? String.join(",", v.getProductTypes())
+        String factoryProduct = v.getFactoryProduct() != null
+                ? String.join(",", v.getFactoryProduct())
                 : "";
         return String.join(" ",
                 safe(v.getCompanyName()),
                 safe(v.getIndustryGroup()),
-                productTypes,
-                safe(v.getProductNote()),
+                factoryProduct,
                 safe(v.getDescription()),
-                safe(v.getPrimaryMaterialFit())
+                safe(v.getPrimaryMaterialFit()),
+                safe(v.getAddress())
         ).trim();
     }
 

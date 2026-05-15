@@ -106,12 +106,12 @@ public class CircularBuyerService {
         v.updateProfile(
                 req.getCompanyName(),
                 req.getIndustryGroup(),
-                req.getProductTypes(),
-                req.getProductNote(),
+                req.getFactoryProduct(),
                 req.getDescription(),
                 req.getPrimaryMaterialFit(),
                 req.getManagerName(),
                 req.getPhone(),
+                req.getAddress(),
                 req.getPartnerType()
         );
         // ADR-021 — 의미 필드 중 하나라도 변경된 경우에만 임베딩 재생성. managerName/phone 만 바뀌면 OpenAI 콜 절약.
@@ -162,9 +162,9 @@ public class CircularBuyerService {
         return changed(v.getCompanyName(), req.getCompanyName())
                 || changed(v.getIndustryGroup(), req.getIndustryGroup())
                 || changed(v.getPrimaryMaterialFit(), req.getPrimaryMaterialFit())
-                || changed(v.getProductNote(), req.getProductNote())
+                || changed(v.getAddress(), req.getAddress())
                 || changed(v.getDescription(), req.getDescription())
-                || listChanged(v.getProductTypes(), req.getProductTypes());
+                || listChanged(v.getFactoryProduct(), req.getFactoryProduct());
     }
 
     private static boolean changed(String oldValue, String newValue) {
