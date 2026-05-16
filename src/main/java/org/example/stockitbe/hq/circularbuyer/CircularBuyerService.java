@@ -6,8 +6,11 @@ import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.model.BaseResponseStatus;
 import org.example.stockitbe.hq.circularbuyer.model.CircularBuyer;
 import org.example.stockitbe.hq.circularbuyer.model.CircularBuyerDto;
+import org.example.stockitbe.hq.circularbuyer.repository.CircularBuyerListView;
 import org.example.stockitbe.hq.circularbuyer.repository.CircularBuyerRepository;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -15,8 +18,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,21 +36,62 @@ public class CircularBuyerService {
     );
 
     private static final String CODE_PREFIX = "RCV-";
-    private static final int CODE_NUMBER_WIDTH = 3;
-    private static final int CODE_NUMBER_MAX = 999;
+    private static final int CODE_NUMBER_WIDTH = 5;
+    private static final int CODE_NUMBER_MAX = 99_999_999;
 
     private final CircularBuyerRepository circularBuyerRepository;
     private final CircularBuyerEmbeddingService embeddingService;
+
+    // 4만 건+ 환경에서 페이지 없는 전체 조회는 응답 불가 수준의 부하. 최대 500건으로 제한.
+    private static final int FIND_ALL_HARD_LIMIT = 500;
 
     @Transactional(readOnly = true)
     public List<CircularBuyerDto.ListRes> findAll(String keyword, String materialFit) {
         if (materialFit != null && !materialFit.isBlank()) {
             validateMaterialFit(materialFit);
         }
-        Specification<CircularBuyer> spec = buildSpec(keyword, materialFit);
-        return circularBuyerRepository.findAll(spec).stream()
+        Specification<CircularBuyer> spec = buildSpec(keyword, materialFit, true);
+        Page<CircularBuyer> page = circularBuyerRepository.findAll(spec, PageRequest.of(0, FIND_ALL_HARD_LIMIT));
+        return page.getContent().stream()
                 .map(CircularBuyerDto.ListRes::from)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public CircularBuyerDto.PageRes findPage(String keyword, String materialFit, Pageable pageable) {
+        if (materialFit != null && !materialFit.isBlank()) {
+            validateMaterialFit(materialFit);
+        }
+        // embedding 컬럼 제외 JPQL 프로젝션 사용 — 행당 ~23KB JSON 역직렬화 방지.
+        String kw = (keyword != null && !keyword.isBlank())
+                ? "%" + keyword.trim().toLowerCase() + "%"
+                : null;
+        String mf = (materialFit != null && !materialFit.isBlank()) ? materialFit : null;
+        Page<CircularBuyerListView> page = circularBuyerRepository.findPageWithoutEmbedding(kw, mf, pageable);
+        return CircularBuyerDto.PageRes.builder()
+                .content(page.getContent().stream().map(this::fromView).toList())
+                .page(page.getNumber())
+                .size(page.getSize())
+                .totalPages(page.getTotalPages())
+                .totalElements(page.getTotalElements())
+                .hasNext(page.hasNext())
+                .hasPrevious(page.hasPrevious())
+                .build();
+    }
+
+    private CircularBuyerDto.ListRes fromView(CircularBuyerListView v) {
+        return CircularBuyerDto.ListRes.builder()
+                .code(v.getCode())
+                .companyName(v.getCompanyName())
+                .industryGroup(v.getIndustryGroup())
+                .factoryProduct(v.getFactoryProduct())
+                .description(v.getDescription())
+                .primaryMaterialFit(v.getPrimaryMaterialFit())
+                .managerName(v.getManagerName())
+                .phone(v.getPhone())
+                .address(v.getAddress())
+                .partnerType(v.getPartnerType())
+                .build();
     }
 
     @Transactional(readOnly = true)
@@ -72,7 +118,7 @@ public class CircularBuyerService {
     }
 
     /**
-     * 자동 코드 부여 — RCV-{NNN} 3자리 zero-padded.
+     * 자동 코드 부여 — RCV-{NNNNN} 5자리 zero-padded.
      * PESSIMISTIC_WRITE 로 마지막 row 락을 잡아 동시 등록 시 한 트랜잭션이 끝날 때까지 다른 트랜잭션 대기.
      */
     private String nextCircularBuyerCode() {
@@ -125,6 +171,16 @@ public class CircularBuyerService {
     public void delete(String code) {
         CircularBuyer v = lookup(code);
         circularBuyerRepository.delete(v);
+    }
+
+    /** primaryMaterialFit 별 전체 건수 — 통계 카드용. */
+    @Transactional(readOnly = true)
+    public Map<String, Long> countByMaterialFit() {
+        return circularBuyerRepository.countGroupByMaterialFit().stream()
+                .collect(Collectors.toMap(
+                        v -> v.getMaterialFit() != null ? v.getMaterialFit() : "unknown",
+                        v -> v.getCount() != null ? v.getCount() : 0L
+                ));
     }
 
     /**
@@ -181,7 +237,7 @@ public class CircularBuyerService {
      * 동적 필터 — keyword(companyName/code/managerName 부분일치 OR) + primaryMaterialFit equal.
      * 정렬: companyName ASC.
      */
-    private Specification<CircularBuyer> buildSpec(String keyword, String materialFit) {
+    private Specification<CircularBuyer> buildSpec(String keyword, String materialFit, boolean sortByCompanyName) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -195,7 +251,9 @@ public class CircularBuyerService {
             if (materialFit != null && !materialFit.isBlank()) {
                 predicates.add(cb.equal(root.get("primaryMaterialFit"), materialFit));
             }
-            query.orderBy(cb.asc(root.get("companyName")));
+            if (sortByCompanyName) {
+                query.orderBy(cb.asc(root.get("companyName")));
+            }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
     }

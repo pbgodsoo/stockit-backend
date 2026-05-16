@@ -108,6 +108,19 @@ public class CircularBuyerDto {
         }
     }
 
+    @Getter
+    @AllArgsConstructor
+    @Builder
+    public static class PageRes {
+        private List<ListRes> content;
+        private int page;
+        private int size;
+        private int totalPages;
+        private long totalElements;
+        private boolean hasNext;
+        private boolean hasPrevious;
+    }
+
     /**
      * ADR-021 추천 입력 — 옵션 B (사용자 결정 2026-04-30):
      *   materialFit (필수, 1층 SQL 룰 키) + productName + description + quantityHint.

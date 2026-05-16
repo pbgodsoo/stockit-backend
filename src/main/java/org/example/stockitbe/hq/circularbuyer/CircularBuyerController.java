@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.model.BaseResponse;
 import org.example.stockitbe.hq.circularbuyer.model.CircularBuyerDto;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,6 +23,22 @@ public class CircularBuyerController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String materialFit) {
         return BaseResponse.success(service.findAll(keyword, materialFit));
+    }
+
+    @GetMapping("/stats")
+    public BaseResponse<Map<String, Long>> stats() {
+        return BaseResponse.success(service.countByMaterialFit());
+    }
+
+    @GetMapping("/page")
+    public BaseResponse<CircularBuyerDto.PageRes> page(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String materialFit,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 200);
+        return BaseResponse.success(service.findPage(keyword, materialFit, PageRequest.of(safePage, safeSize)));
     }
 
     @GetMapping("/{code}")
