@@ -46,11 +46,14 @@ public class CircularBuyerService {
     private static final int FIND_ALL_HARD_LIMIT = 500;
 
     @Transactional(readOnly = true)
-    public List<CircularBuyerDto.ListRes> findAll(String keyword, String materialFit) {
+    public List<CircularBuyerDto.ListRes> findAll(String keyword, String materialFit, String partnerType) {
         if (materialFit != null && !materialFit.isBlank()) {
             validateMaterialFit(materialFit);
         }
-        Specification<CircularBuyer> spec = buildSpec(keyword, materialFit, true);
+        if (partnerType != null && !partnerType.isBlank()) {
+            validatePartnerType(partnerType);
+        }
+        Specification<CircularBuyer> spec = buildSpec(keyword, materialFit, partnerType, true);
         Page<CircularBuyer> page = circularBuyerRepository.findAll(spec, PageRequest.of(0, FIND_ALL_HARD_LIMIT));
         return page.getContent().stream()
                 .map(CircularBuyerDto.ListRes::from)
@@ -58,16 +61,20 @@ public class CircularBuyerService {
     }
 
     @Transactional(readOnly = true)
-    public CircularBuyerDto.PageRes findPage(String keyword, String materialFit, Pageable pageable) {
+    public CircularBuyerDto.PageRes findPage(String keyword, String materialFit, String partnerType, Pageable pageable) {
         if (materialFit != null && !materialFit.isBlank()) {
             validateMaterialFit(materialFit);
+        }
+        if (partnerType != null && !partnerType.isBlank()) {
+            validatePartnerType(partnerType);
         }
         // embedding 컬럼 제외 JPQL 프로젝션 사용 — 행당 ~23KB JSON 역직렬화 방지.
         String kw = (keyword != null && !keyword.isBlank())
                 ? "%" + keyword.trim().toLowerCase() + "%"
                 : null;
         String mf = (materialFit != null && !materialFit.isBlank()) ? materialFit : null;
-        Page<CircularBuyerListView> page = circularBuyerRepository.findPageWithoutEmbedding(kw, mf, pageable);
+        String pt = (partnerType != null && !partnerType.isBlank()) ? partnerType : null;
+        Page<CircularBuyerListView> page = circularBuyerRepository.findPageWithoutEmbedding(kw, mf, pt, pageable);
         return CircularBuyerDto.PageRes.builder()
                 .content(page.getContent().stream().map(this::fromView).toList())
                 .page(page.getNumber())
@@ -234,10 +241,10 @@ public class CircularBuyerService {
     }
 
     /**
-     * 동적 필터 — keyword(companyName/code/managerName 부분일치 OR) + primaryMaterialFit equal.
+     * 동적 필터 — keyword(companyName/code/managerName 부분일치 OR) + primaryMaterialFit equal + partnerType equal.
      * 정렬: companyName ASC.
      */
-    private Specification<CircularBuyer> buildSpec(String keyword, String materialFit, boolean sortByCompanyName) {
+    private Specification<CircularBuyer> buildSpec(String keyword, String materialFit, String partnerType, boolean sortByCompanyName) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -250,6 +257,9 @@ public class CircularBuyerService {
             }
             if (materialFit != null && !materialFit.isBlank()) {
                 predicates.add(cb.equal(root.get("primaryMaterialFit"), materialFit));
+            }
+            if (partnerType != null && !partnerType.isBlank()) {
+                predicates.add(cb.equal(root.get("partnerType"), partnerType));
             }
             if (sortByCompanyName) {
                 query.orderBy(cb.asc(root.get("companyName")));

@@ -20,7 +20,7 @@ public interface CircularBuyerRepository
 
     /**
      * 목록 페이지 조회 — embedding 컬럼을 SELECT에서 제외해 행당 ~23KB JSON 역직렬화 생략.
-     * kw: null 이면 keyword 조건 없음, mf: null 이면 materialFit 조건 없음.
+     * kw: null 이면 keyword 조건 없음, mf: null 이면 materialFit 조건 없음, pt: null 이면 partnerType 조건 없음.
      */
     @Query(value = "SELECT b.code as code, b.companyName as companyName, b.industryGroup as industryGroup, " +
                    "b.factoryProduct as factoryProduct, b.description as description, " +
@@ -29,14 +29,17 @@ public interface CircularBuyerRepository
                    "FROM CircularBuyer b " +
                    "WHERE (:kw IS NULL OR LOWER(b.companyName) LIKE :kw " +
                    "       OR LOWER(b.code) LIKE :kw OR LOWER(b.managerName) LIKE :kw) " +
-                   "AND (:mf IS NULL OR b.primaryMaterialFit = :mf)",
+                   "AND (:mf IS NULL OR b.primaryMaterialFit = :mf) " +
+                   "AND (:pt IS NULL OR b.partnerType = :pt)",
            countQuery = "SELECT COUNT(b) FROM CircularBuyer b " +
                         "WHERE (:kw IS NULL OR LOWER(b.companyName) LIKE :kw " +
                         "       OR LOWER(b.code) LIKE :kw OR LOWER(b.managerName) LIKE :kw) " +
-                        "AND (:mf IS NULL OR b.primaryMaterialFit = :mf)")
+                        "AND (:mf IS NULL OR b.primaryMaterialFit = :mf) " +
+                        "AND (:pt IS NULL OR b.partnerType = :pt)")
     Page<CircularBuyerListView> findPageWithoutEmbedding(
             @Param("kw") String kwLike,
             @Param("mf") String materialFit,
+            @Param("pt") String partnerType,
             Pageable pageable);
 
     /** primaryMaterialFit 별 건수 — 통계 카드용 단일 쿼리. */

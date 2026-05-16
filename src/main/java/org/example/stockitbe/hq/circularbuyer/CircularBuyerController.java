@@ -21,8 +21,9 @@ public class CircularBuyerController {
     @GetMapping
     public BaseResponse<List<CircularBuyerDto.ListRes>> list(
             @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String materialFit) {
-        return BaseResponse.success(service.findAll(keyword, materialFit));
+            @RequestParam(required = false) String materialFit,
+            @RequestParam(required = false) String partnerType) {
+        return BaseResponse.success(service.findAll(keyword, materialFit, partnerType));
     }
 
     @GetMapping("/stats")
@@ -34,11 +35,12 @@ public class CircularBuyerController {
     public BaseResponse<CircularBuyerDto.PageRes> page(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String materialFit,
+            @RequestParam(required = false) String partnerType,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), 200);
-        return BaseResponse.success(service.findPage(keyword, materialFit, PageRequest.of(safePage, safeSize)));
+        return BaseResponse.success(service.findPage(keyword, materialFit, partnerType, PageRequest.of(safePage, safeSize)));
     }
 
     @GetMapping("/{code}")
