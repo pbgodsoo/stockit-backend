@@ -1,5 +1,7 @@
 package org.example.stockitbe.hq.circularbuyer.model;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonGetter;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,8 +22,8 @@ public class CircularBuyerDto {
         private String companyName;
         @NotBlank
         private String industryGroup;
-        private List<String> productTypes;
-        private String productNote;
+        @JsonAlias("productTypes")
+        private List<String> factoryProduct;
         private String description;
         @NotBlank
         private String primaryMaterialFit;
@@ -30,6 +32,8 @@ public class CircularBuyerDto {
         @NotBlank
         private String phone;
         @NotBlank
+        private String address;
+        @NotBlank
         private String partnerType;
 
         public CircularBuyer toEntity(String code) {
@@ -37,12 +41,12 @@ public class CircularBuyerDto {
                     .code(code)
                     .companyName(this.companyName)
                     .industryGroup(this.industryGroup)
-                    .productTypes(this.productTypes)
-                    .productNote(this.productNote)
+                    .factoryProduct(this.factoryProduct)
                     .description(this.description)
                     .primaryMaterialFit(this.primaryMaterialFit)
                     .managerName(this.managerName)
                     .phone(this.phone)
+                    .address(this.address)
                     .partnerType(this.partnerType)
                     .build();
         }
@@ -55,12 +59,13 @@ public class CircularBuyerDto {
     public static class UpdateReq {
         private String companyName;
         private String industryGroup;
-        private List<String> productTypes;
-        private String productNote;
+        @JsonAlias("productTypes")
+        private List<String> factoryProduct;
         private String description;
         private String primaryMaterialFit;
         private String managerName;
         private String phone;
+        private String address;
         private String partnerType;
     }
 
@@ -71,30 +76,49 @@ public class CircularBuyerDto {
         private String code;
         private String companyName;
         private String industryGroup;
-        private List<String> productTypes;
-        // 거래처 카드/우측 디테일에서 표시 — ListRes 단일 호출로 description/productNote 노출
+        private List<String> factoryProduct;
+        // 거래처 카드/우측 디테일에서 표시 — ListRes 단일 호출로 description/address 노출
         // (목록은 30건 수준이라 TEXT 컬럼 포함해도 페이로드 영향 미미).
-        private String productNote;
         private String description;
         private String primaryMaterialFit;
         private String managerName;
         private String phone;
+        private String address;
         private String partnerType;
+
+        // FE 구버전 호환 alias (2단계 전환 중 임시 유지).
+        @JsonGetter("productTypes")
+        public List<String> legacyProductTypes() {
+            return factoryProduct;
+        }
 
         public static ListRes from(CircularBuyer v) {
             return ListRes.builder()
                     .code(v.getCode())
                     .companyName(v.getCompanyName())
                     .industryGroup(v.getIndustryGroup())
-                    .productTypes(v.getProductTypes())
-                    .productNote(v.getProductNote())
+                    .factoryProduct(v.getFactoryProduct())
                     .description(v.getDescription())
                     .primaryMaterialFit(v.getPrimaryMaterialFit())
                     .managerName(v.getManagerName())
                     .phone(v.getPhone())
+                    .address(v.getAddress())
                     .partnerType(v.getPartnerType())
                     .build();
         }
+    }
+
+    @Getter
+    @AllArgsConstructor
+    @Builder
+    public static class PageRes {
+        private List<ListRes> content;
+        private int page;
+        private int size;
+        private int totalPages;
+        private long totalElements;
+        private boolean hasNext;
+        private boolean hasPrevious;
     }
 
     /**
@@ -148,27 +172,33 @@ public class CircularBuyerDto {
         private String code;
         private String companyName;
         private String industryGroup;
-        private List<String> productTypes;
-        private String productNote;
+        private List<String> factoryProduct;
         private String description;
         private String primaryMaterialFit;
         private String managerName;
         private String phone;
+        private String address;
         private String partnerType;
         private Date createdAt;
         private Date updatedAt;
+
+        // FE 구버전 호환 alias (2단계 전환 중 임시 유지).
+        @JsonGetter("productTypes")
+        public List<String> legacyProductTypes() {
+            return factoryProduct;
+        }
 
         public static DetailRes from(CircularBuyer v) {
             return DetailRes.builder()
                     .code(v.getCode())
                     .companyName(v.getCompanyName())
                     .industryGroup(v.getIndustryGroup())
-                    .productTypes(v.getProductTypes())
-                    .productNote(v.getProductNote())
+                    .factoryProduct(v.getFactoryProduct())
                     .description(v.getDescription())
                     .primaryMaterialFit(v.getPrimaryMaterialFit())
                     .managerName(v.getManagerName())
                     .phone(v.getPhone())
+                    .address(v.getAddress())
                     .partnerType(v.getPartnerType())
                     .createdAt(v.getCreatedAt())
                     .updatedAt(v.getUpdatedAt())

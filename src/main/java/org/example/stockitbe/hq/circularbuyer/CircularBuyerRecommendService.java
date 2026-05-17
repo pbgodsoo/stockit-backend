@@ -241,7 +241,7 @@ public class CircularBuyerRecommendService {
         sb.append("  2) 요청 재고와 매칭되는 구체적 이유 (소재 일치·처리 방식 적합성·산업군 부합)\n");
         sb.append("  3) 처리 후 재활용 경로 (어떤 산업·제품으로 환생되는지 — 자동차 흡음재·건설 단열재·재생 원사·펄프·매트리스 충전 등)\n");
         sb.append("  4) 친환경·순환경제 가치 (ESG 효과·탄소 감축·자원 순환)\n");
-        sb.append("- 거래처 description·메모·취급 품목에 등장하는 구체 어휘를 적극 활용해 사실 기반으로 작성.\n");
+        sb.append("- 거래처 description·주소·취급 품목에 등장하는 구체 어휘를 적극 활용해 사실 기반으로 작성.\n");
         sb.append("- '적합한 거래처입니다' 같은 추상적 칭찬·불필요한 인사말·서론 금지 — 바로 본론.\n");
         sb.append("- 한국어 자연어 매끄러운 문장, 각 문장은 마침표로 종료.\n");
         sb.append("- JSON 안에 줄바꿈(\\n) 넣지 말고 한 문단으로 이어 써 (UI 가 자연스럽게 줄바꿈 처리).\n\n");
@@ -258,10 +258,10 @@ public class CircularBuyerRecommendService {
             sb.append(i + 1).append(". code=").append(b.getCode())
                     .append(" / 회사=").append(b.getCompanyName())
                     .append(" / 산업군=").append(safe(b.getIndustryGroup()));
-            if (b.getProductTypes() != null && !b.getProductTypes().isEmpty()) {
-                sb.append(" / 취급=").append(String.join(",", b.getProductTypes()));
+            if (b.getFactoryProduct() != null && !b.getFactoryProduct().isEmpty()) {
+                sb.append(" / 취급=").append(String.join(",", b.getFactoryProduct()));
             }
-            if (b.getProductNote() != null) sb.append(" / 메모=").append(b.getProductNote());
+            if (b.getAddress() != null) sb.append(" / 주소=").append(b.getAddress());
             if (b.getDescription() != null) sb.append(" / 설명=").append(b.getDescription());
             sb.append("\n");
         }

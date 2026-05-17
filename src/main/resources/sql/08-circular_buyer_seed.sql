@@ -5,7 +5,7 @@
 -- embedding 컬럼 NULL — 시드 후 POST /api/hq/circular-buyers/embeddings/backfill 한 번 호출하여 일괄 임베딩 (300콜 ~$0.03 / 30~60초)
 
 INSERT INTO circular_buyer
-(code, company_name, industry_group, product_types, product_note, description,
+(code, company_name, industry_group, factory_product, address, description,
  primary_material_fit, manager_name, phone, partner_type, embedding,
  create_date, update_date)
 VALUES
@@ -312,8 +312,8 @@ VALUES
 ON DUPLICATE KEY UPDATE
   company_name = VALUES(company_name),
   industry_group = VALUES(industry_group),
-  product_types = VALUES(product_types),
-  product_note = VALUES(product_note),
+  factory_product = VALUES(factory_product),
+  address = VALUES(address),
   description = VALUES(description),
   primary_material_fit = VALUES(primary_material_fit),
   manager_name = VALUES(manager_name),
