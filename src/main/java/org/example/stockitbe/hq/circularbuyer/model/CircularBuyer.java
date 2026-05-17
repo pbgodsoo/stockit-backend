@@ -54,6 +54,12 @@ public class CircularBuyer extends BaseEntity {
     @Column(name = "address", nullable = false, length = 256)
     private String address;
 
+    @Column(name = "latitude")
+    private Double latitude;
+
+    @Column(name = "longitude")
+    private Double longitude;
+
     // 파트너 유형 — local_small / social_enterprise / general. 점수 가산 룰은 사이클 3 (거래 이력 합류 후) 에서.
     @Column(name = "partner_type", nullable = false, length = 32)
     @ColumnDefault("'general'")
@@ -68,7 +74,8 @@ public class CircularBuyer extends BaseEntity {
     private CircularBuyer(String code, String companyName, String industryGroup,
                            List<String> factoryProduct, String description,
                            String primaryMaterialFit, String managerName, String phone,
-                           String address, String partnerType, List<Double> embedding) {
+                           String address, Double latitude, Double longitude,
+                           String partnerType, List<Double> embedding) {
         this.code = code;
         this.companyName = companyName;
         this.industryGroup = industryGroup;
@@ -78,6 +85,8 @@ public class CircularBuyer extends BaseEntity {
         this.managerName = managerName;
         this.phone = phone;
         this.address = address;
+        this.latitude = latitude;
+        this.longitude = longitude;
         this.partnerType = partnerType;
         this.embedding = embedding;
     }
@@ -103,5 +112,10 @@ public class CircularBuyer extends BaseEntity {
 
     public void updateEmbedding(List<Double> embedding) {
         this.embedding = embedding;
+    }
+
+    public void updateCoordinates(Double latitude, Double longitude) {
+        this.latitude = latitude;
+        this.longitude = longitude;
     }
 }

@@ -41,13 +41,19 @@ public class Infrastructure extends BaseEntity {
     @Column(name = "address", nullable = false, length = 256)
     private String address;
 
+    @Column(name = "latitude")
+    private Double latitude;
+
+    @Column(name = "longitude")
+    private Double longitude;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)
     private InfraStatus status;
 
     @Builder
     private Infrastructure(String code, LocationType locationType, String name, String region, String managerName,
-                           String contact, String address, InfraStatus status) {
+                           String contact, String address, Double latitude, Double longitude, InfraStatus status) {
         this.code = code;
         this.locationType = locationType;
         this.name = name;
@@ -55,6 +61,8 @@ public class Infrastructure extends BaseEntity {
         this.managerName = managerName;
         this.contact = contact;
         this.address = address;
+        this.latitude = latitude;
+        this.longitude = longitude;
         this.status = status == null ? InfraStatus.ACTIVE : status;
     }
 
@@ -66,5 +74,10 @@ public class Infrastructure extends BaseEntity {
         this.contact = contact;
         this.address = address;
         this.status = status;
+    }
+
+    public void updateCoordinates(Double latitude, Double longitude) {
+        this.latitude = latitude;
+        this.longitude = longitude;
     }
 }
