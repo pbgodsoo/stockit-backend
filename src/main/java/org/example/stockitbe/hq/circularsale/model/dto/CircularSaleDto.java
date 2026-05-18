@@ -16,6 +16,7 @@ import org.example.stockitbe.hq.circularsale.model.entity.CircularSaleItemMateri
 import org.example.stockitbe.hq.circularsale.model.entity.CircularSaleStatusHistory;
 import org.springframework.data.domain.Page;
 
+import java.math.BigDecimal;
 import java.util.Date;
 import java.util.List;
 
@@ -46,13 +47,13 @@ public class CircularSaleDto {
         @NotBlank
         private String skuCode;
         @DecimalMin(value = "0.0", inclusive = false)
-        private Double requestedWeightKg;
+        private BigDecimal requestedWeightKg;
         @Min(1)
         private Integer soldQuantity;
         @DecimalMin(value = "0.0")
-        private Double actualWeightKg;
+        private BigDecimal actualWeightKg;
         @DecimalMin(value = "0.0")
-        private Double estimatedQuantity;
+        private BigDecimal estimatedQuantity;
         @Min(0)
         private Long unitPrice;
         @Min(0)
@@ -95,9 +96,9 @@ public class CircularSaleDto {
         private String color;
         private String size;
         private String materialType;
-        private Double requestedWeightKg;
-        private Double actualWeightKg;
-        private Double estimatedQuantity;
+        private BigDecimal requestedWeightKg;
+        private BigDecimal actualWeightKg;
+        private BigDecimal estimatedQuantity;
         private Integer soldQuantity;
         private Long unitPrice;
         private Long lineAmount;
@@ -142,8 +143,8 @@ public class CircularSaleDto {
         private String buyerName;
         private String materialType;
         private Integer totalSkuCount;
-        private Double totalRequestedWeightKg;
-        private Double totalActualWeightKg;
+        private BigDecimal totalRequestedWeightKg;
+        private BigDecimal totalActualWeightKg;
         private Integer totalSoldQuantity;
         private Long totalAmount;
         private String memo;
@@ -184,7 +185,7 @@ public class CircularSaleDto {
         private String buyerName;
         private String materialType;
         private Integer totalSkuCount;
-        private Double totalActualWeightKg;
+        private BigDecimal totalActualWeightKg;
         private Integer totalSoldQuantity;
         private Long totalAmount;
         private String headline;
@@ -258,8 +259,8 @@ public class CircularSaleDto {
         private String buyerIndustryGroup;
         private String materialType;
         private Integer totalSkuCount;
-        private Double totalRequestedWeightKg;
-        private Double totalActualWeightKg;
+        private BigDecimal totalRequestedWeightKg;
+        private BigDecimal totalActualWeightKg;
         private Integer totalSoldQuantity;
         private Long totalAmount;
         private String memo;

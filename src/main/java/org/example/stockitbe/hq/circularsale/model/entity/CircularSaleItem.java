@@ -7,6 +7,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.example.stockitbe.common.model.BaseEntity;
 
+import java.math.BigDecimal;
+
 @Entity
 @Table(name = "circular_sale_item",
         uniqueConstraints = {
@@ -58,14 +60,14 @@ public class CircularSaleItem extends BaseEntity {
     @Column(name = "material_type", nullable = false, length = 50)
     private String materialType;
 
-    @Column(name = "requested_weight_kg", nullable = false, precision = 14, scale = 3)
-    private Double requestedWeightKg;
+    @Column(name = "requested_weight_kg", nullable = false, precision = 14, scale = 3, columnDefinition = "DECIMAL(14,3)")
+    private BigDecimal requestedWeightKg;
 
-    @Column(name = "actual_weight_kg", nullable = false, precision = 14, scale = 3)
-    private Double actualWeightKg;
+    @Column(name = "actual_weight_kg", nullable = false, precision = 14, scale = 3, columnDefinition = "DECIMAL(14,3)")
+    private BigDecimal actualWeightKg;
 
-    @Column(name = "estimated_quantity", nullable = false, precision = 14, scale = 3)
-    private Double estimatedQuantity;
+    @Column(name = "estimated_quantity", nullable = false, precision = 14, scale = 3, columnDefinition = "DECIMAL(14,3)")
+    private BigDecimal estimatedQuantity;
 
     @Column(name = "sold_quantity", nullable = false)
     private Integer soldQuantity;
@@ -82,8 +84,8 @@ public class CircularSaleItem extends BaseEntity {
     @Builder
     private CircularSaleItem(Long saleHeaderId, Long inventoryId, Long skuId, String skuCode, String productCode,
                              String productName, String mainCategory, String subCategory, String color, String size,
-                             String materialType, Double requestedWeightKg, Double actualWeightKg,
-                             Double estimatedQuantity, Integer soldQuantity, Long unitPrice, Long lineAmount,
+                             String materialType, BigDecimal requestedWeightKg, BigDecimal actualWeightKg,
+                             BigDecimal estimatedQuantity, Integer soldQuantity, Long unitPrice, Long lineAmount,
                              String memo) {
         this.saleHeaderId = saleHeaderId;
         this.inventoryId = inventoryId;
@@ -96,9 +98,9 @@ public class CircularSaleItem extends BaseEntity {
         this.color = color;
         this.size = size;
         this.materialType = materialType;
-        this.requestedWeightKg = requestedWeightKg == null ? 0D : requestedWeightKg;
-        this.actualWeightKg = actualWeightKg == null ? 0D : actualWeightKg;
-        this.estimatedQuantity = estimatedQuantity == null ? 0D : estimatedQuantity;
+        this.requestedWeightKg = requestedWeightKg == null ? BigDecimal.ZERO : requestedWeightKg;
+        this.actualWeightKg = actualWeightKg == null ? BigDecimal.ZERO : actualWeightKg;
+        this.estimatedQuantity = estimatedQuantity == null ? BigDecimal.ZERO : estimatedQuantity;
         this.soldQuantity = soldQuantity == null ? 0 : soldQuantity;
         this.unitPrice = unitPrice == null ? 0L : unitPrice;
         this.lineAmount = lineAmount == null ? 0L : lineAmount;

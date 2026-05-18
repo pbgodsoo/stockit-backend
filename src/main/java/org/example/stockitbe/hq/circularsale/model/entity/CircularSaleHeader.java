@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import org.example.stockitbe.common.model.BaseEntity;
 import org.example.stockitbe.hq.circularsale.model.CircularSaleStatus;
 
+import java.math.BigDecimal;
 import java.util.Date;
 
 @Entity
@@ -59,11 +60,11 @@ public class CircularSaleHeader extends BaseEntity {
     @Column(name = "total_sku_count", nullable = false)
     private Integer totalSkuCount;
 
-    @Column(name = "total_requested_weight_kg", nullable = false, precision = 14, scale = 3)
-    private Double totalRequestedWeightKg;
+    @Column(name = "total_requested_weight_kg", nullable = false, precision = 14, scale = 3, columnDefinition = "DECIMAL(14,3)")
+    private BigDecimal totalRequestedWeightKg;
 
-    @Column(name = "total_actual_weight_kg", nullable = false, precision = 14, scale = 3)
-    private Double totalActualWeightKg;
+    @Column(name = "total_actual_weight_kg", nullable = false, precision = 14, scale = 3, columnDefinition = "DECIMAL(14,3)")
+    private BigDecimal totalActualWeightKg;
 
     @Column(name = "total_sold_quantity", nullable = false)
     private Integer totalSoldQuantity;
@@ -80,7 +81,7 @@ public class CircularSaleHeader extends BaseEntity {
     @Builder
     private CircularSaleHeader(String saleNo, Long buyerId, Long warehouseId, CircularSaleStatus status, Date soldAt,
                                String soldByMemberId, String soldByName, Long outboundHeaderId, String materialType,
-                               Integer totalSkuCount, Double totalRequestedWeightKg, Double totalActualWeightKg,
+                               Integer totalSkuCount, BigDecimal totalRequestedWeightKg, BigDecimal totalActualWeightKg,
                                Integer totalSoldQuantity, Long totalAmount, String memo, Date completedAt) {
         this.saleNo = saleNo;
         this.buyerId = buyerId;
@@ -92,8 +93,8 @@ public class CircularSaleHeader extends BaseEntity {
         this.outboundHeaderId = outboundHeaderId;
         this.materialType = materialType;
         this.totalSkuCount = totalSkuCount == null ? 0 : totalSkuCount;
-        this.totalRequestedWeightKg = totalRequestedWeightKg == null ? 0D : totalRequestedWeightKg;
-        this.totalActualWeightKg = totalActualWeightKg == null ? 0D : totalActualWeightKg;
+        this.totalRequestedWeightKg = totalRequestedWeightKg == null ? BigDecimal.ZERO : totalRequestedWeightKg;
+        this.totalActualWeightKg = totalActualWeightKg == null ? BigDecimal.ZERO : totalActualWeightKg;
         this.totalSoldQuantity = totalSoldQuantity == null ? 0 : totalSoldQuantity;
         this.totalAmount = totalAmount == null ? 0L : totalAmount;
         this.memo = memo;

@@ -45,6 +45,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -68,6 +70,7 @@ public class CircularSaleService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter NUMBER_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
+    private static final int DECIMAL_SCALE_3 = 3;
 
     private final CircularSaleHeaderRepository saleHeaderRepository;
     private final CircularSaleItemRepository saleItemRepository;
@@ -359,7 +362,13 @@ public class CircularSaleService {
         if (!seenInventoryIds.add(line.getInventoryId())) {
             throw BaseException.from(BaseResponseStatus.CIRCULAR_SALE_INVALID_REQUEST);
         }
-        if (line.getRequestedWeightKg() == null || line.getRequestedWeightKg() <= 0) {
+        if (line.getRequestedWeightKg() == null || line.getRequestedWeightKg().compareTo(BigDecimal.ZERO) <= 0) {
+            throw BaseException.from(BaseResponseStatus.CIRCULAR_SALE_INVALID_REQUEST);
+        }
+        if (line.getActualWeightKg() != null && line.getActualWeightKg().compareTo(BigDecimal.ZERO) < 0) {
+            throw BaseException.from(BaseResponseStatus.CIRCULAR_SALE_INVALID_REQUEST);
+        }
+        if (line.getEstimatedQuantity() != null && line.getEstimatedQuantity().compareTo(BigDecimal.ZERO) < 0) {
             throw BaseException.from(BaseResponseStatus.CIRCULAR_SALE_INVALID_REQUEST);
         }
         if (line.getSoldQuantity() == null || line.getSoldQuantity() <= 0) {
@@ -425,8 +434,8 @@ public class CircularSaleService {
                 .soldByName(me == null ? "SYSTEM" : me.getName())
                 .materialType(request.getMaterialType().trim())
                 .totalSkuCount(contexts.size())
-                .totalRequestedWeightKg(sumDouble(contexts, c -> c.request.getRequestedWeightKg()))
-                .totalActualWeightKg(sumDouble(contexts, c -> c.request.getActualWeightKg() == null ? c.request.getRequestedWeightKg() : c.request.getActualWeightKg()))
+                .totalRequestedWeightKg(sumBigDecimal(contexts, c -> c.request.getRequestedWeightKg()))
+                .totalActualWeightKg(sumBigDecimal(contexts, c -> c.request.getActualWeightKg() == null ? c.request.getRequestedWeightKg() : c.request.getActualWeightKg()))
                 .totalSoldQuantity(sumInt(contexts, c -> c.request.getSoldQuantity()))
                 .totalAmount(sumLong(contexts, c -> c.request.getLineAmount()))
                 .memo(request.getMemo())
@@ -448,9 +457,9 @@ public class CircularSaleService {
                     .color(context.sku.getColor())
                     .size(context.sku.getSize())
                     .materialType(context.materialType)
-                    .requestedWeightKg(reqLine.getRequestedWeightKg())
-                    .actualWeightKg(reqLine.getActualWeightKg() == null ? reqLine.getRequestedWeightKg() : reqLine.getActualWeightKg())
-                    .estimatedQuantity(reqLine.getEstimatedQuantity() == null ? reqLine.getSoldQuantity().doubleValue() : reqLine.getEstimatedQuantity())
+                    .requestedWeightKg(scale3(reqLine.getRequestedWeightKg()))
+                    .actualWeightKg(scale3(reqLine.getActualWeightKg() == null ? reqLine.getRequestedWeightKg() : reqLine.getActualWeightKg()))
+                    .estimatedQuantity(scale3(reqLine.getEstimatedQuantity() == null ? BigDecimal.valueOf(reqLine.getSoldQuantity()) : reqLine.getEstimatedQuantity()))
                     .soldQuantity(reqLine.getSoldQuantity())
                     .unitPrice(reqLine.getUnitPrice())
                     .lineAmount(reqLine.getLineAmount())
@@ -627,12 +636,20 @@ public class CircularSaleService {
         return value;
     }
 
-    private Double sumDouble(Collection<LineContext> contexts, Function<LineContext, Double> extractor) {
-        double sum = 0D;
+    private BigDecimal sumBigDecimal(Collection<LineContext> contexts, Function<LineContext, BigDecimal> extractor) {
+        BigDecimal sum = BigDecimal.ZERO;
         for (LineContext context : contexts) {
-            sum += extractor.apply(context);
+            BigDecimal value = extractor.apply(context);
+            if (value != null) {
+                sum = sum.add(scale3(value));
+            }
         }
-        return sum;
+        return scale3(sum);
+    }
+
+    private BigDecimal scale3(BigDecimal value) {
+        if (value == null) return BigDecimal.ZERO.setScale(DECIMAL_SCALE_3, RoundingMode.HALF_UP);
+        return value.setScale(DECIMAL_SCALE_3, RoundingMode.HALF_UP);
     }
 
     private Integer sumInt(Collection<LineContext> contexts, Function<LineContext, Integer> extractor) {
