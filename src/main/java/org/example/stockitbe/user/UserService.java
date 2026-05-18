@@ -4,15 +4,23 @@ import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.jwt.JwtRefreshRepository;
 import org.example.stockitbe.common.model.BaseResponseStatus;
-import org.example.stockitbe.user.model.AuthUserDetails;
-import org.example.stockitbe.user.model.User;
-import org.example.stockitbe.user.model.UserDto;
+// Phase 2 알림 트리거 — 회원가입 시 본사에 PENDING 알림 발행
+import org.example.stockitbe.notification.event.NotificationEvent;
+import org.example.stockitbe.notification.model.entity.NotificationSeverity;
+import org.example.stockitbe.notification.model.entity.NotificationType;
+import org.example.stockitbe.user.model.entity.AuthUserDetails;
+import org.example.stockitbe.user.model.entity.User;
+import org.example.stockitbe.user.model.entity.UserRole;
+import org.example.stockitbe.user.model.dto.UserDto;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +35,8 @@ public class UserService implements UserDetailsService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtRefreshRepository jwtRefreshRepository;
+    // Phase 2 — 도메인 이벤트 발행자 (Spring 기본 제공). signup() 끝에서 NotificationEvent 발행에 사용
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 회원가입 신청
@@ -35,6 +45,7 @@ public class UserService implements UserDetailsService {
      */
     @Transactional
     public UserDto.SignupRes signup(UserDto.SignupReq dto) {
+
         // 1. 이메일 중복 검사
         if (userRepository.existsByEmail(dto.getEmail())) {
             throw BaseException.from(BaseResponseStatus.SIGNUP_DUPLICATE_EMAIL);
@@ -46,7 +57,23 @@ public class UserService implements UserDetailsService {
         // 3. User 저장
         User saved = userRepository.save(dto.toEntity(encodedPassword));
 
-        // 4. 응답 반환
+
+
+        // 4. 본사(HQ) 전체에 회원가입 PENDING 알림 발행
+        //    AFTER_COMMIT 으로 처리되므로, 위 user 저장이 롤백되면 알림도 발생하지 않음 (정합성 보장)
+        eventPublisher.publishEvent(NotificationEvent.builder()
+                .type(NotificationType.USER_SIGNUP_PENDING)
+                .severity(NotificationSeverity.INFO)
+                .title("신규 회원가입 신청")
+                .message(saved.getName() + "(" + saved.getEmail() + ") 회원가입 승인 대기 중입니다.")
+                .targetRole(UserRole.HQ)                   // 본사 전체 수신
+                .refType("USER")                            // 원천 도메인 추적용
+                .refId(String.valueOf(saved.getId()))
+                .build());
+
+
+
+        // 5. 응답 반환
         return UserDto.SignupRes.from(saved);
     }
 
