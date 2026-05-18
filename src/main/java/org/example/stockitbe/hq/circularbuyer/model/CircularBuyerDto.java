@@ -156,6 +156,10 @@ public class CircularBuyerDto {
         private String primaryMaterialFit;
         private String industryGroup;
         private String partnerType;
+        private List<String> factoryProduct;
+        private String managerName;
+        private String phone;
+        private String address;
         private Double distanceKm;
         private String rationale;
     }

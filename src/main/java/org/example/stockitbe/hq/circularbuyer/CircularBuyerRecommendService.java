@@ -115,6 +115,10 @@ public class CircularBuyerRecommendService {
                         .primaryMaterialFit(b.getPrimaryMaterialFit())
                         .industryGroup(b.getIndustryGroup())
                         .partnerType(b.getPartnerType())
+                        .factoryProduct(b.getFactoryProduct())
+                        .managerName(b.getManagerName())
+                        .phone(b.getPhone())
+                        .address(b.getAddress())
                         .distanceKm(distanceKm)
                         .rationale(rationales.getOrDefault(b.getCode(), fallbackRationale()))
                         .build();
