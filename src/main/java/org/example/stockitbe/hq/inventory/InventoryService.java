@@ -250,8 +250,11 @@ public class InventoryService {
     }
 
     /**
-     * 발주 COMPLETED (입고 확정) 진입 시 가용재고를 실재고로 이동.
-     * row 부재 시 신규 INSERT (가용재고 0, 실재고 quantity — SHIPPING 누락된 비정상 케이스 방어).
+     * 발주 COMPLETED (입고 확정) 진입 시 실재고 인식 (ADR-024 정정 2026-05-18, 이슈 #303).
+     * 정상 흐름은 SHIPPING 단계에서 row 가 이미 생성되며 available 도 +delta 돼있음 →
+     * 입고 확정은 quantity += delta 만 (moveAvailableToPhysical).
+     * row 부재 시 신규 INSERT — SHIPPING 누락된 비정상 케이스 방어. 이 경우엔 가용재고도
+     * 함께 인식(quantity = available = quantity) — increaseOnHandAndAvailable 의 INSERT 룰과 정합.
      */
     @Transactional
     public void markPhysical(Long locationId, String skuCode, int quantity) {
@@ -270,7 +273,7 @@ public class InventoryService {
                                 .quantity(quantity)
                                 .reservedQuantity(0)
                                 .inTransitQuantity(0)
-                                .availableQuantity(0)
+                                .availableQuantity(quantity)
                                 .build()));
     }
 

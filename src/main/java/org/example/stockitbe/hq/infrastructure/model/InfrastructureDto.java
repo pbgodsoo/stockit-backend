@@ -39,6 +39,11 @@ public class InfrastructureDto {
     @AllArgsConstructor
     @Builder
     public static class Res {
+        // FE 가 warehouseId/locationId 가 필요한 BE 엔드포인트(예: 새 발주 카탈로그
+        // /api/hq/purchase-orders/catalog?warehouseId=) 에 전달하기 위해 노출.
+        // 외부 식별자는 code 가 정석이지만 catalog query 는 inventory.location_id (Long) 매핑이라
+        // id 가 필요. 다른 화면들은 기존처럼 code 만 써도 무방.
+        private Long id;
         private String code;
         private LocationType locationType;
         private String name;
@@ -52,6 +57,7 @@ public class InfrastructureDto {
 
         public static Res from(Infrastructure infra, Long mappedStoreCount) {
             return Res.builder()
+                    .id(infra.getId())
                     .code(infra.getCode())
                     .locationType(infra.getLocationType())
                     .name(infra.getName())
