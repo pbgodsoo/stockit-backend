@@ -71,3 +71,9 @@ management:
 admin:
   bootstrap:
     password: ${ADMIN_BOOTSTRAP_PASSWORD}
+
+stockit:
+  circular-buyer:
+    ai:
+      embedding-timeout-ms: 5000
+      rationale-timeout-ms: 12000

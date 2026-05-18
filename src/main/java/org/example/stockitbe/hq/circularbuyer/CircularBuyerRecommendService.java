@@ -17,6 +17,7 @@ import org.example.stockitbe.hq.product.model.Material;
 import org.example.stockitbe.hq.product.model.ProductMaterialComposition;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +29,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -76,6 +82,12 @@ public class CircularBuyerRecommendService {
     private final EmbeddingModel embeddingModel;
     private final ChatModel chatModel;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Value("${stockit.circular-buyer.ai.embedding-timeout-ms:5000}")
+    private long embeddingTimeoutMs;
+
+    @Value("${stockit.circular-buyer.ai.rationale-timeout-ms:12000}")
+    private long rationaleTimeoutMs;
 
     @Transactional(readOnly = true)
     public CircularBuyerDto.RecommendRes recommend(CircularBuyerDto.RecommendReq req) {
@@ -196,7 +208,11 @@ public class CircularBuyerRecommendService {
     ) {
         float[] q;
         try {
-            q = embeddingModel.embed(queryText);
+            q = callAiWithTimeout(
+                    () -> embeddingModel.embed(queryText),
+                    embeddingTimeoutMs,
+                    "OpenAI embedding"
+            );
         } catch (Exception e) {
             log.warn("쿼리 임베딩 생성 실패 — 코사인 정렬 없이 fallback 정렬(앞 N건). reason={}", e.getMessage());
             return candidates.stream()
@@ -254,7 +270,11 @@ public class CircularBuyerRecommendService {
         if (top.isEmpty()) return Map.of();
         try {
             String prompt = buildPrompt(top, req);
-            String response = chatModel.call(prompt);
+            String response = callAiWithTimeout(
+                    () -> chatModel.call(prompt),
+                    rationaleTimeoutMs,
+                    "OpenAI chat rationale"
+            );
             String json = extractJsonArray(response);
             if (json == null) {
                 log.warn("LLM 응답에서 JSON 배열 추출 실패. raw={}", response);
@@ -283,10 +303,10 @@ public class CircularBuyerRecommendService {
         WarehousePoint wp = resolveWarehousePoint(req.getWarehouseCode());
         sb.append("너는 SPA 브랜드 본사 관리자에게 순환재고 처리 거래처를 추천하는 한국어 어시스턴트야.\n");
         sb.append("아래 재고 정보와 후보 거래처 ").append(top.size()).append("곳을 보고, ");
-        sb.append("각 거래처가 왜 이 재고에 적합한지 충분히 자세하고 신뢰감 있는 사유를 작성해.\n\n");
+        sb.append("각 거래처가 왜 이 재고에 적합한지 짧고 신뢰감 있는 사유를 작성해.\n\n");
 
         sb.append("[사유 작성 가이드]\n");
-        sb.append("- 각 거래처당 5~6줄, 약 200~300자 분량으로 충분히 길게.\n");
+        sb.append("- 각 거래처당 2~3문장, 약 120~180자 분량으로 간결하게.\n");
         sb.append("- 다음 4가지 흐름을 자연스럽게 한 문단에 녹여서 작성:\n");
         sb.append("  1) 거래처의 핵심 처리 영역과 전문성 (어떤 소재를 어떤 방식으로 처리하는 회사인지)\n");
         sb.append("  2) 요청 재고와 매칭되는 구체적 이유 (소재 일치·처리 방식 적합성·산업군 부합)\n");
@@ -327,7 +347,7 @@ public class CircularBuyerRecommendService {
         sb.append("[\n");
         for (int i = 0; i < top.size(); i++) {
             sb.append("  {\"code\": \"").append(top.get(i).getCode())
-                    .append("\", \"rationale\": \"<5~6줄 200~300자 사유 한 문단>\"}");
+                    .append("\", \"rationale\": \"<2~3문장 120~180자 사유 한 문단>\"}");
             if (i < top.size() - 1) sb.append(",");
             sb.append("\n");
         }
@@ -343,6 +363,32 @@ public class CircularBuyerRecommendService {
 
     private static String fallbackRationale() {
         return "AI 사유 생성을 일시적으로 사용할 수 없습니다.";
+    }
+
+    private <T> T callAiWithTimeout(Supplier<T> supplier, long timeoutMs, String label) throws Exception {
+        CompletableFuture<T> future = CompletableFuture.supplyAsync(supplier);
+        try {
+            return future.get(timeoutMs, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            future.cancel(true);
+            throw new IllegalStateException(label + " timeout after " + timeoutMs + "ms", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw e;
+        } catch (ExecutionException e) {
+            throw unwrapExecutionException(e);
+        }
+    }
+
+    private static Exception unwrapExecutionException(ExecutionException e) {
+        Throwable cause = e.getCause();
+        if (cause instanceof RuntimeException runtimeException) {
+            return runtimeException;
+        }
+        if (cause instanceof Exception exception) {
+            return exception;
+        }
+        return new IllegalStateException(cause);
     }
 
     // ─── 공통 헬퍼 ──────────────────────────────────────────────────────────

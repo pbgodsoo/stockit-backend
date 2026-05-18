@@ -69,3 +69,9 @@ management:
   metrics:
     tags:
       application: stockit-be
+
+stockit:
+  circular-buyer:
+    ai:
+      embedding-timeout-ms: 5000
+      rationale-timeout-ms: 12000
