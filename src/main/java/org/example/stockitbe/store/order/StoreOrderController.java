@@ -7,7 +7,7 @@ import org.example.stockitbe.store.order.model.dto.StoreOrderDto;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-import org.example.stockitbe.user.model.AuthUserDetails;
+import org.example.stockitbe.user.model.entity.AuthUserDetails;
 
 import java.time.LocalDate;
 import java.util.List;

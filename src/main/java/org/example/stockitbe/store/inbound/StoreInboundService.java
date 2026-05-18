@@ -21,7 +21,7 @@ import org.example.stockitbe.store.order.model.entity.StoreOrderHeader;
 import org.example.stockitbe.store.order.model.entity.StoreOrderStatusHistory;
 import org.example.stockitbe.store.order.repository.StoreOrderHeaderRepository;
 import org.example.stockitbe.store.order.repository.StoreOrderStatusHistoryRepository;
-import org.example.stockitbe.user.model.AuthUserDetails;
+import org.example.stockitbe.user.model.entity.AuthUserDetails;
 import org.example.stockitbe.warehouse.outbound.model.OutboundStatus;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundHeader;
 import org.example.stockitbe.warehouse.outbound.model.entity.WhOutboundStatusHistory;

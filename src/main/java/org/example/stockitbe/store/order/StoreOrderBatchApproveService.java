@@ -13,7 +13,7 @@ import org.example.stockitbe.store.order.model.StoreOrderStatus;
 import org.example.stockitbe.store.order.model.dto.StoreOrderBatchDto;
 import org.example.stockitbe.store.order.model.entity.StoreOrderHeader;
 import org.example.stockitbe.store.order.repository.StoreOrderHeaderRepository;
-import org.example.stockitbe.user.model.AuthUserDetails;
+import org.example.stockitbe.user.model.entity.AuthUserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

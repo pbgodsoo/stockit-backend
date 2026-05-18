@@ -10,6 +10,7 @@ import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
 import org.example.stockitbe.hq.inventory.InventoryRepository;
+import org.example.stockitbe.hq.inventory.InventoryService;
 import org.example.stockitbe.hq.inventory.model.Inventory;
 import org.example.stockitbe.hq.product.ProductMasterRepository;
 import org.example.stockitbe.hq.product.ProductSkuRepository;
@@ -21,7 +22,7 @@ import org.example.stockitbe.store.sale.model.entity.StoreSaleHeader;
 import org.example.stockitbe.store.sale.model.entity.StoreSaleItem;
 import org.example.stockitbe.store.sale.repository.StoreSaleHeaderRepository;
 import org.example.stockitbe.store.sale.repository.StoreSaleItemRepository;
-import org.example.stockitbe.user.model.AuthUserDetails;
+import org.example.stockitbe.user.model.entity.AuthUserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,6 +53,8 @@ public class StoreSaleService {
     private final ProductMasterRepository productMasterRepository;
     private final CategoryRepository categoryRepository;
     private final InventoryRepository inventoryRepository;
+    // Phase 2 — 판매로 재고 차감 후 안전재고/품절 평가 위임. 알림 발행은 InventoryService 내부에서 ApplicationEvent 로 처리
+    private final InventoryService inventoryService;
 
     // 판매
     @Transactional
@@ -71,6 +74,18 @@ public class StoreSaleService {
 
         // 4) 모든 검증 통과 후 재고를 차감한다.
         applyInventoryDeductions(contexts);
+
+        // 4-1) Phase 2 — 차감 후 가용재고가 안전재고 미만이거나 0 이하면 매장 + 본사에 알림 발행
+        //      InventoryService 의 helper 가 ProductMaster.storeSafetyStock 과 비교 후 이벤트 발행
+        //      AFTER_COMMIT 이라 본 트랜잭션 롤백 시 알림도 안 나감
+        for (LineContext context : contexts) {
+            inventoryService.evaluateStoreStockAndAlert(
+                    store.getId(),
+                    store.getCode(),
+                    context.sku.getId(),
+                    context.sku.getSkuCode()
+            );
+        }
 
         // 5) 판매 헤더/아이템을 저장하고 판매번호를 부여한다.
         SalePersistResult persisted = persistSale(dto, store, contexts);

@@ -134,7 +134,16 @@ public enum BaseResponseStatus {
 
     // 5100번대 외부 API 관련 (시스템 에러)
     EXTERNAL_API_ERROR(false, 5100, "외부 API 호출 중 오류가 발생했습니다."),
-    CARBON_PRICE_UNAVAILABLE(false, 5101, "배출권 시세 정보를 불러올 수 없습니다.");
+    CARBON_PRICE_UNAVAILABLE(false, 5101, "배출권 시세 정보를 불러올 수 없습니다."),
+
+
+    //  5200번대 알림
+    NOTIFICATION_NOT_FOUND(false, 5200, "알림을 찾을 수 없습니다."),
+    NOTIFICATION_FORBIDDEN(false, 5201, "본인 수신 알림이 아닙니다."),
+    NOTIFICATION_ALREADY_READ(false, 5202, "이미 읽음 처리된 알림입니다."),
+    NOTIFICATION_SSE_CONNECT_FAILED(false, 5203, "실시간 알림 연결에 실패했습니다.");
+
+
 
     private final boolean success;
     private final int code;

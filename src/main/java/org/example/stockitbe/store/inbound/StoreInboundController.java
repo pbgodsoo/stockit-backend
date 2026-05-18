@@ -3,7 +3,7 @@ package org.example.stockitbe.store.inbound;
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.model.BaseResponse;
 import org.example.stockitbe.store.inbound.model.dto.StoreInboundDto;
-import org.example.stockitbe.user.model.AuthUserDetails;
+import org.example.stockitbe.user.model.entity.AuthUserDetails;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;

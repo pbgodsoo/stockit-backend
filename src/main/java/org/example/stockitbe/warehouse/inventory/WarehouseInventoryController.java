@@ -2,7 +2,7 @@ package org.example.stockitbe.warehouse.inventory;
 
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.model.BaseResponse;
-import org.example.stockitbe.user.model.AuthUserDetails;
+import org.example.stockitbe.user.model.entity.AuthUserDetails;
 import org.example.stockitbe.warehouse.inventory.model.WarehouseInventoryDto;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;

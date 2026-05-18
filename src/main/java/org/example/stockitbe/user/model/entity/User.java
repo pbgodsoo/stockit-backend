@@ -1,4 +1,4 @@
-package org.example.stockitbe.user.model;
+package org.example.stockitbe.user.model.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;

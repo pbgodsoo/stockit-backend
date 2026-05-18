@@ -16,7 +16,7 @@ import org.example.stockitbe.store.inbound.model.entity.StoreInboundHeader;
 import org.example.stockitbe.store.inbound.model.entity.StoreInboundStatusHistory;
 import org.example.stockitbe.store.inbound.repository.StoreInboundHeaderRepository;
 import org.example.stockitbe.store.inbound.repository.StoreInboundStatusHistoryRepository;
-import org.example.stockitbe.user.model.AuthUserDetails;
+import org.example.stockitbe.user.model.entity.AuthUserDetails;
 import org.example.stockitbe.warehouse.outbound.model.OutboundDestinationType;
 import org.example.stockitbe.warehouse.outbound.model.OutboundStatus;
 import org.example.stockitbe.warehouse.outbound.model.OutboundSourceType;
@@ -151,6 +151,9 @@ public class WhOutboundService {
         //    — PO 의 startInTransit 시점에 도착 창고 가용+ 와 동일 패턴 (ADR-024).
         List<WhOutboundItem> items = outboundItemRepository.findAllByOutboundHeaderIdOrderByIdAsc(header.getId());
         boolean toWarehouse = header.getDestinationType() == OutboundDestinationType.WAREHOUSE;
+        // Phase 2 — 본 창고(출고원) code 캐싱. 알림 발행 시 targetLocationCode 로 사용
+        String sourceWarehouseCode = infrastructureRepository.findById(header.getWarehouseId())
+                .map(Infrastructure::getCode).orElse(null);
         for (WhOutboundItem item : items) {
             int moved = inventoryService.moveReservedToInTransit(header.getWarehouseId(), item.getSkuId(), item.getRequestedQuantity());
             if (moved != item.getRequestedQuantity()) {
@@ -158,6 +161,16 @@ public class WhOutboundService {
             }
             if (toWarehouse) {
                 inventoryService.increaseAvailable(header.getDestinationId(), item.getSkuCode(), item.getRequestedQuantity());
+            }
+            // Phase 2 — 출고 확정 후 본 창고 가용재고가 안전재고 미만/품절이면 창고 + 본사 알림
+            //          InventoryService 가 ProductMaster.warehouseSafetyStock 과 비교 후 이벤트 발행
+            if (sourceWarehouseCode != null) {
+                inventoryService.evaluateWarehouseStockAndAlert(
+                        header.getWarehouseId(),
+                        sourceWarehouseCode,
+                        item.getSkuId(),
+                        item.getSkuCode()
+                );
             }
         }
 

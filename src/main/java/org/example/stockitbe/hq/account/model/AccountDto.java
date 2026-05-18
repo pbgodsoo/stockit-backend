@@ -2,9 +2,9 @@ package org.example.stockitbe.hq.account.model;
 
 import lombok.Builder;
 import lombok.Getter;
-import org.example.stockitbe.user.model.User;
-import org.example.stockitbe.user.model.UserRole;
-import org.example.stockitbe.user.model.UserStatus;
+import org.example.stockitbe.user.model.entity.User;
+import org.example.stockitbe.user.model.entity.UserRole;
+import org.example.stockitbe.user.model.entity.UserStatus;
 
 import java.time.LocalDateTime;
 

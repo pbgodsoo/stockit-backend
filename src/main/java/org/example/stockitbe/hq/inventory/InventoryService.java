@@ -22,6 +22,12 @@ import org.example.stockitbe.hq.product.model.Material;
 import org.example.stockitbe.hq.product.model.ProductMaster;
 import org.example.stockitbe.hq.product.model.ProductMaterialType;
 import org.example.stockitbe.hq.product.model.ProductSku;
+// Phase 2 알림 트리거 — 순환재고 후보 + 매장/창고 재고 부족·품절 알림 발행
+import org.example.stockitbe.notification.event.NotificationEvent;
+import org.example.stockitbe.notification.model.entity.NotificationSeverity;
+import org.example.stockitbe.notification.model.entity.NotificationType;
+import org.example.stockitbe.user.model.entity.UserRole;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -46,6 +52,8 @@ public class InventoryService {
     private final MaterialRepository materialRepository;
     private final CategoryRepository categoryRepository;
     private final InfrastructureRepository infrastructureRepository;
+    // Phase 2 — Spring ApplicationEvent 발행자. 알림 도메인이 직접 의존하지 않도록 이벤트 패턴 사용
+    private final ApplicationEventPublisher eventPublisher;
 
     private static final int CONDITION_LONG_NO_MOVEMENT = 1;
     private static final int CONDITION_LOW_PERFORMANCE = 2;
@@ -292,6 +300,92 @@ public class InventoryService {
         return value == null ? 0 : value;
     }
 
+    // -------- Phase 2 알림 — 재고 부족/품절 평가 helper --------
+
+    // 매장 판매 직후 호출되는 진입점.
+    // 사용하는 메서드: StoreSaleService.create() — 판매로 인한 재고 차감 직후 호출
+    // 현재 가용재고 < ProductMaster.storeSafetyStock 이면 매장 + 본사 두 채널에 알림 발행
+    // <=0 이면 품절(CRITICAL), 그 미만이면 부족(WARNING)
+    public void evaluateStoreStockAndAlert(Long storeLocationId, String storeCode, Long skuId, String skuCode) {
+        if (storeLocationId == null || skuId == null) return;
+        // 매장 inventory 는 status=NORMAL row 한 개만 사용 (status 분리 룰)
+        inventoryRepository.findBySkuIdAndLocationIdAndInventoryStatus(skuId, storeLocationId, InventoryStatus.NORMAL)
+                .ifPresent(inv -> {
+                    ProductSku sku = productSkuRepository.findById(skuId).orElse(null);
+                    if (sku == null) return;
+                    ProductMaster master = productMasterRepository.findByCode(sku.getProductCode()).orElse(null);
+                    if (master == null) return;
+                    int available = Math.max(0, n(inv.getAvailableQuantity()));
+                    int safetyStock = Math.max(0, n(master.getStoreSafetyStock()));   // 매장용 안전재고
+                    publishStockAlertIfNeeded(available, safetyStock, UserRole.STORE, storeCode, skuCode);
+                });
+    }
+
+    // 창고 출고 확정 직후 호출되는 진입점.
+    // 사용하는 메서드: WhOutboundService.confirm() — moveReservedToInTransit 직후 호출
+    // 매장과 동일 로직이나 안전재고는 ProductMaster.warehouseSafetyStock 사용
+    public void evaluateWarehouseStockAndAlert(Long warehouseLocationId, String warehouseCode, Long skuId, String skuCode) {
+        if (warehouseLocationId == null || skuId == null) return;
+        inventoryRepository.findBySkuIdAndLocationIdAndInventoryStatus(skuId, warehouseLocationId, InventoryStatus.NORMAL)
+                .ifPresent(inv -> {
+                    ProductSku sku = productSkuRepository.findById(skuId).orElse(null);
+                    if (sku == null) return;
+                    ProductMaster master = productMasterRepository.findByCode(sku.getProductCode()).orElse(null);
+                    if (master == null) return;
+                    int available = Math.max(0, n(inv.getAvailableQuantity()));
+                    int safetyStock = Math.max(0, n(master.getWarehouseSafetyStock())); // 창고용 안전재고
+                    publishStockAlertIfNeeded(available, safetyStock, UserRole.WAREHOUSE, warehouseCode, skuCode);
+                });
+    }
+
+    // 사용하는 메서드: evaluateStoreStockAndAlert, evaluateWarehouseStockAndAlert
+    // 가용재고 vs 안전재고 비교 후 임계 초과 시 지점 + 본사 2채널에 알림 발행
+    private void publishStockAlertIfNeeded(int available, int safetyStock,
+                                            UserRole role, String locationCode, String skuCode) {
+        // (a) 품절 — 가용재고 0 이하
+        if (available <= 0) {
+            String title = role == UserRole.STORE ? "매장 재고 품절" : "창고 재고 품절";
+            // 본인 지점용 — 권한+locationCode 매칭으로 본인만 수신
+            publishStockAlert(NotificationType.INVENTORY_OUT_OF_STOCK, NotificationSeverity.CRITICAL,
+                    title, skuCode + " 재고가 품절되었습니다.",
+                    role, locationCode, skuCode);
+            // 본사 전체용 — locationCode=null 이면 모든 HQ 수신
+            publishStockAlert(NotificationType.INVENTORY_OUT_OF_STOCK, NotificationSeverity.CRITICAL,
+                    title, "[" + locationCode + "] " + skuCode + " 품절",
+                    UserRole.HQ, null, skuCode);
+            return;
+        }
+        // (b) 부족 — 가용재고가 안전재고 미만 (안전재고가 0 인 SKU 는 알림 발생 X)
+        if (safetyStock > 0 && available < safetyStock) {
+            String title = role == UserRole.STORE ? "매장 재고 부족" : "창고 재고 부족";
+            publishStockAlert(NotificationType.INVENTORY_SHORTAGE, NotificationSeverity.WARNING,
+                    title,
+                    skuCode + " 재고가 안전재고(" + safetyStock + ") 미만입니다. 현재 가용 " + available,
+                    role, locationCode, skuCode);
+            publishStockAlert(NotificationType.INVENTORY_SHORTAGE, NotificationSeverity.WARNING,
+                    title,
+                    "[" + locationCode + "] " + skuCode + " 안전재고 미만 (가용 " + available + "/" + safetyStock + ")",
+                    UserRole.HQ, null, skuCode);
+        }
+    }
+
+    // 사용하는 메서드: publishStockAlertIfNeeded
+    // NotificationEvent 빌드 + publishEvent 호출. refType=INVENTORY 로 통일해 알림→원천 SKU 추적
+    private void publishStockAlert(NotificationType type, NotificationSeverity severity,
+                                    String title, String message,
+                                    UserRole role, String locationCode, String skuCode) {
+        eventPublisher.publishEvent(NotificationEvent.builder()
+                .type(type)
+                .severity(severity)
+                .title(title)
+                .message(message)
+                .targetRole(role)
+                .targetLocationCode(locationCode)
+                .refType("INVENTORY")
+                .refId(skuCode)
+                .build());
+    }
+
     private static class ImbalancedSkuAggregate {
         private final ProductSku sku;
         private final ProductMaster master;
@@ -414,6 +508,20 @@ public class InventoryService {
             }
         }
         inventoryCandidateConditionRepository.saveAll(conditions);
+
+        // Phase 2 — 새로 전환된 후보 1건 이상이면 본사에 요약 1건 알림 (계획서 §4-10 ③)
+        //          개별 SKU 마다 알림 X (스팸 방지). convertedCount 만 한 줄로 보고
+        if (convertedCount > 0) {
+            eventPublisher.publishEvent(NotificationEvent.builder()
+                    .type(NotificationType.CIRCULAR_CANDIDATE)
+                    .severity(NotificationSeverity.INFO)
+                    .title("순환재고 후보 신규 발생")
+                    .message("순환재고 후보 " + convertedCount + "건이 새로 등록되었습니다.")
+                    .targetRole(UserRole.HQ)              // 본사 전체
+                    .refType("INVENTORY")
+                    .refId("CIRCULAR_REFRESH")            // 식별용 더미 id (배치 단위)
+                    .build());
+        }
 
         return InventoryDto.CircularCandidateRefreshRes.builder()
                 .scannedCount(normalInventories.size())

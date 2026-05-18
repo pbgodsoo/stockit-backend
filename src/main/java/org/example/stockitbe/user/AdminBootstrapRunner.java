@@ -2,9 +2,9 @@ package org.example.stockitbe.user;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.example.stockitbe.user.model.User;
-import org.example.stockitbe.user.model.UserRole;
-import org.example.stockitbe.user.model.UserStatus;
+import org.example.stockitbe.user.model.entity.User;
+import org.example.stockitbe.user.model.entity.UserRole;
+import org.example.stockitbe.user.model.entity.UserStatus;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
