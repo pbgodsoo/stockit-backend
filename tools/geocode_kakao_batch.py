@@ -45,6 +45,49 @@ def clean_basic(address: str) -> str:
     out = re.sub(r"\([^)]*\)", "", out)
     out = out.split(",")[0]
     out = re.sub(r"[)\]}>]+$", "", out)  # 꼬리 특수문자 제거
+    out = re.sub(r"\s*-\s*", "-", out)   # 168 -9 -> 168-9
+    out = re.sub(r"\s+", " ", out).strip()
+    return out
+
+
+def normalize_admin_spacing(address: str) -> str:
+    """
+    붙어있는 행정구역 토큰을 분리한다.
+    예) 천안시서북구 -> 천안시 서북구, 안산시단원구초지동 -> 안산시 단원구 초지동
+    """
+    out = address
+    patterns = [
+        # 광역/특별 + 기초 (서울특별시중구, 경기도안양시 ...)
+        (r"([가-힣]+(?:특별자치시|특별자치도|특별시|광역시|시|도))([가-힣]+(?:시|군|구))", r"\1 \2"),
+        # 기초 + 하위 (안양시만안구, 단원구초지동, 군위군효령면 ...)
+        (r"([가-힣]+(?:시|군|구))([가-힣0-9]+(?:군|구|읍|면|동|리))", r"\1 \2"),
+    ]
+    prev = None
+    while prev != out:
+        prev = out
+        for pattern, repl in patterns:
+            out = re.sub(pattern, repl, out)
+    out = re.sub(r"\s+", " ", out).strip()
+    return out
+
+
+def normalize_je_dong_notation(address: str) -> str:
+    """
+    구식 법정동 표기 보정.
+    예) 방화제동 -> 방화동, 중화제3동 -> 중화3동
+    """
+    out = re.sub(r"([가-힣]+)제(\d+)동\b", r"\1\2동", address)
+    out = re.sub(r"([가-힣]+)제동\b", r"\1동", out)
+    out = re.sub(r"\s+", " ", out).strip()
+    return out
+
+
+def strip_trailing_business_name(address: str) -> str:
+    """
+    도로명+건물번호 뒤에 붙은 상호 꼬리를 제거한 후보를 만든다.
+    예) 해안로 259 신명전기 -> 해안로 259
+    """
+    out = re.sub(r"(\d+(?:-\d+)?)\s+[A-Za-z가-힣][A-Za-z0-9가-힣().-]*\s*$", r"\1", address)
     out = re.sub(r"\s+", " ", out).strip()
     return out
 
@@ -114,6 +157,8 @@ def build_query_candidates(address: str) -> list[str]:
     base = clean_basic(address)
     if not base:
         return []
+    base = normalize_admin_spacing(base)
+    base = normalize_je_dong_notation(base)
 
     candidates: list[str] = []
     base_col = normalize_collapse_bunggil(base)
@@ -133,6 +178,11 @@ def build_query_candidates(address: str) -> list[str]:
         # 건물번호 제거 버전 (도로명 레벨)
         strip_trailing_building_number(base_col),
         strip_trailing_building_number(base),
+        # 상호 꼬리 제거 버전
+        strip_trailing_business_name(base_col),
+        strip_trailing_business_name(base),
+        strip_trailing_business_name(trimmed_col),
+        strip_trailing_business_name(trimmed),
     ]
 
     # 숫자 행정동 정규화 (청천2동 → 청천동)
@@ -167,6 +217,8 @@ def build_query_candidates(address: str) -> list[str]:
 
 def extract_region_tokens(address: str) -> list[str]:
     source = clean_basic(address)
+    source = normalize_admin_spacing(source)
+    source = normalize_je_dong_notation(source)
     tokens = source.split()
     regions: list[str] = []
     for token in tokens:
@@ -228,6 +280,14 @@ def is_region_match(raw_address: str, result_address: str) -> bool:
     if not expected:
         return True
     normalized_result = normalize_region_token(result_address)
+    normalized_result = normalize_admin_spacing(normalized_result)
+
+    # 행정구역 개편 예외(과거 주소 -> 현재 행정구역 표기)
+    if "군위군" in raw_address:
+        normalized_result = normalized_result.replace("대구", "경북")
+    if "연기군" in raw_address:
+        normalized_result = normalized_result.replace("세종", "충남")
+
     # 표기 정규화 + 축약(경기도/경기) 별칭 중 하나라도 포함되면 매칭
     for token in expected:
         aliases = region_aliases(token)
