@@ -10,6 +10,8 @@ import org.example.stockitbe.common.model.BaseResponseStatus;
 import org.example.stockitbe.hq.circularbuyer.model.CircularBuyer;
 import org.example.stockitbe.hq.circularbuyer.model.CircularBuyerDto;
 import org.example.stockitbe.hq.circularbuyer.repository.CircularBuyerRepository;
+import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
+import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.product.ProductMasterRepository;
 import org.example.stockitbe.hq.product.model.Material;
 import org.example.stockitbe.hq.product.model.ProductMaterialComposition;
@@ -23,9 +25,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * ADR-021 AI 거래처 추천 — 3층 RAG 파이프라인.
@@ -45,6 +50,10 @@ public class CircularBuyerRecommendService {
             "natural-single", "synthetic", "blended"
     );
     private static final int TOP_K = 5;
+    private static final double SIM_WEIGHT = 0.7;
+    private static final double DIST_WEIGHT = 0.3;
+    private static final double DIST_NORM_KM = 30.0;
+    private static final double EARTH_RADIUS_KM = 6371.0;
     private static final Pattern JSON_ARRAY = Pattern.compile("\\[.*]", Pattern.DOTALL);
 
     /**
@@ -62,6 +71,7 @@ public class CircularBuyerRecommendService {
     );
 
     private final CircularBuyerRepository circularBuyerRepository;
+    private final InfrastructureRepository infrastructureRepository;
     private final ProductMasterRepository productMasterRepository;
     private final EmbeddingModel embeddingModel;
     private final ChatModel chatModel;
@@ -81,20 +91,34 @@ public class CircularBuyerRecommendService {
         }
 
         // 2층 — 쿼리 임베딩 + 코사인 top 5
-        List<CircularBuyer> top = rankByCosine(candidates, buildQueryText(req));
+        WarehousePoint warehousePoint = resolveWarehousePoint(req.getWarehouseCode());
+        List<RankedBuyer> rankedTop = rankByScore(candidates, buildQueryText(req), warehousePoint);
+        List<CircularBuyer> top = rankedTop.stream().map(RankedBuyer::buyer).toList();
 
         // 3층 — LLM 사유 생성 (실패 시 fallback)
         Map<String, String> rationales = generateRationales(top, req);
+        Map<String, RankedBuyer> rankedByCode = rankedTop.stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toMap(
+                        r -> r.buyer().getCode(),
+                        r -> r,
+                        (left, right) -> left
+                ));
 
         List<CircularBuyerDto.RecommendItem> items = top.stream()
-                .map(b -> CircularBuyerDto.RecommendItem.builder()
+                .map(b -> {
+                    RankedBuyer rankedBuyer = rankedByCode.get(b.getCode());
+                    Double distanceKm = rankedBuyer == null ? null : rankedBuyer.distanceKm();
+                    return CircularBuyerDto.RecommendItem.builder()
                         .code(b.getCode())
                         .companyName(b.getCompanyName())
                         .primaryMaterialFit(b.getPrimaryMaterialFit())
                         .industryGroup(b.getIndustryGroup())
                         .partnerType(b.getPartnerType())
+                        .distanceKm(distanceKm)
                         .rationale(rationales.getOrDefault(b.getCode(), fallbackRationale()))
-                        .build())
+                        .build();
+                })
                 .toList();
 
         return CircularBuyerDto.RecommendRes.builder()
@@ -161,21 +185,43 @@ public class CircularBuyerRecommendService {
         });
     }
 
-    private List<CircularBuyer> rankByCosine(List<CircularBuyer> candidates, String queryText) {
+    private List<RankedBuyer> rankByScore(
+            List<CircularBuyer> candidates,
+            String queryText,
+            WarehousePoint warehousePoint
+    ) {
         float[] q;
         try {
             q = embeddingModel.embed(queryText);
         } catch (Exception e) {
             log.warn("쿼리 임베딩 생성 실패 — 코사인 정렬 없이 fallback 정렬(앞 N건). reason={}", e.getMessage());
-            return candidates.stream().limit(TOP_K).toList();
+            return candidates.stream()
+                    .limit(TOP_K)
+                    .map(b -> new RankedBuyer(b, null, 0.0))
+                    .toList();
         }
         List<Double> qVec = toDoubleList(q);
         return candidates.stream()
-                .map(b -> Map.entry(b, cosine(qVec, b.getEmbedding())))
-                .sorted((a, b) -> Double.compare(b.getValue(), a.getValue()))
+                .map(buyer -> toRankedBuyer(buyer, qVec, warehousePoint))
+                .sorted((a, b) -> Double.compare(b.score(), a.score()))
                 .limit(TOP_K)
-                .map(Map.Entry::getKey)
                 .toList();
+    }
+
+    private RankedBuyer toRankedBuyer(CircularBuyer buyer, List<Double> qVec, WarehousePoint warehousePoint) {
+        double simScore = cosine(qVec, buyer.getEmbedding());
+        boolean canUseDistance = warehousePoint != null
+                && isValidLatLng(buyer.getLatitude(), buyer.getLongitude());
+        if (!canUseDistance) {
+            return new RankedBuyer(buyer, null, simScore);
+        }
+        double distanceKm = haversineKm(
+                warehousePoint.latitude(), warehousePoint.longitude(),
+                buyer.getLatitude(), buyer.getLongitude()
+        );
+        double distScore = 1.0 / (1.0 + (distanceKm / DIST_NORM_KM));
+        double finalScore = (SIM_WEIGHT * simScore) + (DIST_WEIGHT * distScore);
+        return new RankedBuyer(buyer, round2(distanceKm), finalScore);
     }
 
     private static double cosine(List<Double> a, List<Double> b) {
@@ -230,6 +276,7 @@ public class CircularBuyerRecommendService {
 
     private String buildPrompt(List<CircularBuyer> top, CircularBuyerDto.RecommendReq req) {
         StringBuilder sb = new StringBuilder();
+        WarehousePoint wp = resolveWarehousePoint(req.getWarehouseCode());
         sb.append("너는 SPA 브랜드 본사 관리자에게 순환재고 처리 거래처를 추천하는 한국어 어시스턴트야.\n");
         sb.append("아래 재고 정보와 후보 거래처 ").append(top.size()).append("곳을 보고, ");
         sb.append("각 거래처가 왜 이 재고에 적합한지 충분히 자세하고 신뢰감 있는 사유를 작성해.\n\n");
@@ -262,6 +309,12 @@ public class CircularBuyerRecommendService {
                 sb.append(" / 취급=").append(String.join(",", b.getFactoryProduct()));
             }
             if (b.getAddress() != null) sb.append(" / 주소=").append(b.getAddress());
+            if (isValidLatLng(b.getLatitude(), b.getLongitude()) && wp != null) {
+                double d = haversineKm(wp.latitude(), wp.longitude(), b.getLatitude(), b.getLongitude());
+                sb.append(" / 거리=").append(round2(d)).append("km");
+            } else {
+                sb.append(" / 거리=거리 정보 없음");
+            }
             if (b.getDescription() != null) sb.append(" / 설명=").append(b.getDescription());
             sb.append("\n");
         }
@@ -311,4 +364,35 @@ public class CircularBuyerRecommendService {
         }
         return out;
     }
+
+    private WarehousePoint resolveWarehousePoint(String warehouseCode) {
+        if (warehouseCode == null || warehouseCode.isBlank()) return null;
+        Optional<Infrastructure> infraOpt = infrastructureRepository.findByCode(warehouseCode.trim());
+        if (infraOpt.isEmpty()) return null;
+        Infrastructure infra = infraOpt.get();
+        if (!isValidLatLng(infra.getLatitude(), infra.getLongitude())) return null;
+        return new WarehousePoint(infra.getLatitude(), infra.getLongitude());
+    }
+
+    private static boolean isValidLatLng(Double lat, Double lng) {
+        if (lat == null || lng == null) return false;
+        return lat >= -90.0 && lat <= 90.0 && lng >= -180.0 && lng <= 180.0;
+    }
+
+    private static double haversineKm(double lat1, double lng1, double lat2, double lng2) {
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLng = Math.toRadians(lng2 - lng1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return EARTH_RADIUS_KM * c;
+    }
+
+    private static double round2(double value) {
+        return Math.round(value * 100.0) / 100.0;
+    }
+
+    private record WarehousePoint(double latitude, double longitude) {}
+    private record RankedBuyer(CircularBuyer buyer, Double distanceKm, double score) {}
 }

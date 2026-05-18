@@ -140,6 +140,7 @@ public class CircularBuyerDto {
         private String description;
         private String quantityHint;
         private String productCode;
+        private String warehouseCode;
     }
 
     /**
@@ -155,6 +156,7 @@ public class CircularBuyerDto {
         private String primaryMaterialFit;
         private String industryGroup;
         private String partnerType;
+        private Double distanceKm;
         private String rationale;
     }
 
