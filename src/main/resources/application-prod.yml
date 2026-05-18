@@ -8,9 +8,9 @@ spring:
     username: ${DB_USER}
     password: ${DB_PASS}
     hikari:
-      maximum-pool-size: ${DB_POOL_MAX:5}
-      minimum-idle: ${DB_POOL_MIN_IDLE:1}
-      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:10000}
+      maximum-pool-size: 10
+      minimum-idle: 3
+      connection-timeout: 10000
 
   jpa:
     database-platform: org.hibernate.dialect.MariaDBDialect
