@@ -6,9 +6,9 @@ import org.example.stockitbe.common.jwt.JwtRefreshRepository;
 import org.example.stockitbe.common.model.BaseResponseStatus;
 import org.example.stockitbe.hq.account.model.AccountDto;
 import org.example.stockitbe.user.UserRepository;
-import org.example.stockitbe.user.model.User;
-import org.example.stockitbe.user.model.UserRole;
-import org.example.stockitbe.user.model.UserStatus;
+import org.example.stockitbe.user.model.entity.User;
+import org.example.stockitbe.user.model.entity.UserRole;
+import org.example.stockitbe.user.model.entity.UserStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

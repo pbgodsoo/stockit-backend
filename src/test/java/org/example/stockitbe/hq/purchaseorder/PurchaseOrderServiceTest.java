@@ -17,7 +17,7 @@ import org.example.stockitbe.hq.vendor.model.Vendor;
 import org.example.stockitbe.hq.vendor.model.VendorProduct;
 import org.example.stockitbe.hq.vendor.model.VendorProductStatus;
 import org.example.stockitbe.hq.vendor.model.VendorStatus;
-import org.example.stockitbe.user.model.AuthUserDetails;
+import org.example.stockitbe.user.model.entity.AuthUserDetails;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

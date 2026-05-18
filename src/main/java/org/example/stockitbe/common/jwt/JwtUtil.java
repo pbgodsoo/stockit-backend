@@ -3,7 +3,7 @@ package org.example.stockitbe.common.jwt;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-import org.example.stockitbe.user.model.UserRole;
+import org.example.stockitbe.user.model.entity.UserRole;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
