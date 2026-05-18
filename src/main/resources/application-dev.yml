@@ -75,5 +75,5 @@ admin:
 stockit:
   circular-buyer:
     ai:
-      embedding-timeout-ms: 5000
-      rationale-timeout-ms: 12000
+      embedding-timeout-ms: 15000
+      rationale-timeout-ms: 60000

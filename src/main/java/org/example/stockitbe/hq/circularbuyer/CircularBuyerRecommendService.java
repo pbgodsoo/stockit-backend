@@ -83,10 +83,10 @@ public class CircularBuyerRecommendService {
     private final ChatModel chatModel;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @Value("${stockit.circular-buyer.ai.embedding-timeout-ms:5000}")
+    @Value("${stockit.circular-buyer.ai.embedding-timeout-ms:15000}")
     private long embeddingTimeoutMs;
 
-    @Value("${stockit.circular-buyer.ai.rationale-timeout-ms:12000}")
+    @Value("${stockit.circular-buyer.ai.rationale-timeout-ms:60000}")
     private long rationaleTimeoutMs;
 
     @Transactional(readOnly = true)
