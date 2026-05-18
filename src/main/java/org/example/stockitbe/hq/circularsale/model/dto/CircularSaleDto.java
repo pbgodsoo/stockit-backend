@@ -185,6 +185,8 @@ public class CircularSaleDto {
         private Long saleId;
         private String saleNo;
         private CircularSaleStatus status;
+        private String outboundNo;
+        private OutboundStatus outboundStatus;
         private Date soldAt;
         private Date completedAt;
         private String buyerCode;
@@ -255,6 +257,8 @@ public class CircularSaleDto {
         private Long saleId;
         private String saleNo;
         private CircularSaleStatus status;
+        private String outboundNo;
+        private OutboundStatus outboundStatus;
         private Date soldAt;
         private Date completedAt;
         private String soldByMemberId;

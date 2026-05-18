@@ -136,6 +136,12 @@ public class CircularSaleService {
         Map<Long, CircularBuyer> buyerById = circularBuyerRepository.findAllById(
                 headers.getContent().stream().map(CircularSaleHeader::getBuyerId).collect(Collectors.toSet())
         ).stream().collect(Collectors.toMap(CircularBuyer::getId, Function.identity()));
+        Map<Long, WhOutboundHeader> outboundById = outboundHeaderRepository.findAllById(
+                headers.getContent().stream()
+                        .map(CircularSaleHeader::getOutboundHeaderId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet())
+        ).stream().collect(Collectors.toMap(WhOutboundHeader::getId, Function.identity()));
 
         Map<Long, List<CircularSaleItem>> itemsByHeader = saleItemRepository.findAllBySaleHeaderIdIn(
                 headers.getContent().stream().map(CircularSaleHeader::getId).toList()
@@ -144,11 +150,14 @@ public class CircularSaleService {
         List<CircularSaleDto.ListRowRes> rows = new ArrayList<>();
         for (CircularSaleHeader header : headers.getContent()) {
             CircularBuyer buyer = buyerById.get(header.getBuyerId());
+            WhOutboundHeader outbound = outboundById.get(header.getOutboundHeaderId());
             List<CircularSaleItem> items = itemsByHeader.getOrDefault(header.getId(), List.of());
             rows.add(CircularSaleDto.ListRowRes.builder()
                     .saleId(header.getId())
                     .saleNo(header.getSaleNo())
                     .status(header.getStatus())
+                    .outboundNo(outbound == null ? null : outbound.getOutboundNo())
+                    .outboundStatus(outbound == null ? null : outbound.getStatus())
                     .soldAt(header.getSoldAt())
                     .completedAt(header.getCompletedAt())
                     .buyerCode(buyer == null ? null : buyer.getCode())
@@ -171,6 +180,8 @@ public class CircularSaleService {
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.CIRCULAR_SALE_NOT_FOUND));
         CircularBuyer buyer = circularBuyerRepository.findById(header.getBuyerId())
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.CIRCULAR_SALE_BUYER_NOT_FOUND));
+        WhOutboundHeader outbound = header.getOutboundHeaderId() == null ? null
+                : outboundHeaderRepository.findById(header.getOutboundHeaderId()).orElse(null);
 
         List<CircularSaleItem> items = saleItemRepository.findAllBySaleHeaderIdOrderByIdAsc(header.getId());
         List<Long> itemIds = items.stream().map(CircularSaleItem::getId).toList();
@@ -193,6 +204,8 @@ public class CircularSaleService {
                 .saleId(header.getId())
                 .saleNo(header.getSaleNo())
                 .status(header.getStatus())
+                .outboundNo(outbound == null ? null : outbound.getOutboundNo())
+                .outboundStatus(outbound == null ? null : outbound.getStatus())
                 .soldAt(header.getSoldAt())
                 .completedAt(header.getCompletedAt())
                 .soldByMemberId(header.getSoldByMemberId())
