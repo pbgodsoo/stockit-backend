@@ -195,7 +195,7 @@ public class InventoryService {
     // 출고 확정 시점에 특정 창고/상품 재고를 reserved -> inTransit으로 옮기는 역할
     // 반환값은 "실제로 이동된 수량"이며, 호출부에서 요청수량과 일치하는지 검증해 예외 처리한다.
     @Transactional
-        public int moveReservedToInTransit(Long locationId, Long skuId, int requestedQuantity) {
+    public int moveReservedToInTransit(Long locationId, Long skuId, int requestedQuantity) {
         // 1. 필수 파라미터가 없거나 요청 수량이 0 이하이면 처리하지 않는다.
         if (locationId == null || skuId == null || requestedQuantity <= 0) return 0;
 
@@ -206,6 +206,23 @@ public class InventoryService {
                 )
                 .map(inv -> inv.moveReservedToInTransit(requestedQuantity))
                 .orElse(0);
+    }
+
+    /** 특정 inventory row(CIRCULAR 등) 기준으로 reserved -> inTransit 이동 */
+    @Transactional
+    public int moveReservedToInTransitByInventoryId(Long inventoryId, int requestedQuantity) {
+        if (inventoryId == null || requestedQuantity <= 0) return 0;
+        return inventoryRepository.findWithLockById(inventoryId)
+                .map(inv -> inv.moveReservedToInTransit(requestedQuantity))
+                .orElse(0);
+    }
+
+    /** 특정 inventory row 기준으로 물리 재고(quantity)만 차감 */
+    @Transactional
+    public void decreaseQuantityByInventoryId(Long inventoryId, int quantityToDeduct) {
+        if (inventoryId == null || quantityToDeduct <= 0) return;
+        inventoryRepository.findWithLockById(inventoryId)
+                .ifPresent(inv -> inv.decreaseQuantityOnly(quantityToDeduct));
     }
 
     /**

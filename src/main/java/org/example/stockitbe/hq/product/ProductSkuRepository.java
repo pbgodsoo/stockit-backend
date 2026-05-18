@@ -15,4 +15,5 @@ public interface ProductSkuRepository extends JpaRepository<ProductSku, Long> {
     boolean existsByProductCodeAndColorAndSize(String productCode, String color, String size);
     long deleteByProductCode(String productCode);
     List<ProductSku> findAllByProductCodeInOrderByIdAsc(Collection<String> productCodes);
+    List<ProductSku> findAllBySkuCodeIn(Collection<String> skuCodes);
 }

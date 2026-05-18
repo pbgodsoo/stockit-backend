@@ -76,13 +76,22 @@ public enum BaseResponseStatus {
     PURCHASE_ORDER_SKU_PRODUCT_MISMATCH(false, 4305, "발주 품목의 SKU가 공급처 계약 제품의 옵션이 아닙니다."),
     PURCHASE_ORDER_BATCH_EMPTY(false, 4306, "분할 발주에 품목이 없습니다."),
 
-    // 4400번대~ 순환재고 거래처 (ADR-020 / ADR-021)
+    // 4400번대~ 순환재고 관련 (ADR-020 / ADR-021)
     CIRCULAR_BUYER_NOT_FOUND(false, 4400, "순환재고 거래처를 찾을 수 없습니다."),
     DUPLICATE_CIRCULAR_BUYER_CODE(false, 4401, "이미 등록된 순환재고 거래처 코드입니다."),
     INVALID_MATERIAL_FIT(false, 4402, "유효하지 않은 소재 적합도입니다."),
     CIRCULAR_BUYER_CODE_EXHAUSTED(false, 4403, "순환재고 거래처 코드(RCV-999)가 모두 소진되었습니다."),
     CONCURRENT_CIRCULAR_BUYER_REGISTRATION(false, 4404, "동시 등록 충돌이 발생했습니다. 다시 시도해주세요."),
     INVALID_PARTNER_TYPE(false, 4405, "유효하지 않은 파트너 유형입니다."),
+    CIRCULAR_SALE_NOT_FOUND(false, 4406, "순환재고 판매 내역을 찾을 수 없습니다."),
+    CIRCULAR_SALE_EMPTY_ITEMS(false, 4407, "순환재고 판매 항목이 비어 있습니다."),
+    CIRCULAR_SALE_INVALID_QUANTITY(false, 4408, "순환재고 판매 수량이 올바르지 않습니다."),
+    CIRCULAR_SALE_SKU_NOT_FOUND(false, 4409, "순환재고 판매 SKU를 찾을 수 없습니다."),
+    CIRCULAR_SALE_INSUFFICIENT_STOCK(false, 4410, "순환재고가 부족하여 판매를 확정할 수 없습니다."),
+    CIRCULAR_SALE_BUYER_NOT_FOUND(false, 4411, "순환재고 판매 거래처를 찾을 수 없습니다."),
+    CIRCULAR_SALE_INVALID_WAREHOUSE(false, 4412, "순환재고 판매 출고 창고 정보가 올바르지 않습니다."),
+    CIRCULAR_SALE_INVALID_STATUS_TRANSITION(false, 4413, "순환재고 판매 상태 전이가 올바르지 않습니다."),
+    CIRCULAR_SALE_INVALID_REQUEST(false, 4414, "순환재고 판매 요청값이 올바르지 않습니다."),
 
     // 4500번대~ 매장 판매
     STORE_SALE_NOT_FOUND(false, 4500, "판매 내역을 찾을 수 없습니다."),

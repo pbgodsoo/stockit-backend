@@ -8,6 +8,9 @@ import org.example.stockitbe.hq.circularbuyer.model.CircularBuyer;
 import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
+import org.example.stockitbe.hq.circularsale.CircularSaleService;
+import org.example.stockitbe.hq.circularsale.model.entity.CircularSaleItem;
+import org.example.stockitbe.hq.circularsale.repository.CircularSaleItemRepository;
 import org.example.stockitbe.hq.warehousetransfer.WarehouseTransferHeaderRepository;
 import org.example.stockitbe.hq.warehousetransfer.model.WarehouseTransferHeader;
 import org.example.stockitbe.hq.inventory.InventoryService;
@@ -51,6 +54,8 @@ public class WhOutboundService {
     private final StoreInboundStatusHistoryRepository inboundStatusHistoryRepository;
     private final InfrastructureRepository infrastructureRepository;
     private final CircularBuyerRepository circularBuyerRepository;
+    private final CircularSaleService circularSaleService;
+    private final CircularSaleItemRepository circularSaleItemRepository;
     private final InventoryService inventoryService;
     private final WarehouseTransferHeaderRepository warehouseTransferHeaderRepository;
 
@@ -154,8 +159,11 @@ public class WhOutboundService {
         // Phase 2 — 본 창고(출고원) code 캐싱. 알림 발행 시 targetLocationCode 로 사용
         String sourceWarehouseCode = infrastructureRepository.findById(header.getWarehouseId())
                 .map(Infrastructure::getCode).orElse(null);
+        boolean circularSaleOutbound = header.getSourceType() == OutboundSourceType.CIRCULAR_SALE;
         for (WhOutboundItem item : items) {
-            int moved = inventoryService.moveReservedToInTransit(header.getWarehouseId(), item.getSkuId(), item.getRequestedQuantity());
+            int moved = circularSaleOutbound
+                    ? moveCircularSaleReservedToInTransit(item)
+                    : inventoryService.moveReservedToInTransit(header.getWarehouseId(), item.getSkuId(), item.getRequestedQuantity());
             if (moved != item.getRequestedQuantity()) {
                 throw BaseException.from(BaseResponseStatus.OUTBOUND_RESERVED_STOCK_NOT_ENOUGH);
             }
@@ -187,10 +195,37 @@ public class WhOutboundService {
                         .reason(reason == null || reason.isBlank() ? "OUTBOUND_CONFIRM" : reason)
                         .build()
         );
+
+        // 출고 상태 변경을 순환 재고 판매 상태에 동기화하는 호출입니다.
+        circularSaleService.syncStatusByOutboundTransition(
+                header,
+                OutboundStatus.IN_TRANSIT,
+                me.getEmployeeCode(),
+                me.getName(),
+                reason == null || reason.isBlank() ? "OUTBOUND_CONFIRM" : reason,
+                now
+        );
         syncTransferStatusFromOutbound(header, OutboundStatus.IN_TRANSIT);
 
         // 5) 최신 상세 정보를 반환한다.
         return detail(me, outboundNo);
+    }
+
+    // 순환재고 판매 출고는 판매 라인의 inventoryId 기준으로 reserved -> inTransit 이동
+    private int moveCircularSaleReservedToInTransit(WhOutboundItem item) {
+        if (item.getSourceLineRefId() == null) {
+            throw BaseException.from(BaseResponseStatus.OUTBOUND_RESERVED_STOCK_NOT_ENOUGH);
+        }
+        CircularSaleItem saleItem = circularSaleItemRepository.findById(item.getSourceLineRefId())
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.OUTBOUND_RESERVED_STOCK_NOT_ENOUGH));
+        int moved = inventoryService.moveReservedToInTransitByInventoryId(
+                saleItem.getInventoryId(),
+                item.getRequestedQuantity()
+        );
+        if (moved > 0) {
+            inventoryService.decreaseQuantityByInventoryId(saleItem.getInventoryId(), moved);
+        }
+        return moved;
     }
 
     // 배송 완료 처리 함수 (IN_TRANSIT -> ARRIVED)
@@ -217,6 +252,14 @@ public class WhOutboundService {
                         .changedByName(me.getName())
                         .reason(reason == null || reason.isBlank() ? "OUTBOUND_ARRIVED" : reason)
                         .build()
+        );
+        circularSaleService.syncStatusByOutboundTransition(
+                header,
+                OutboundStatus.ARRIVED,
+                me.getEmployeeCode(),
+                me.getName(),
+                reason == null || reason.isBlank() ? "OUTBOUND_ARRIVED" : reason,
+                now
         );
         syncTransferStatusFromOutbound(header, OutboundStatus.ARRIVED);
 
