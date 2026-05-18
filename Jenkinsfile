@@ -111,7 +111,8 @@ spec:
                           exit 1
                         fi
 
-                        TARGET_REPLICAS=4
+                        WARMUP_REPLICAS=1
+                        TARGET_REPLICAS=2
                         SOURCE_REPLICAS=0
                         ENDPOINT_WAIT_TIMEOUT=300
                         SCALE_STEP_WAIT_SECONDS=15
@@ -128,9 +129,9 @@ spec:
                           stockit-be=${IMAGE_NAME}:${IMAGE_TAG} \
                           --namespace=${K8S_NAMESPACE}
 
-                        log "[BlueGreen] scale up stockit-be-\${TARGET_COLOR} to \${TARGET_REPLICAS}"
+                        log "[BlueGreen] scale up stockit-be-\${TARGET_COLOR} to warmup replicas=\${WARMUP_REPLICAS}"
                         ./kubectl scale deployment/stockit-be-\${TARGET_COLOR} \
-                          --replicas=\${TARGET_REPLICAS} \
+                          --replicas=\${WARMUP_REPLICAS} \
                           --namespace=${K8S_NAMESPACE}
 
                         log "[BlueGreen] waiting rollout for stockit-be-\${TARGET_COLOR}"
@@ -159,9 +160,9 @@ spec:
                         ./kubectl get pods -l app=stockit-be,color=\${TARGET_COLOR} --namespace=${K8S_NAMESPACE} -o wide
                         ./kubectl get endpoints stockit-be --namespace=${K8S_NAMESPACE} -o wide
 
-                        log "[BlueGreen] scale-down old color in steps: \${ACTIVE_COLOR} 4 -> 2"
+                        log "[BlueGreen] scale-down old color in steps: \${ACTIVE_COLOR} 2 -> 1"
                         ./kubectl scale deployment/stockit-be-\${ACTIVE_COLOR} \
-                          --replicas=2 \
+                          --replicas=1 \
                           --namespace=${K8S_NAMESPACE}
                         sleep \${SCALE_STEP_WAIT_SECONDS}
 
@@ -170,6 +171,11 @@ spec:
                           --replicas=\${SOURCE_REPLICAS} \
                           --namespace=${K8S_NAMESPACE}
                         log "[BlueGreen] old color scale-down complete"
+
+                        log "[BlueGreen] scale up target color to final replicas=\${TARGET_REPLICAS}"
+                        ./kubectl scale deployment/stockit-be-\${TARGET_COLOR} \
+                          --replicas=\${TARGET_REPLICAS} \
+                          --namespace=${K8S_NAMESPACE}
 
                         ./kubectl get deploy stockit-be-blue stockit-be-green \
                           --namespace=${K8S_NAMESPACE} \
@@ -198,7 +204,7 @@ spec:
                         fi
 
                         ./kubectl scale deployment/stockit-be-\${ACTIVE_COLOR} \
-                          --replicas=4 \
+                          --replicas=2 \
                           --namespace=${K8S_NAMESPACE}
 
                         if [ -n "\${TARGET_COLOR}" ]; then

@@ -7,7 +7,7 @@ metadata:
     app: stockit-be
     color: green
 spec:
-  replicas: 4
+  replicas: 2
   selector:
     matchLabels:
       app: stockit-be
@@ -74,6 +74,12 @@ spec:
                 secretKeyRef:
                   name: stockit-be-secret
                   key: public-data-api-key
+            - name: DB_POOL_MAX
+              value: "5"
+            - name: DB_POOL_MIN_IDLE
+              value: "1"
+            - name: DB_CONNECTION_TIMEOUT_MS
+              value: "10000"
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
@@ -111,4 +117,4 @@ spec:
               memory: 1536Mi
             limits:
               cpu: 500m
-              memory: 3Gi
+              memory: 4Gi
