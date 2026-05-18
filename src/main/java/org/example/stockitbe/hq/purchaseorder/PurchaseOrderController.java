@@ -5,7 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.model.BaseResponse;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderDto;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderStatus;
-import org.example.stockitbe.user.model.AuthUserDetails;
+import org.example.stockitbe.user.model.entity.AuthUserDetails;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;

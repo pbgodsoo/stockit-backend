@@ -2,7 +2,7 @@ package org.example.stockitbe.warehouse.inbound;
 
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.model.BaseResponse;
-import org.example.stockitbe.user.model.AuthUserDetails;
+import org.example.stockitbe.user.model.entity.AuthUserDetails;
 import org.example.stockitbe.warehouse.inbound.model.WhInboundDto;
 import org.example.stockitbe.warehouse.inbound.model.entity.WhInboundHeader;
 import org.springframework.format.annotation.DateTimeFormat;

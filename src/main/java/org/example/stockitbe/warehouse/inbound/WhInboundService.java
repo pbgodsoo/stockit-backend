@@ -15,7 +15,7 @@ import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrder;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderItem;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderStatus;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrderStatusHistory;
-import org.example.stockitbe.user.model.AuthUserDetails;
+import org.example.stockitbe.user.model.entity.AuthUserDetails;
 import org.example.stockitbe.warehouse.inbound.model.InboundType;
 import org.example.stockitbe.warehouse.inbound.model.WhInboundDto;
 import org.example.stockitbe.warehouse.inbound.model.entity.WhInboundHeader;

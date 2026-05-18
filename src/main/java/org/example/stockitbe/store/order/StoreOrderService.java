@@ -28,7 +28,7 @@ import org.example.stockitbe.store.inbound.model.entity.StoreInboundHeader;
 import org.example.stockitbe.store.order.repository.StoreOrderHeaderRepository;
 import org.example.stockitbe.store.order.repository.StoreOrderItemRepository;
 import org.example.stockitbe.store.order.repository.StoreOrderStatusHistoryRepository;
-import org.example.stockitbe.user.model.AuthUserDetails;
+import org.example.stockitbe.user.model.entity.AuthUserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

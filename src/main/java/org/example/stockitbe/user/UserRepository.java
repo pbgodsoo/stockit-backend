@@ -1,7 +1,7 @@
 package org.example.stockitbe.user;
 
-import org.example.stockitbe.user.model.User;
-import org.example.stockitbe.user.model.UserStatus;
+import org.example.stockitbe.user.model.entity.User;
+import org.example.stockitbe.user.model.entity.UserStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

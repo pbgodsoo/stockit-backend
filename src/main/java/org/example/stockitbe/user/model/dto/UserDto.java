@@ -1,9 +1,12 @@
-package org.example.stockitbe.user.model;
+package org.example.stockitbe.user.model.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.example.stockitbe.user.model.entity.User;
+import org.example.stockitbe.user.model.entity.UserRole;
+import org.example.stockitbe.user.model.entity.UserStatus;
 
 import java.time.LocalDateTime;
 
