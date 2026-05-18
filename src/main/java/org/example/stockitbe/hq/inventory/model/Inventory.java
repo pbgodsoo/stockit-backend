@@ -138,11 +138,14 @@ public class Inventory extends BaseEntity {
     }
 
     /**
-     * 본사 발주 COMPLETED (입고 확정) 시 가용재고를 실재고로 이동.
-     * available_quantity -= delta, quantity += delta.
+     * 본사 발주 COMPLETED (입고 확정) 시 실재고 인식 (ADR-024 정정 2026-05-18, 이슈 #303).
+     * 가용재고는 SHIPPING 단계 increaseAvailable 로 이미 +delta 됐으므로, 입고 확정에선
+     * 실재고(quantity) 만 +delta. 가용재고를 또 차감하면 "가용재고 0 으로 떨어짐" 버그 재발.
+     * 단계별 의미:
+     *   - SHIPPING : available += delta (예약 가용, 매장 발주가 잡을 수 있음)
+     *   - COMPLETED: quantity  += delta (실재고 인식, available 은 그대로)
      */
     public void moveAvailableToPhysical(int delta) {
-        this.availableQuantity = this.availableQuantity - delta;
         this.quantity = this.quantity + delta;
         this.lastMovementAt = new Date();
     }

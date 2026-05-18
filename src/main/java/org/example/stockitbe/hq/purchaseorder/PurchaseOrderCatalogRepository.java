@@ -18,6 +18,9 @@ import java.util.List;
  */
 public interface PurchaseOrderCatalogRepository extends JpaRepository<ProductSku, Long> {
 
+    // inventory_status 필터는 InventoryStatusPolicy.QUERY_ALLOWED_STATUSES 와 정합 —
+    // {NORMAL, CIRCULAR_CANDIDATE}. 창고재고조회(WarehouseInventoryService) 와 같은 정책이라
+    // 새 발주 카탈로그의 "재고" 열이 창고재고조회의 가용재고 합과 일치한다.
     @Query(value = """
             SELECT
                 v.code AS vendorCode,
@@ -37,7 +40,7 @@ public interface PurchaseOrderCatalogRepository extends JpaRepository<ProductSku
                     FROM inventory i
                     JOIN infrastructure inf ON inf.id = i.location_id
                     WHERE i.sku_id = ps.id
-                      AND i.inventory_status = 'NORMAL'
+                      AND i.inventory_status IN ('NORMAL', 'CIRCULAR_CANDIDATE')
                       AND inf.location_type = 'WAREHOUSE'
                       AND (:warehouseId IS NULL OR i.location_id = :warehouseId)
                 ), 0) AS availableQty
@@ -61,7 +64,7 @@ public interface PurchaseOrderCatalogRepository extends JpaRepository<ProductSku
                       FROM inventory i
                       WHERE i.sku_id = ps.id
                         AND i.location_id = :warehouseId
-                        AND i.inventory_status = 'NORMAL'
+                        AND i.inventory_status IN ('NORMAL', 'CIRCULAR_CANDIDATE')
                    ), 0) < pm.warehouse_safety_stock
               ))
             """,
@@ -87,7 +90,7 @@ public interface PurchaseOrderCatalogRepository extends JpaRepository<ProductSku
                       FROM inventory i
                       WHERE i.sku_id = ps.id
                         AND i.location_id = :warehouseId
-                        AND i.inventory_status = 'NORMAL'
+                        AND i.inventory_status IN ('NORMAL', 'CIRCULAR_CANDIDATE')
                    ), 0) < pm.warehouse_safety_stock
               ))
             """,
