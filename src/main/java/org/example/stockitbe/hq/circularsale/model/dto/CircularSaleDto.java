@@ -14,6 +14,7 @@ import org.example.stockitbe.hq.circularsale.model.entity.CircularSaleHeader;
 import org.example.stockitbe.hq.circularsale.model.entity.CircularSaleItem;
 import org.example.stockitbe.hq.circularsale.model.entity.CircularSaleItemMaterial;
 import org.example.stockitbe.hq.circularsale.model.entity.CircularSaleStatusHistory;
+import org.example.stockitbe.warehouse.outbound.model.OutboundStatus;
 import org.springframework.data.domain.Page;
 
 import java.math.BigDecimal;
@@ -137,6 +138,8 @@ public class CircularSaleDto {
         private Long saleId;
         private String saleNo;
         private CircularSaleStatus status;
+        private String outboundNo;
+        private OutboundStatus outboundStatus;
         private Date soldAt;
         private Date completedAt;
         private String buyerCode;
@@ -150,11 +153,14 @@ public class CircularSaleDto {
         private String memo;
         private List<LineRes> items;
 
-        public static CreateRes from(CircularSaleHeader header, String buyerCode, String buyerName, List<LineRes> items) {
+        public static CreateRes from(CircularSaleHeader header, String buyerCode, String buyerName,
+                                     String outboundNo, OutboundStatus outboundStatus, List<LineRes> items) {
             return CreateRes.builder()
                     .saleId(header.getId())
                     .saleNo(header.getSaleNo())
                     .status(header.getStatus())
+                    .outboundNo(outboundNo)
+                    .outboundStatus(outboundStatus)
                     .soldAt(header.getSoldAt())
                     .completedAt(header.getCompletedAt())
                     .buyerCode(buyerCode)

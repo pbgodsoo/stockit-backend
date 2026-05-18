@@ -99,7 +99,14 @@ public class CircularSaleService {
         SalePersistResult persisted = persistSaleAndOutbound(request, me, buyer, warehouseId, contexts);
 
         List<CircularSaleDto.LineRes> lines = mapLineRes(persisted.items, persisted.materialRows);
-        return CircularSaleDto.CreateRes.from(persisted.header, buyer.getCode(), buyer.getCompanyName(), lines);
+        return CircularSaleDto.CreateRes.from(
+                persisted.header,
+                buyer.getCode(),
+                buyer.getCompanyName(),
+                persisted.outbound.getOutboundNo(),
+                persisted.outbound.getStatus(),
+                lines
+        );
     }
 
     // 순환재고 판매 목록 조회
@@ -543,7 +550,7 @@ public class CircularSaleService {
                 .reason("CIRCULAR_SALE_CREATE")
                 .build());
 
-        return new SalePersistResult(header, savedItems, materialRows);
+        return new SalePersistResult(header, outbound, savedItems, materialRows);
     }
 
     // 사용하는 메서드: create
@@ -693,6 +700,7 @@ public class CircularSaleService {
 
     private record SalePersistResult(
             CircularSaleHeader header,
+            WhOutboundHeader outbound,
             List<CircularSaleItem> items,
             List<CircularSaleItemMaterial> materialRows
     ) {
