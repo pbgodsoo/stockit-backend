@@ -13,9 +13,9 @@ public class StoreOrderBatchApproveScheduler {
 
     private final StoreOrderBatchApproveService batchApproveService;
 
-    // 발주 자동 배치 스케줄러 추가
+    // 발주 자동 배치 스케줄러 추가 (매일 18:00, 00:00에 실행)
     @Scheduled(
-            cron = "${store-order.batch.cron:0 0 0 * * *}",
+            cron = "${store-order.batch.cron:0 0 18,0 * * *}",
             zone = "${store-order.batch.zone:Asia/Seoul}"
     )
     public void runAutoBatch() {

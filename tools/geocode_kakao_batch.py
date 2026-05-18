@@ -26,6 +26,12 @@ import pymysql
 import requests
 
 KAKAO_URL = "https://dapi.kakao.com/v2/local/search/address.json"
+LOCK_WAIT_ERROR_CODES = {1205, 1213}
+
+_REGION_BARE_TOKENS = {
+    "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종",
+    "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주",
+}
 
 
 @dataclass
@@ -45,6 +51,62 @@ def clean_basic(address: str) -> str:
     out = re.sub(r"\([^)]*\)", "", out)
     out = out.split(",")[0]
     out = re.sub(r"[)\]}>]+$", "", out)  # 꼬리 특수문자 제거
+    out = re.sub(r"\s*-\s*", "-", out)   # 168 -9 -> 168-9
+    out = re.sub(r"\s+", " ", out).strip()
+    return out
+
+
+def normalize_admin_spacing(address: str) -> str:
+    """
+    붙어있는 행정구역 토큰을 분리한다.
+    예) 천안시서북구 -> 천안시 서북구, 안산시단원구초지동 -> 안산시 단원구 초지동
+    """
+    out = address
+    patterns = [
+        # 광역/특별 + 기초 (서울특별시중구, 경기도안양시 ...)
+        (r"([가-힣]+(?:특별자치시|특별자치도|특별시|광역시|시|도))([가-힣]+(?:시|군|구))", r"\1 \2"),
+        # 기초 + 하위 (안양시만안구, 단원구초지동, 군위군효령면 ...)
+        (r"([가-힣]+(?:시|군|구))([가-힣0-9]+(?:군|구|읍|면|동|리))", r"\1 \2"),
+    ]
+    prev = None
+    while prev != out:
+        prev = out
+        for pattern, repl in patterns:
+            out = re.sub(pattern, repl, out)
+    out = re.sub(r"\s+", " ", out).strip()
+    return out
+
+
+def normalize_je_dong_notation(address: str) -> str:
+    """
+    구식 법정동 표기 보정.
+    예) 방화제동 -> 방화동, 중화제3동 -> 중화3동
+    """
+    out = re.sub(r"([가-힣]+)제(\d+)동\b", r"\1\2동", address)
+    out = re.sub(r"([가-힣]+)제동\b", r"\1동", out)
+    out = re.sub(r"\s+", " ", out).strip()
+    return out
+
+
+def strip_trailing_business_name(address: str) -> str:
+    """
+    도로명+건물번호 뒤에 붙은 상호 꼬리를 제거한 후보를 만든다.
+    예) 해안로 259 신명전기 -> 해안로 259
+    """
+    out = re.sub(r"(\d+(?:-\d+)?)\s+[A-Za-z가-힣][A-Za-z0-9가-힣().-]*\s*$", r"\1", address)
+    out = re.sub(r"\s+", " ", out).strip()
+    return out
+
+
+def strip_industrial_suffix(address: str) -> str:
+    """
+    산업단지 코드/층 범위 등 꼬리 제거.
+    예) 104블록6로트, 14B-1L, 1~2층
+    """
+    out = address
+    out = re.sub(r"\s+\d+\s*블록\s*\d+\s*로트.*$", "", out)
+    out = re.sub(r"\s+[A-Za-z가-힣]+\d+[A-Za-z0-9-]*\s*$", "", out)
+    out = re.sub(r"\s+\d+\s*~\s*\d+\s*층.*$", "", out)
     out = re.sub(r"\s+", " ", out).strip()
     return out
 
@@ -75,6 +137,13 @@ def normalize_spacing_road(address: str) -> str:
     return out
 
 
+def collapse_spacing_road(address: str) -> str:
+    """'흥안대로 439번길' -> '흥안대로439번길'."""
+    out = re.sub(r"([로길])\s+(\d)", r"\1\2", address)
+    out = re.sub(r"\s+", " ", out).strip()
+    return out
+
+
 def normalize_collapse_bunggil(address: str) -> str:
     """'42 번길' → '42번길': 카카오 API 는 번길 앞 공백 없는 형식을 선호."""
     out = re.sub(r"(\d)\s+번길", r"\1번길", address)
@@ -85,6 +154,20 @@ def normalize_collapse_bunggil(address: str) -> str:
 def strip_trailing_building_number(address: str) -> str:
     """도로명 뒤 건물번호(예: '1-18', '39') 제거 — 도로명만 남겨 후보 확장."""
     out = re.sub(r"\s+\d+(?:-\d+)?\s*$", "", address)
+    out = re.sub(r"\s+", " ", out).strip()
+    return out
+
+
+def strip_trailing_lot_number(address: str) -> str:
+    """지번 뒤 숫자 제거(동/읍/면까지만)."""
+    out = re.sub(r"\s+(?:산\s*)?\d+(?:-\d+)?\s*$", "", address)
+    out = re.sub(r"\s+", " ", out).strip()
+    return out
+
+
+def strip_invalid_zero_lot(address: str) -> str:
+    """비정상 지번(0, 00-0) 제거."""
+    out = re.sub(r"\s+(?:산\s*)?0+(?:-0+)?\s*$", "", address)
     out = re.sub(r"\s+", " ", out).strip()
     return out
 
@@ -114,6 +197,8 @@ def build_query_candidates(address: str) -> list[str]:
     base = clean_basic(address)
     if not base:
         return []
+    base = normalize_admin_spacing(base)
+    base = normalize_je_dong_notation(base)
 
     candidates: list[str] = []
     base_col = normalize_collapse_bunggil(base)
@@ -130,9 +215,26 @@ def build_query_candidates(address: str) -> list[str]:
         normalize_spacing_road(base),
         normalize_spacing_road(trimmed_col),
         normalize_spacing_road(trimmed),
+        collapse_spacing_road(base_col),
+        collapse_spacing_road(base),
+        collapse_spacing_road(trimmed_col),
+        collapse_spacing_road(trimmed),
         # 건물번호 제거 버전 (도로명 레벨)
         strip_trailing_building_number(base_col),
         strip_trailing_building_number(base),
+        strip_trailing_lot_number(base_col),
+        strip_trailing_lot_number(base),
+        strip_invalid_zero_lot(base_col),
+        strip_invalid_zero_lot(base),
+        # 상호 꼬리 제거 버전
+        strip_trailing_business_name(base_col),
+        strip_trailing_business_name(base),
+        strip_trailing_business_name(trimmed_col),
+        strip_trailing_business_name(trimmed),
+        strip_industrial_suffix(base_col),
+        strip_industrial_suffix(base),
+        strip_industrial_suffix(trimmed_col),
+        strip_industrial_suffix(trimmed),
     ]
 
     # 숫자 행정동 정규화 (청천2동 → 청천동)
@@ -167,11 +269,17 @@ def build_query_candidates(address: str) -> list[str]:
 
 def extract_region_tokens(address: str) -> list[str]:
     source = clean_basic(address)
+    source = normalize_admin_spacing(source)
+    source = normalize_je_dong_notation(source)
     tokens = source.split()
     regions: list[str] = []
     for token in tokens:
-        if token.endswith(("시", "도", "군", "구")):
+        is_region_like = token.endswith(("시", "도", "군", "구")) or token in _REGION_BARE_TOKENS
+        if is_region_like:
             regions.append(token)
+        elif regions:
+            # 주소 선두의 행정구역 블록만 사용하고 이후 상호/설명 토큰은 무시
+            break
         if len(regions) >= 3:
             break
     return regions
@@ -228,12 +336,44 @@ def is_region_match(raw_address: str, result_address: str) -> bool:
     if not expected:
         return True
     normalized_result = normalize_region_token(result_address)
+    normalized_result = normalize_admin_spacing(normalized_result)
+
+    # 행정구역 개편 예외(과거 주소 -> 현재 행정구역 표기)
+    if "군위군" in raw_address:
+        normalized_result = normalized_result.replace("대구", "경북")
+    if "연기군" in raw_address:
+        normalized_result = normalized_result.replace("세종", "충남")
+
+    result_tokens = extract_region_tokens(normalized_result)
     # 표기 정규화 + 축약(경기도/경기) 별칭 중 하나라도 포함되면 매칭
     for token in expected:
         aliases = region_aliases(token)
-        if not any(alias in normalized_result for alias in aliases):
-            return False
+        if any(alias in normalized_result for alias in aliases):
+            continue
+        if any(rt in aliases for rt in result_tokens):
+            continue
+        return False
     return True
+
+
+def execute_with_retry(
+    conn: pymysql.Connection,
+    sql: str,
+    params: tuple | None = None,
+    retry: int = 3,
+    retry_sleep: float = 0.2,
+) -> None:
+    for attempt in range(1, retry + 1):
+        try:
+            with conn.cursor() as cur:
+                cur.execute(sql, params or ())
+            conn.commit()
+            return
+        except pymysql.err.OperationalError as exc:
+            code = exc.args[0] if exc.args else None
+            if code not in LOCK_WAIT_ERROR_CODES or attempt == retry:
+                raise
+            time.sleep(retry_sleep * attempt)
 
 
 def parse_db_url(db_url: str) -> tuple[str, int, str]:
@@ -367,13 +507,12 @@ def process_table(
                     saw_mismatch = True
                     mismatch_result_address = result_address
                     continue
-                with conn.cursor() as cur:
-                    cur.execute(
-                        f"UPDATE {table} SET latitude=%s, longitude=%s WHERE {pk_col}=%s",
-                        (lat, lng, row_id),
-                    )
-                    cur.execute(f"DELETE FROM {miss_table} WHERE id=%s", (row_id,))
-                conn.commit()
+                execute_with_retry(
+                    conn,
+                    f"UPDATE {table} SET latitude=%s, longitude=%s WHERE {pk_col}=%s",
+                    (lat, lng, row_id),
+                )
+                execute_with_retry(conn, f"DELETE FROM {miss_table} WHERE id=%s", (row_id,))
                 success += 1
                 resolved = True
                 break
@@ -383,15 +522,14 @@ def process_table(
             fail += 1
             consecutive_api_errors += 1
             print(f"[FAIL] {table}:{row_id} -> {last_query} ({exc})")
-            with conn.cursor() as cur:
-                cur.execute(
-                    f"""
-                    REPLACE INTO {miss_table}(id, original_address, last_query, candidate_count, miss_reason)
-                    VALUES(%s, %s, %s, %s, %s)
-                    """,
-                    (row_id, raw_address, last_query, len(candidates), "API_FAIL"),
-                )
-            conn.commit()
+            execute_with_retry(
+                conn,
+                f"""
+                REPLACE INTO {miss_table}(id, original_address, last_query, candidate_count, miss_reason)
+                VALUES(%s, %s, %s, %s, %s)
+                """,
+                (row_id, raw_address, last_query, len(candidates), "API_FAIL"),
+            )
             if max_consecutive_api_errors > 0 and consecutive_api_errors >= max_consecutive_api_errors:
                 print(
                     f"[ABORT] 연속 API 오류 {consecutive_api_errors}회 발생으로 중단합니다. "
@@ -418,15 +556,14 @@ def process_table(
                 f"last_query='{last_query}'"
             )
             reason = "MISS"
-        with conn.cursor() as cur:
-            cur.execute(
-                f"""
-                REPLACE INTO {miss_table}(id, original_address, last_query, candidate_count, miss_reason)
-                VALUES(%s, %s, %s, %s, %s)
-                """,
-                (row_id, raw_address, last_query, len(candidates), reason),
-            )
-        conn.commit()
+        execute_with_retry(
+            conn,
+            f"""
+            REPLACE INTO {miss_table}(id, original_address, last_query, candidate_count, miss_reason)
+            VALUES(%s, %s, %s, %s, %s)
+            """,
+            (row_id, raw_address, last_query, len(candidates), reason),
+        )
     return success, miss, fail, mismatch
 
 
