@@ -49,7 +49,6 @@ dependencies {
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 
-
     // --- Swagger 관련 ---
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.4'
 
@@ -66,4 +65,18 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+// Gradle problems report 이동 시 기존 파일이 있으면 FileAlreadyExistsException 이 발생할 수 있어
+// 빌드 시작 전에 대상 파일을 정리한다.
+def problemsReportFile = layout.buildDirectory.file("reports/problems/problems-report.html")
+
+tasks.register('cleanProblemsReportFile') {
+    doLast {
+        delete(problemsReportFile)
+    }
+}
+
+tasks.matching { it.name in ['build', 'test', 'bootRun', 'bootJar', 'check'] }.configureEach {
+    dependsOn(tasks.named('cleanProblemsReportFile'))
 }
