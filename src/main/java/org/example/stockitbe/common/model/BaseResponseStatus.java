@@ -25,9 +25,10 @@ public enum BaseResponseStatus {
     ALREADY_JOINED(false, 4003, "이미 참여 중인 모집글이 있습니다."),
     RECRUIT_FULL(false, 4004, "모집이 마감되었거나 인원이 초과되었습니다."),
     ALREADY_CALLED(false, 4005, "이미 기사님 호출이 완료되어 나갈 수 없습니다."),
-    LOGIN_FAILED(false, 4006, "로그인에 실패하였습니다."),
+    LOGIN_FAILED(false, 4006, "사원코드 또는 비밀번호가 일치하지 않습니다."),
     DRIVER_ROLE_REQUIRED(false, 4007, "드라이버 계정만 로그인할 수 있습니다."),
-    ADMIN_ONLY_ACCESS(false, 4008, "관리자 계정만 공지사항 작업을 할 수 있습니다."),
+    JWT_REFRESH_NOT_APPROVED(false, 4008, "승인된 계정이 아닙니다."),
+    SIGNUP_INVALID_PHONE(false, 4009, "전화번호는 010으로 시작하는 11자리 숫자여야 합니다."),
 
     // 4100번대~ 결제 관련
     PAYMENT_UNAUTHENTICATED_USER(false, 4100, "인증받지 않은 사용자입니다."),
@@ -127,7 +128,7 @@ public enum BaseResponseStatus {
     USER_NOT_APPROVED(false, 4801, "승인된 사용자만 탈퇴 처리할 수 있습니다."),
     USER_ALREADY_WITHDRAWN(false, 4802, "이미 탈퇴 처리된 사용자입니다."),
     USER_PASSWORD_SAME(false, 4803, "새 비밀번호가 기존 비밀번호와 동일합니다."),
-
+    EMPLOYEE_CODE_SEQUENCE_NOT_FOUND(false, 4804, "사원코드 시퀀스가 초기화되지 않았습니다. 관리자에게 문의해주세요."),
     // 5000번대 실패
     FAIL(false, 5000, "요청 실패"),
 
