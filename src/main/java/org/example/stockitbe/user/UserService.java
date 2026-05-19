@@ -51,6 +51,14 @@ public class UserService implements UserDetailsService {
             throw BaseException.from(BaseResponseStatus.SIGNUP_DUPLICATE_EMAIL);
         }
 
+        if (dto.getPassword() == null || !dto.getPassword().matches(PASSWORD_REGEX)) {
+            throw BaseException.from(BaseResponseStatus.SIGNUP_INVALID_PASSWORD);
+        }
+
+        if (dto.getPhoneNumber() == null || !dto.getPhoneNumber().matches(PHONE_REGEX)) {
+            throw BaseException.from(BaseResponseStatus.SIGNUP_INVALID_PHONE);
+        }
+
         // 2. 비밀번호 인코딩
         String encodedPassword = passwordEncoder.encode(dto.getPassword());
 
@@ -97,7 +105,7 @@ public class UserService implements UserDetailsService {
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.USER_NOT_FOUND));
 
         if (phoneNumber == null || !phoneNumber.matches(PHONE_REGEX)) {
-            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+            throw BaseException.from(BaseResponseStatus.SIGNUP_INVALID_PHONE);
         }
 
         user.updatePhone(phoneNumber);

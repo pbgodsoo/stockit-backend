@@ -74,7 +74,7 @@ public class UserController {
         if (user.getStatus() != UserStatus.APPROVED) {
             // 정지/거절된 사용자는 모든 토큰 무효화
             jwtRefreshRepository.deleteAllByEmployeeCode(employeeCode);
-            throw BaseException.from(BaseResponseStatus.LOGIN_FAILED);
+            throw BaseException.from(BaseResponseStatus.JWT_REFRESH_NOT_APPROVED);
         }
 
         // 새 Access Token 발급
@@ -136,6 +136,17 @@ public class UserController {
         return ResponseEntity.ok(BaseResponse.success(null));
     }
 
+
+    @PatchMapping("/mypage/phone")
+    public ResponseEntity<BaseResponse<UserDto.MypageRes>> updatePhone(
+            @AuthenticationPrincipal AuthUserDetails userDetails,
+            @RequestBody UserDto.UpdatePhoneReq req) {
+        UserDto.MypageRes result = userService.updatePhone(
+                userDetails.getEmployeeCode(),
+                req.getPhoneNumber()
+        );
+        return ResponseEntity.ok(BaseResponse.success(result));
+    }
 
 
 

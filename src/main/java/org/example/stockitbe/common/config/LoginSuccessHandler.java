@@ -5,9 +5,8 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.example.stockitbe.common.jwt.JwtRefresh;
-import org.example.stockitbe.common.jwt.JwtRefreshRepository;
 import org.example.stockitbe.common.jwt.JwtUtil;
+import org.example.stockitbe.common.jwt.RefreshTokenService;
 import org.example.stockitbe.common.model.BaseResponse;
 import org.example.stockitbe.user.model.entity.AuthUserDetails;
 import org.example.stockitbe.user.model.dto.UserDto;
@@ -15,11 +14,10 @@ import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
+
 
 @Component
 @RequiredArgsConstructor
@@ -31,11 +29,10 @@ public class LoginSuccessHandler implements AuthenticationSuccessHandler {
     private static final String REFRESH_TOKEN_PATH = "/api/user";
 
     private final JwtUtil jwtUtil;
-    private final JwtRefreshRepository jwtRefreshRepository;
+    private final RefreshTokenService refreshTokenService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
-    @Transactional
     public void onAuthenticationSuccess(HttpServletRequest request,
                                         HttpServletResponse response,
                                         Authentication authentication) throws IOException {
@@ -47,13 +44,7 @@ public class LoginSuccessHandler implements AuthenticationSuccessHandler {
         String refreshToken = jwtUtil.createRefreshToken(employeeCode);
 
         // 2. 기존 Refresh Token 삭제 후 새로 저장 (1 user = 1 active refresh)
-        jwtRefreshRepository.deleteAllByEmployeeCode(employeeCode);
-        jwtRefreshRepository.save(JwtRefresh.builder()
-                .employeeCode(employeeCode)
-                .token(refreshToken)
-                .expiresAt(LocalDateTime.now().plusSeconds(jwtUtil.getRefreshExpirationMs() / 1000))
-                .createdAt(LocalDateTime.now())
-                .build());
+        refreshTokenService.replaceRefreshToken(employeeCode, refreshToken, jwtUtil.getRefreshExpirationMs());
 
         // 3. Access Token 쿠키 (모든 경로에서 전송)
         Cookie accessCookie = new Cookie(ACCESS_TOKEN_COOKIE, accessToken);

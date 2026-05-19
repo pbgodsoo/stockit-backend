@@ -13,6 +13,10 @@ import java.time.LocalDateTime;
 @Getter
 @Builder
 @Entity
+@Table(name = "user", indexes = {
+        @Index(name = "uk_user_email", columnList = "email", unique = true),
+        @Index(name = "idx_user_status_applied_at", columnList = "status, applied_at")
+})
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -27,7 +31,7 @@ public class User {
     @Column(nullable = false)
     private String name;        // 회원가입용 이름
 
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true)
     private String email;       // 회원가입용 이메일
 
     @Column(nullable = false)
