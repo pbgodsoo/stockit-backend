@@ -19,6 +19,7 @@ import org.example.stockitbe.hq.circularsale.repository.CircularSaleItemMaterial
 import org.example.stockitbe.hq.circularsale.repository.CircularSaleItemRepository;
 import org.example.stockitbe.hq.circularsale.repository.CircularSaleStatusHistoryRepository;
 import org.example.stockitbe.hq.inventory.InventoryRepository;
+import org.example.stockitbe.hq.inventory.InventoryService;
 import org.example.stockitbe.hq.inventory.model.Inventory;
 import org.example.stockitbe.hq.inventory.model.InventoryStatus;
 import org.example.stockitbe.hq.product.ProductMasterRepository;
@@ -81,6 +82,7 @@ public class CircularSaleService {
     private final ProductMasterRepository productMasterRepository;
     private final CategoryRepository categoryRepository;
     private final InventoryRepository inventoryRepository;
+    private final InventoryService inventoryService;
     private final WhOutboundHeaderRepository outboundHeaderRepository;
     private final WhOutboundItemRepository outboundItemRepository;
     private final WhOutboundStatusHistoryRepository outboundStatusHistoryRepository;
@@ -454,9 +456,12 @@ public class CircularSaleService {
     // 사용하는 메서드: create
     // 검증 완료된 라인 기준으로 재고를 reserved 로 예약한다.
     private void applyInventoryReservations(List<LineContext> contexts) {
-        // 라인마다 reserveUpTo 호출 결과를 검증해 부족 수량이 있으면 즉시 실패시킨다.
+        // 라인마다 InventoryService를 통해 판매 재고를 예약 처리하고 부족 수량이 있으면 즉시 실패시킨다.
         for (LineContext context : contexts) {
-            int reserved = context.inventory.reserveUpTo(context.request.getSoldQuantity());
+            int reserved = inventoryService.reserveForOutboundUpToByInventoryId(
+                    context.inventory.getId(),
+                    context.request.getSoldQuantity()
+            );
             if (reserved != context.request.getSoldQuantity()) {
                 throw BaseException.from(BaseResponseStatus.CIRCULAR_SALE_INSUFFICIENT_STOCK);
             }

@@ -217,6 +217,28 @@ public class InventoryService {
                 .orElse(0);
     }
 
+    /** 특정 inventory row(CIRCULAR 등) 기준으로 출고 예약(reserved) 수량을 적재한다. */
+    @Transactional
+    public int reserveForOutboundUpToByInventoryId(Long inventoryId, int requestedQuantity) {
+        if (inventoryId == null || requestedQuantity <= 0) return 0;
+        return inventoryRepository.findWithLockById(inventoryId)
+                .map(inv -> inv.reserveUpTo(requestedQuantity))
+                .orElse(0);
+    }
+
+    /**
+     * 순환재고 판매 출고확정 전용 처리.
+     * reserved -> inTransit 전이 후 실제수량(quantity)까지 같은 트랜잭션에서 차감한다.
+     */
+    @Transactional
+    public int moveReservedToInTransitAndDecreaseByInventoryId(Long inventoryId, int requestedQuantity) {
+        int moved = moveReservedToInTransitByInventoryId(inventoryId, requestedQuantity);
+        if (moved > 0) {
+            decreaseQuantityByInventoryId(inventoryId, moved);
+        }
+        return moved;
+    }
+
     /** 특정 inventory row 기준으로 물리 재고(quantity)만 차감 */
     @Transactional
     public void decreaseQuantityByInventoryId(Long inventoryId, int quantityToDeduct) {
