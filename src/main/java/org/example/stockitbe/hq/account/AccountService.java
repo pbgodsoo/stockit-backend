@@ -5,28 +5,36 @@ import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.jwt.JwtRefreshRepository;
 import org.example.stockitbe.common.model.BaseResponseStatus;
 import org.example.stockitbe.hq.account.model.AccountDto;
+import org.example.stockitbe.hq.account.model.entity.EmployeeCodeSequence;
+import org.example.stockitbe.hq.account.repository.EmployeeCodeSequenceRepository;
 import org.example.stockitbe.user.UserRepository;
 import org.example.stockitbe.user.model.entity.User;
 import org.example.stockitbe.user.model.entity.UserRole;
 import org.example.stockitbe.user.model.entity.UserStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.persistence.criteria.Predicate;
+import java.util.ArrayList;
 import java.util.List;
+
 
 @Service
 @RequiredArgsConstructor
 public class AccountService {
-
+    private final EmployeeCodeSequenceRepository sequenceRepository;
     private final UserRepository userRepository;
     private final JwtRefreshRepository jwtRefreshRepository;
 
     @Transactional(readOnly = true)
-    public List<AccountDto.PendingRes> getPendingAccounts() {
-        return userRepository.findByStatusOrderByAppliedAtAsc(UserStatus.PENDING).stream()
-                .map(AccountDto.PendingRes::from)
-                .toList();
+    public Page<AccountDto.PendingRes> getPendingAccounts(String keyword, Pageable pageable) {
+        Specification<User> spec = buildSpec(keyword, null, UserStatus.PENDING);
+        return userRepository.findAll(spec, pageable).map(AccountDto.PendingRes::from);
     }
+
 
     @Transactional
     public AccountDto.ProcessRes approve(Long accountId) {
@@ -86,10 +94,11 @@ public class AccountService {
 
     private String generateEmployeeCode(UserRole role) {
         String prefix = role.getCodePrefix();
-        int nextNumber = userRepository
-                .findTopByEmployeeCodeStartingWithOrderByEmployeeCodeDesc(prefix)
-                .map(user -> Integer.parseInt(user.getEmployeeCode().substring(2)) + 1)
-                .orElse(1);
+        // 비관적 락으로 시퀀스 row 잠금 → 다른 트랜잭션은 커밋까지 대기
+        EmployeeCodeSequence seq = sequenceRepository
+                .findByRoleCodeForUpdate(prefix)
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.EMPLOYEE_CODE_SEQUENCE_NOT_FOUND));
+        int nextNumber = seq.incrementAndGet();
         return String.format("%s%04d", prefix, nextNumber);
     }
 
@@ -97,9 +106,40 @@ public class AccountService {
      * 전체 회원 목록 조회 (PENDING / APPROVED / REJECTED 모두)
      */
     @Transactional(readOnly = true)
-    public List<AccountDto.PendingRes> getAllAccounts() {
-        return userRepository.findAllByOrderByAppliedAtDesc().stream()
-                .map(AccountDto.PendingRes::from)
-                .toList();
+    public Page<AccountDto.PendingRes> getAllAccounts(
+            String keyword, UserRole role, UserStatus status, Pageable pageable) {
+        Specification<User> spec = buildSpec(keyword, role, status);
+        return userRepository.findAll(spec, pageable).map(AccountDto.PendingRes::from);
+    }
+
+    /**
+     * 동적 검색 조건 빌더
+     *  - keyword: 이름 OR 이메일 OR 사원코드 LIKE 검색 (null/blank 시 무시)
+     *  - role:    권한 필터 (null 시 전체)
+     *  - status:  상태 필터 (null 시 전체)
+     */
+    private Specification<User> buildSpec(String keyword, UserRole role, UserStatus status) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            // 키워드 검색 (이름/이메일/사원코드 OR)
+            if (keyword != null && !keyword.isBlank()) {
+                String pattern = "%" + keyword.trim() + "%";
+                predicates.add(cb.or(
+                        cb.like(root.get("name"), pattern),
+                        cb.like(root.get("email"), pattern),
+                        cb.like(root.get("employeeCode"), pattern)
+                ));
+            }
+            // 권한 필터
+            if (role != null) {
+                predicates.add(cb.equal(root.get("role"), role));
+            }
+            // 상태 필터
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
     }
 }
