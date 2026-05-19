@@ -470,7 +470,7 @@ public class CircularSaleService {
         Date now = new Date();
         // 1) 판매 헤더 저장(임시번호 저장 후 PK 기반 정식번호 재할당)
         CircularSaleHeader header = saleHeaderRepository.save(CircularSaleHeader.builder()
-                .saleNo("TEMP-" + UUID.randomUUID())
+                .saleNo(generateTempNo("TMP"))
                 .buyerId(buyer.getId())
                 .warehouseId(warehouseId)
                 .status(CircularSaleStatus.READY_TO_SHIP)
@@ -533,7 +533,7 @@ public class CircularSaleService {
 
         // 4) 출고 헤더/출고 아이템 저장 및 판매 헤더에 연결
         WhOutboundHeader outbound = outboundHeaderRepository.save(WhOutboundHeader.builder()
-                .outboundNo("TEMP-" + UUID.randomUUID())
+                .outboundNo(generateTempNo("TMP"))
                 .sourceType(OutboundSourceType.CIRCULAR_SALE)
                 .sourceRefNo(header.getSaleNo())
                 .sourceRefSeq(1)
@@ -684,6 +684,13 @@ public class CircularSaleService {
     private String blankToNull(String value) {
         if (value == null || value.isBlank()) return null;
         return value;
+    }
+
+    // 사용하는 메서드: persistSaleAndOutbound
+    // DB 길이 제약을 넘지 않도록 하이픈을 제거한 UUID 기반 임시번호를 생성한다.
+    private String generateTempNo(String prefix) {
+        String safePrefix = (prefix == null || prefix.isBlank()) ? "TMP" : prefix.trim();
+        return safePrefix + "-" + UUID.randomUUID().toString().replace("-", "");
     }
 
     private BigDecimal sumBigDecimal(Collection<LineContext> contexts, Function<LineContext, BigDecimal> extractor) {
