@@ -1,4 +1,4 @@
-﻿package org.example.stockitbe.hq.circularsale;
+package org.example.stockitbe.hq.circularsale;
 
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;

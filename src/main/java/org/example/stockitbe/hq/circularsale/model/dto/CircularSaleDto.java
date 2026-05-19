@@ -1,4 +1,4 @@
-﻿package org.example.stockitbe.hq.circularsale.model.dto;
+package org.example.stockitbe.hq.circularsale.model.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
