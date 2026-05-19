@@ -88,16 +88,22 @@ public class CircularSaleService {
     // 순환재고 판매 생성
     @Transactional
     public CircularSaleDto.CreateRes create(CircularSaleDto.CreateReq request, AuthUserDetails me) {
+        // 1) 요청 본문 최소 검증(빈 라인/소재구분 누락 차단)
         validateCreateRequest(request);
+        // 2) 거래처/카테고리 기준 데이터 로드 (조회)
         CircularBuyer buyer = findBuyerByCode(request.getBuyerCode());
         CategoryLookup categoryLookup = buildCategoryLookup();
 
+        // 3) 라인별 SKU/재고/소재 스냅샷 컨텍스트 구성 + 단일 창고 검증
         List<LineContext> contexts = buildLineContexts(request.getItems(), request.getMaterialType(), categoryLookup);
         Long warehouseId = resolveSingleWarehouse(contexts);
 
+        // 4) 재고를 즉시 차감하지 않고 예약 수량으로 선반영
         applyInventoryReservations(contexts);
+        // 5) 판매/출고/상태이력을 한 트랜잭션으로 동시 저장
         SalePersistResult persisted = persistSaleAndOutbound(request, me, buyer, warehouseId, contexts);
 
+        // 6) 응답 DTO 조립 후 반환
         List<CircularSaleDto.LineRes> lines = mapLineRes(persisted.items, persisted.materialRows);
         return CircularSaleDto.CreateRes.from(
                 persisted.header,
@@ -116,10 +122,12 @@ public class CircularSaleService {
             LocalDate from, LocalDate to,
             String buyerCode, String materialType, String keyword
     ) {
+        // 1) 페이지/정렬 파라미터 정규화
         int safePage = page == null ? 0 : Math.max(0, page);
         int safeSize = size == null ? 20 : Math.min(Math.max(1, size), 200);
         Pageable pageable = PageRequest.of(safePage, safeSize, parseSort(sort));
 
+        // 2) 검색 조건 정규화(기간/키워드/소재/거래처코드)
         Date fromDate = from == null ? null : Date.from(from.atStartOfDay(KST).toInstant());
         Date toDateExclusive = to == null ? null : Date.from(to.plusDays(1).atStartOfDay(KST).toInstant());
         String safeKeyword = keyword == null ? null : keyword.trim();
@@ -133,6 +141,7 @@ public class CircularSaleService {
             return CircularSaleDto.ListPageRes.from(new PageImpl<>(List.of(), pageable, 0));
         }
 
+        // 3) 목록 렌더링에 필요한 연관 데이터(거래처/출고/아이템) 배치 조회
         Map<Long, CircularBuyer> buyerById = circularBuyerRepository.findAllById(
                 headers.getContent().stream().map(CircularSaleHeader::getBuyerId).collect(Collectors.toSet())
         ).stream().collect(Collectors.toMap(CircularBuyer::getId, Function.identity()));
@@ -147,6 +156,7 @@ public class CircularSaleService {
                 headers.getContent().stream().map(CircularSaleHeader::getId).toList()
         ).stream().collect(Collectors.groupingBy(CircularSaleItem::getSaleHeaderId));
 
+        // 4) 헤더 단위 목록 행 DTO로 매핑
         List<CircularSaleDto.ListRowRes> rows = new ArrayList<>();
         for (CircularSaleHeader header : headers.getContent()) {
             CircularBuyer buyer = buyerById.get(header.getBuyerId());
@@ -170,12 +180,14 @@ public class CircularSaleService {
                     .headline(buildHeadline(items))
                     .build());
         }
+        // 5) 페이지 메타 포함 응답으로 반환
         return CircularSaleDto.ListPageRes.from(new PageImpl<>(rows, pageable, headers.getTotalElements()));
     }
 
     // 순환재고 판매 상세 조회
     @Transactional(readOnly = true)
     public CircularSaleDto.DetailRes detail(Long saleId) {
+        // 1) 판매 헤더/거래처/출고 헤더 조회
         CircularSaleHeader header = saleHeaderRepository.findById(saleId)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.CIRCULAR_SALE_NOT_FOUND));
         CircularBuyer buyer = circularBuyerRepository.findById(header.getBuyerId())
@@ -183,6 +195,7 @@ public class CircularSaleService {
         WhOutboundHeader outbound = header.getOutboundHeaderId() == null ? null
                 : outboundHeaderRepository.findById(header.getOutboundHeaderId()).orElse(null);
 
+        // 2) 판매 라인 + 소재 스냅샷 조회 후 라인 응답으로 변환
         List<CircularSaleItem> items = saleItemRepository.findAllBySaleHeaderIdOrderByIdAsc(header.getId());
         List<Long> itemIds = items.stream().map(CircularSaleItem::getId).toList();
         Map<Long, List<CircularSaleDto.MaterialRes>> materialsByItem = saleItemMaterialRepository
@@ -195,11 +208,13 @@ public class CircularSaleService {
                 .map(item -> CircularSaleDto.LineRes.from(item, materialsByItem.getOrDefault(item.getId(), List.of())))
                 .toList();
 
+        // 3) 상태 이력 조회
         List<CircularSaleDto.StatusHistoryRes> histories = saleStatusHistoryRepository
                 .findAllBySaleHeaderIdOrderByChangedAtAscIdAsc(header.getId()).stream()
                 .map(CircularSaleDto.StatusHistoryRes::from)
                 .toList();
 
+        // 4) 상세 응답 조립
         return CircularSaleDto.DetailRes.builder()
                 .saleId(header.getId())
                 .saleNo(header.getSaleNo())
@@ -230,19 +245,23 @@ public class CircularSaleService {
     @Transactional
     public void syncStatusByOutboundTransition(WhOutboundHeader outbound, OutboundStatus toStatus,
                                                String actorMemberId, String actorName, String reason, Date changedAt) {
+        // 1) 순환재고 판매 출처가 아닌 출고는 동기화 대상에서 제외
         if (outbound == null || outbound.getSourceType() != OutboundSourceType.CIRCULAR_SALE) {
             return;
         }
 
+        // 2) 출고 헤더 기준으로 연결된 판매 헤더 조회(우선 outboundHeaderId, 보조로 saleNo)
         CircularSaleHeader sale = saleHeaderRepository.findByOutboundHeaderId(outbound.getId())
                 .orElseGet(() -> saleHeaderRepository.findBySaleNo(outbound.getSourceRefNo())
                         .orElseThrow(() -> BaseException.from(BaseResponseStatus.CIRCULAR_SALE_NOT_FOUND)));
 
+        // 3) 목표 상태 계산 및 멱등 처리(동일 상태면 no-op)
         CircularSaleStatus target = toCircularStatus(toStatus);
         if (target == null || sale.getStatus() == target) {
             return;
         }
 
+        // 4) 허용 전이만 통과(READY_TO_SHIP -> IN_TRANSIT -> ARRIVED)
         CircularSaleStatus from = sale.getStatus();
         if (target == CircularSaleStatus.IN_TRANSIT && from != CircularSaleStatus.READY_TO_SHIP) {
             throw BaseException.from(BaseResponseStatus.CIRCULAR_SALE_INVALID_STATUS_TRANSITION);
@@ -257,6 +276,7 @@ public class CircularSaleService {
             sale.markArrived(changedAt);
         }
 
+        // 5) 판매 상태 이력 적재
         saleStatusHistoryRepository.save(CircularSaleStatusHistory.builder()
                 .saleHeaderId(sale.getId())
                 .fromStatus(from)
@@ -314,6 +334,7 @@ public class CircularSaleService {
     // 사용하는 메서드: create
     // 라인별 SKU/재고/상품/소재 스냅샷 정보를 조합해 생성 컨텍스트를 만든다.
     private List<LineContext> buildLineContexts(List<CircularSaleDto.CreateLineReq> lines, String expectedMaterialType, CategoryLookup categoryLookup) {
+        // 1) 요청 라인 SKU를 일괄 조회해 미존재 SKU를 빠르게 검출
         List<String> skuCodes = lines.stream().map(CircularSaleDto.CreateLineReq::getSkuCode).toList();
         Map<String, ProductSku> skuByCode = productSkuRepository.findAllBySkuCodeIn(skuCodes).stream()
                 .collect(Collectors.toMap(ProductSku::getSkuCode, Function.identity()));
@@ -325,6 +346,7 @@ public class CircularSaleService {
                 skuByCode.values().stream().map(ProductSku::getProductCode).collect(Collectors.toSet())
         ).stream().collect(Collectors.toMap(ProductMaster::getCode, Function.identity()));
 
+        // 2) 라인별로 요청값/재고/카테고리/소재 스냅샷을 검증하고 컨텍스트화
         Set<Long> seenInventoryIds = new HashSet<>();
         List<LineContext> contexts = new ArrayList<>();
         for (CircularSaleDto.CreateLineReq reqLine : lines) {
@@ -370,6 +392,7 @@ public class CircularSaleService {
                             .toList())
                     .build());
         }
+        // 3) 검증 완료된 컨텍스트 목록 반환
         return contexts;
     }
 
@@ -431,6 +454,7 @@ public class CircularSaleService {
     // 사용하는 메서드: create
     // 검증 완료된 라인 기준으로 재고를 reserved 로 예약한다.
     private void applyInventoryReservations(List<LineContext> contexts) {
+        // 라인마다 reserveUpTo 호출 결과를 검증해 부족 수량이 있으면 즉시 실패시킨다.
         for (LineContext context : contexts) {
             int reserved = context.inventory.reserveUpTo(context.request.getSoldQuantity());
             if (reserved != context.request.getSoldQuantity()) {
@@ -444,6 +468,7 @@ public class CircularSaleService {
     private SalePersistResult persistSaleAndOutbound(CircularSaleDto.CreateReq request, AuthUserDetails me, CircularBuyer buyer,
                                                      Long warehouseId, List<LineContext> contexts) {
         Date now = new Date();
+        // 1) 판매 헤더 저장(임시번호 저장 후 PK 기반 정식번호 재할당)
         CircularSaleHeader header = saleHeaderRepository.save(CircularSaleHeader.builder()
                 .saleNo("TEMP-" + UUID.randomUUID())
                 .buyerId(buyer.getId())
@@ -462,6 +487,7 @@ public class CircularSaleService {
                 .build());
         header.assignSaleNo(generateSaleNo(header.getId(), now));
 
+        // 2) 판매 아이템 저장
         List<CircularSaleItem> items = new ArrayList<>();
         for (LineContext context : contexts) {
             CircularSaleDto.CreateLineReq reqLine = context.request;
@@ -488,6 +514,7 @@ public class CircularSaleService {
         }
         List<CircularSaleItem> savedItems = saleItemRepository.saveAll(items);
 
+        // 3) 판매 아이템별 소재 스냅샷 저장
         List<CircularSaleItemMaterial> materialRows = new ArrayList<>();
         for (int i = 0; i < savedItems.size(); i++) {
             CircularSaleItem savedItem = savedItems.get(i);
@@ -504,6 +531,7 @@ public class CircularSaleService {
         }
         saleItemMaterialRepository.saveAll(materialRows);
 
+        // 4) 출고 헤더/출고 아이템 저장 및 판매 헤더에 연결
         WhOutboundHeader outbound = outboundHeaderRepository.save(WhOutboundHeader.builder()
                 .outboundNo("TEMP-" + UUID.randomUUID())
                 .sourceType(OutboundSourceType.CIRCULAR_SALE)
@@ -545,6 +573,7 @@ public class CircularSaleService {
         }
         outboundItemRepository.saveAll(outboundItems);
 
+        // 5) 판매/출고 상태이력의 최초 상태(READY_TO_SHIP) 적재
         saleStatusHistoryRepository.save(CircularSaleStatusHistory.builder()
                 .saleHeaderId(header.getId())
                 .fromStatus(null)
@@ -563,6 +592,7 @@ public class CircularSaleService {
                 .reason("CIRCULAR_SALE_CREATE")
                 .build());
 
+        // 6) 생성 결과 반환
         return new SalePersistResult(header, outbound, savedItems, materialRows);
     }
 
