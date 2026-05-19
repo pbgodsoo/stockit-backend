@@ -1,4 +1,4 @@
-package org.example.stockitbe.hq.circularsale;
+﻿package org.example.stockitbe.hq.circularsale;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +33,7 @@ public class CircularSaleController {
 
     // 순환 재고 판매 내역 목록 조회
     @GetMapping
-    public BaseResponse<CircularSaleDto.PageRes> list(
+    public BaseResponse<CircularSaleDto.ListPageRes> list(
             @RequestParam(defaultValue = "0") Integer page,
             @RequestParam(defaultValue = "20") Integer size,
             @RequestParam(defaultValue = "soldAt,desc") String sort,
@@ -45,7 +45,7 @@ public class CircularSaleController {
     ) {
         // 1. 요청 수신: 판매 이력 조회 조건/페이지 파라미터를 받는다.
         // 2. 서비스 호출: 조건 기반 목록 조회를 수행한다.
-        CircularSaleDto.PageRes result = circularSaleService.list(page, size, sort, from, to, buyerCode, materialType, keyword);
+        CircularSaleDto.ListPageRes result = circularSaleService.list(page, size, sort, from, to, buyerCode, materialType, keyword);
 
         // 3. 응답 반환: 페이지 응답을 공통 응답으로 반환한다.
         return BaseResponse.success(result);

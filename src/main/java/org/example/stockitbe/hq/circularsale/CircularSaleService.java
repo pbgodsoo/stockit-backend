@@ -1,4 +1,4 @@
-package org.example.stockitbe.hq.circularsale;
+﻿package org.example.stockitbe.hq.circularsale;
 
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
@@ -111,7 +111,7 @@ public class CircularSaleService {
 
     // 순환재고 판매 목록 조회
     @Transactional(readOnly = true)
-    public CircularSaleDto.PageRes list(
+    public CircularSaleDto.ListPageRes list(
             Integer page, Integer size, String sort,
             LocalDate from, LocalDate to,
             String buyerCode, String materialType, String keyword
@@ -130,7 +130,7 @@ public class CircularSaleService {
                 fromDate, toDateExclusive, buyerId, blankToNull(safeMaterialType), blankToNull(safeKeyword), pageable
         );
         if (headers.isEmpty()) {
-            return CircularSaleDto.PageRes.from(new PageImpl<>(List.of(), pageable, 0));
+            return CircularSaleDto.ListPageRes.from(new PageImpl<>(List.of(), pageable, 0));
         }
 
         Map<Long, CircularBuyer> buyerById = circularBuyerRepository.findAllById(
@@ -170,7 +170,7 @@ public class CircularSaleService {
                     .headline(buildHeadline(items))
                     .build());
         }
-        return CircularSaleDto.PageRes.from(new PageImpl<>(rows, pageable, headers.getTotalElements()));
+        return CircularSaleDto.ListPageRes.from(new PageImpl<>(rows, pageable, headers.getTotalElements()));
     }
 
     // 순환재고 판매 상세 조회

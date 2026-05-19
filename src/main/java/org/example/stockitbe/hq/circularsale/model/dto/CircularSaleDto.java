@@ -1,4 +1,4 @@
-package org.example.stockitbe.hq.circularsale.model.dto;
+﻿package org.example.stockitbe.hq.circularsale.model.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
@@ -23,6 +23,8 @@ import java.util.List;
 
 public class CircularSaleDto {
 
+    // 순환재고 판매 요청 DTO
+    // 거래처/소재구분/메모와 판매 라인 목록을 전달
     @Getter
     @NoArgsConstructor
     @AllArgsConstructor
@@ -38,6 +40,57 @@ public class CircularSaleDto {
         private List<CreateLineReq> items;
     }
 
+    // 순환재고 판매 응답 DTO
+    // 생성된 판매 헤더 요약, 출고 연계 상태, 라인 목록을 반환
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class CreateRes {
+        private Long saleId;
+        private String saleNo;
+        private CircularSaleStatus status;
+        private String outboundNo;
+        private OutboundStatus outboundStatus;
+        private Date soldAt;
+        private Date completedAt;
+        private String buyerCode;
+        private String buyerName;
+        private String materialType;
+        private Integer totalSkuCount;
+        private BigDecimal totalRequestedWeightKg;
+        private BigDecimal totalActualWeightKg;
+        private Integer totalSoldQuantity;
+        private Long totalAmount;
+        private String memo;
+        private List<LineRes> items;
+
+        public static CreateRes from(CircularSaleHeader header, String buyerCode, String buyerName,
+                                     String outboundNo, OutboundStatus outboundStatus, List<LineRes> items) {
+            return CreateRes.builder()
+                    .saleId(header.getId())
+                    .saleNo(header.getSaleNo())
+                    .status(header.getStatus())
+                    .outboundNo(outboundNo)
+                    .outboundStatus(outboundStatus)
+                    .soldAt(header.getSoldAt())
+                    .completedAt(header.getCompletedAt())
+                    .buyerCode(buyerCode)
+                    .buyerName(buyerName)
+                    .materialType(header.getMaterialType())
+                    .totalSkuCount(header.getTotalSkuCount())
+                    .totalRequestedWeightKg(header.getTotalRequestedWeightKg())
+                    .totalActualWeightKg(header.getTotalActualWeightKg())
+                    .totalSoldQuantity(header.getTotalSoldQuantity())
+                    .totalAmount(header.getTotalAmount())
+                    .memo(header.getMemo())
+                    .items(items)
+                    .build();
+        }
+    }
+
+    // 순환재고 판매 생성 라인 요청 DTO
+    // 재고/상품 식별자와 중량/수량/단가/금액 정보를 전달
     @Getter
     @NoArgsConstructor
     @AllArgsConstructor
@@ -62,26 +115,8 @@ public class CircularSaleDto {
         private String memo;
     }
 
-    @Getter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class MaterialRes {
-        private String materialCode;
-        private String materialName;
-        private Integer ratio;
-        private Integer sortOrder;
-
-        public static MaterialRes from(CircularSaleItemMaterial row) {
-            return MaterialRes.builder()
-                    .materialCode(row.getMaterialCode())
-                    .materialName(row.getMaterialName())
-                    .ratio(row.getRatio())
-                    .sortOrder(row.getSortOrder())
-                    .build();
-        }
-    }
-
+    // 순환재고 판매 라인 응답 DTO
+    // 판매 상세 품목 정보와 소재 스냅샷 목록을 반환
     @Getter
     @NoArgsConstructor
     @AllArgsConstructor
@@ -130,53 +165,58 @@ public class CircularSaleDto {
         }
     }
 
+    // 순환재고 판매 품목 소재 응답 DTO
+    // ESG 추적용 소재 스냅샷(material code/name/ratio)을 반환
     @Getter
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
-    public static class CreateRes {
-        private Long saleId;
-        private String saleNo;
-        private CircularSaleStatus status;
-        private String outboundNo;
-        private OutboundStatus outboundStatus;
-        private Date soldAt;
-        private Date completedAt;
-        private String buyerCode;
-        private String buyerName;
-        private String materialType;
-        private Integer totalSkuCount;
-        private BigDecimal totalRequestedWeightKg;
-        private BigDecimal totalActualWeightKg;
-        private Integer totalSoldQuantity;
-        private Long totalAmount;
-        private String memo;
-        private List<LineRes> items;
+    public static class MaterialRes {
+        private String materialCode;
+        private String materialName;
+        private Integer ratio;
+        private Integer sortOrder;
 
-        public static CreateRes from(CircularSaleHeader header, String buyerCode, String buyerName,
-                                     String outboundNo, OutboundStatus outboundStatus, List<LineRes> items) {
-            return CreateRes.builder()
-                    .saleId(header.getId())
-                    .saleNo(header.getSaleNo())
-                    .status(header.getStatus())
-                    .outboundNo(outboundNo)
-                    .outboundStatus(outboundStatus)
-                    .soldAt(header.getSoldAt())
-                    .completedAt(header.getCompletedAt())
-                    .buyerCode(buyerCode)
-                    .buyerName(buyerName)
-                    .materialType(header.getMaterialType())
-                    .totalSkuCount(header.getTotalSkuCount())
-                    .totalRequestedWeightKg(header.getTotalRequestedWeightKg())
-                    .totalActualWeightKg(header.getTotalActualWeightKg())
-                    .totalSoldQuantity(header.getTotalSoldQuantity())
-                    .totalAmount(header.getTotalAmount())
-                    .memo(header.getMemo())
-                    .items(items)
+        public static MaterialRes from(CircularSaleItemMaterial row) {
+            return MaterialRes.builder()
+                    .materialCode(row.getMaterialCode())
+                    .materialName(row.getMaterialName())
+                    .ratio(row.getRatio())
+                    .sortOrder(row.getSortOrder())
                     .build();
         }
     }
 
+    // 순환재고 판매 목록 List 페이지 응답 DTO
+    // 페이지 메타정보와 목록 행 데이터를 함께 반환
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class ListPageRes {
+        private int page;
+        private int size;
+        private int totalPages;
+        private long totalElements;
+        private boolean hasNext;
+        private boolean hasPrevious;
+        private List<ListRowRes> content;
+
+        public static ListPageRes from(Page<ListRowRes> page) {
+            return ListPageRes.builder()
+                    .page(page.getNumber())
+                    .size(page.getSize())
+                    .totalPages(page.getTotalPages())
+                    .totalElements(page.getTotalElements())
+                    .hasNext(page.hasNext())
+                    .hasPrevious(page.hasPrevious())
+                    .content(page.getContent())
+                    .build();
+        }
+    }
+
+    // 순환재고 판매 목록 행 응답 DTO
+    // 목록 화면에 필요한 판매 요약/상태/출고상태 정보를 반환
     @Getter
     @NoArgsConstructor
     @AllArgsConstructor
@@ -199,56 +239,8 @@ public class CircularSaleDto {
         private String headline;
     }
 
-    @Getter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class PageRes {
-        private int page;
-        private int size;
-        private int totalPages;
-        private long totalElements;
-        private boolean hasNext;
-        private boolean hasPrevious;
-        private List<ListRowRes> content;
-
-        public static PageRes from(Page<ListRowRes> page) {
-            return PageRes.builder()
-                    .page(page.getNumber())
-                    .size(page.getSize())
-                    .totalPages(page.getTotalPages())
-                    .totalElements(page.getTotalElements())
-                    .hasNext(page.hasNext())
-                    .hasPrevious(page.hasPrevious())
-                    .content(page.getContent())
-                    .build();
-        }
-    }
-
-    @Getter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class StatusHistoryRes {
-        private CircularSaleStatus fromStatus;
-        private CircularSaleStatus status;
-        private Date changedAt;
-        private String changedByMemberId;
-        private String changedByName;
-        private String reason;
-
-        public static StatusHistoryRes from(CircularSaleStatusHistory row) {
-            return StatusHistoryRes.builder()
-                    .fromStatus(row.getFromStatus())
-                    .status(row.getStatus())
-                    .changedAt(row.getChangedAt())
-                    .changedByMemberId(row.getChangedByMemberId())
-                    .changedByName(row.getChangedByName())
-                    .reason(row.getReason())
-                    .build();
-        }
-    }
-
+    // 순환재고 판매 상세 Detail 응답 DTO
+    // 판매 헤더/라인/상태이력 전체를 상세 화면용으로 반환
     @Getter
     @NoArgsConstructor
     @AllArgsConstructor
@@ -276,6 +268,32 @@ public class CircularSaleDto {
         private String memo;
         private List<LineRes> items;
         private List<StatusHistoryRes> statusHistory;
+    }
+
+    // 순환재고 판매 상태이력 응답 DTO
+    // 상태 전이(from/to), 변경 시각, 변경 주체, 사유를 반환
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class StatusHistoryRes {
+        private CircularSaleStatus fromStatus;
+        private CircularSaleStatus status;
+        private Date changedAt;
+        private String changedByMemberId;
+        private String changedByName;
+        private String reason;
+
+        public static StatusHistoryRes from(CircularSaleStatusHistory row) {
+            return StatusHistoryRes.builder()
+                    .fromStatus(row.getFromStatus())
+                    .status(row.getStatus())
+                    .changedAt(row.getChangedAt())
+                    .changedByMemberId(row.getChangedByMemberId())
+                    .changedByName(row.getChangedByName())
+                    .reason(row.getReason())
+                    .build();
+        }
     }
 }
 
