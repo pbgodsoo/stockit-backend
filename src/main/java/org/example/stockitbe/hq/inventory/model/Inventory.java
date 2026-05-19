@@ -189,6 +189,13 @@ public class Inventory extends BaseEntity {
         return moved;
     }
 
+    // reserved -> inTransit 반영 후, 출고 확정 시점에 물리 재고(quantity)만 차감한다.
+    public void decreaseQuantityOnly(int quantityToDeduct) {
+        int safeDeduct = Math.max(0, quantityToDeduct);
+        this.quantity = Math.max(0, n(this.quantity) - safeDeduct);
+        this.lastMovementAt = new Date();
+    }
+
     // ------------- 매장 입고 확정 관련 ------------------
     // 매장 입고 확정 시점에 실재고/가용재고를 동시에 증가시킨다.
     public void increaseOnHandAndAvailable(int receivedQuantity) {

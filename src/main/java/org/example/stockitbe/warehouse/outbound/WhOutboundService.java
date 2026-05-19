@@ -8,6 +8,9 @@ import org.example.stockitbe.hq.circularbuyer.model.CircularBuyer;
 import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
+import org.example.stockitbe.hq.circularsale.CircularSaleService;
+import org.example.stockitbe.hq.circularsale.model.entity.CircularSaleItem;
+import org.example.stockitbe.hq.circularsale.repository.CircularSaleItemRepository;
 import org.example.stockitbe.hq.warehousetransfer.WarehouseTransferHeaderRepository;
 import org.example.stockitbe.hq.warehousetransfer.model.WarehouseTransferHeader;
 import org.example.stockitbe.hq.inventory.InventoryService;
@@ -51,6 +54,8 @@ public class WhOutboundService {
     private final StoreInboundStatusHistoryRepository inboundStatusHistoryRepository;
     private final InfrastructureRepository infrastructureRepository;
     private final CircularBuyerRepository circularBuyerRepository;
+    private final CircularSaleService circularSaleService;
+    private final CircularSaleItemRepository circularSaleItemRepository;
     private final InventoryService inventoryService;
     private final WarehouseTransferHeaderRepository warehouseTransferHeaderRepository;
 
@@ -146,7 +151,7 @@ public class WhOutboundService {
             throw BaseException.from(BaseResponseStatus.OUTBOUND_INVALID_STATUS_TRANSITION);
         }
 
-        // 3) 출고 라인별로 예약재고를 이동중 재고로 전이한다.
+        // 3) 출고 라인별로 예약 재고를 이동중 재고로 전이한다.
         //    destinationType=WAREHOUSE (창고간 이동) 인 경우 도착 창고 가용재고+ 도 같은 시점에 박는다.
         //    — PO 의 startInTransit 시점에 도착 창고 가용+ 와 동일 패턴 (ADR-024).
         List<WhOutboundItem> items = outboundItemRepository.findAllByOutboundHeaderIdOrderByIdAsc(header.getId());
@@ -155,7 +160,7 @@ public class WhOutboundService {
         String sourceWarehouseCode = infrastructureRepository.findById(header.getWarehouseId())
                 .map(Infrastructure::getCode).orElse(null);
         for (WhOutboundItem item : items) {
-            int moved = inventoryService.moveReservedToInTransit(header.getWarehouseId(), item.getSkuId(), item.getRequestedQuantity());
+            int moved = moveReservedStockForConfirm(header, item);
             if (moved != item.getRequestedQuantity()) {
                 throw BaseException.from(BaseResponseStatus.OUTBOUND_RESERVED_STOCK_NOT_ENOUGH);
             }
@@ -187,10 +192,45 @@ public class WhOutboundService {
                         .reason(reason == null || reason.isBlank() ? "OUTBOUND_CONFIRM" : reason)
                         .build()
         );
+
+        // 출고 상태 변경을 순환 재고 판매 상태에 동기화하는 호출입니다.
+        circularSaleService.syncStatusByOutboundTransition(
+                header,
+                OutboundStatus.IN_TRANSIT,
+                me.getEmployeeCode(),
+                me.getName(),
+                reason == null || reason.isBlank() ? "OUTBOUND_CONFIRM" : reason,
+                now
+        );
         syncTransferStatusFromOutbound(header, OutboundStatus.IN_TRANSIT);
 
         // 5) 최신 상세 정보를 반환한다.
         return detail(me, outboundNo);
+    }
+
+    // 출고확정 시 sourceType별(매장 발주, 재고이동, 순환재고 판매) 재고 반영 전략을 통일된 시그니처로 처리한다.
+    private int moveReservedStockForConfirm(WhOutboundHeader header, WhOutboundItem item) {
+        if (header.getSourceType() == OutboundSourceType.CIRCULAR_SALE) {
+            return moveReservedStockForCircularSale(item);
+        }
+        return inventoryService.moveReservedToInTransit(
+                header.getWarehouseId(),
+                item.getSkuId(),
+                item.getRequestedQuantity()
+        );
+    }
+
+    // 순환재고 판매 출고는 sourceLineRefId -> sale_item -> inventoryId 경유로 예약/실재고를 함께 반영한다.
+    private int moveReservedStockForCircularSale(WhOutboundItem item) {
+        if (item.getSourceLineRefId() == null) {
+            throw BaseException.from(BaseResponseStatus.OUTBOUND_RESERVED_STOCK_NOT_ENOUGH);
+        }
+        CircularSaleItem saleItem = circularSaleItemRepository.findById(item.getSourceLineRefId())
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.OUTBOUND_RESERVED_STOCK_NOT_ENOUGH));
+        return inventoryService.moveReservedToInTransitAndDecreaseByInventoryId(
+                saleItem.getInventoryId(),
+                item.getRequestedQuantity()
+        );
     }
 
     // 배송 완료 처리 함수 (IN_TRANSIT -> ARRIVED)
@@ -217,6 +257,14 @@ public class WhOutboundService {
                         .changedByName(me.getName())
                         .reason(reason == null || reason.isBlank() ? "OUTBOUND_ARRIVED" : reason)
                         .build()
+        );
+        circularSaleService.syncStatusByOutboundTransition(
+                header,
+                OutboundStatus.ARRIVED,
+                me.getEmployeeCode(),
+                me.getName(),
+                reason == null || reason.isBlank() ? "OUTBOUND_ARRIVED" : reason,
+                now
         );
         syncTransferStatusFromOutbound(header, OutboundStatus.ARRIVED);
 
