@@ -8,10 +8,16 @@ import lombok.NoArgsConstructor;
 import org.example.stockitbe.common.model.BaseEntity;
 
 @Entity
-@Table(name = "product_sku", uniqueConstraints = {
+@Table(name = "product_sku",
+    uniqueConstraints = {
         @UniqueConstraint(name = "uk_product_sku_code", columnNames = "sku_code"),
         @UniqueConstraint(name = "uk_product_sku_product_color_size", columnNames = {"product_code", "color", "size"})
-})
+    },
+    // status 단독 인덱스 — 카탈로그 진입점 ACTIVE 필터 가속 (ADR-027).
+    indexes = {
+        @Index(name = "idx_product_sku_status", columnList = "status")
+    }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ProductSku extends BaseEntity {

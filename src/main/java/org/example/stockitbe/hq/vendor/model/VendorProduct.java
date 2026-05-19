@@ -10,9 +10,16 @@ import org.example.stockitbe.common.model.BaseEntity;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "vendor_product", uniqueConstraints = {
+@Table(name = "vendor_product",
+    uniqueConstraints = {
         @UniqueConstraint(name = "uk_vendor_product_code", columnNames = "code")
-})
+    },
+    // (product_code, status) 복합 인덱스 — 새 발주 카탈로그 4-way JOIN 의
+    // ProductSku ↔ VendorProduct nested loop 풀스캔 회피 (ADR-027).
+    indexes = {
+        @Index(name = "idx_vendor_product_product_code_status", columnList = "product_code, status")
+    }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class VendorProduct extends BaseEntity {
