@@ -231,6 +231,7 @@ public class CircularSaleDto {
         private Date completedAt;
         private String buyerCode;
         private String buyerName;
+        private String buyerIndustryGroup;
         private String materialType;
         private Integer totalSkuCount;
         private BigDecimal totalActualWeightKg;

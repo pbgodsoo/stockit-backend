@@ -174,6 +174,7 @@ public class CircularSaleService {
                     .completedAt(header.getCompletedAt())
                     .buyerCode(buyer == null ? null : buyer.getCode())
                     .buyerName(buyer == null ? null : buyer.getCompanyName())
+                    .buyerIndustryGroup(buyer == null ? null : buyer.getIndustryGroup())
                     .materialType(header.getMaterialType())
                     .totalSkuCount(header.getTotalSkuCount())
                     .totalActualWeightKg(header.getTotalActualWeightKg())
