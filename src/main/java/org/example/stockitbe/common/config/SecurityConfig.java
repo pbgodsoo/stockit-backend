@@ -1,4 +1,4 @@
-﻿package org.example.stockitbe.common.config;
+package org.example.stockitbe.common.config;
 
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
