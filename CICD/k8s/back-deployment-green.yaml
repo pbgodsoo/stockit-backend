@@ -80,6 +80,26 @@ spec:
               value: "1"
             - name: DB_CONNECTION_TIMEOUT_MS
               value: "10000"
+            - name: ES_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: stockit-be-config
+                  key: es-host
+            - name: ES_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: stockit-be-config
+                  key: es-port
+            - name: ES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: stockit-be-config
+                  key: es-user
+            - name: ES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: stockit-be-secret
+                  key: es-password
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
