@@ -712,6 +712,7 @@ public class InventoryService {
                 .collect(Collectors.toMap(Infrastructure::getId, Function.identity()));
         List<Inventory> warehouseCirculars = circularInventories.stream()
                 .filter(inv -> warehouseById.containsKey(inv.getLocationId()))
+                .filter(inv -> Math.max(0, n(inv.getAvailableQuantity())) > 0)
                 .toList();
         if (warehouseCirculars.isEmpty()) {
             return buildCircularInventoryPage(List.of(), safePage, safeSize, 0);
