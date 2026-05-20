@@ -40,3 +40,6 @@ out/
 .env.prod
 .bkit
 .claude
+
+# Keep ES folder local-only
+ES/**
