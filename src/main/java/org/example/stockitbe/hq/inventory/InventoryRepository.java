@@ -2,6 +2,8 @@ package org.example.stockitbe.hq.inventory;
 
 import jakarta.persistence.LockModeType;
 import org.example.stockitbe.hq.inventory.model.CompanyWideAggregateRow;
+import org.example.stockitbe.hq.inventory.model.CircularInventoryCompositionRow;
+import org.example.stockitbe.hq.inventory.model.CircularInventoryPageRow;
 import org.example.stockitbe.hq.inventory.model.CompanyWideSkuRow;
 import org.example.stockitbe.hq.inventory.model.Inventory;
 import org.example.stockitbe.hq.inventory.model.InventoryStatus;
@@ -903,4 +905,177 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
             @Param("category") String category,
             @Param("keyword") String keyword
     );
+
+    @Query(value = """
+        SELECT
+            i.id AS inventoryId,
+            ps.sku_code AS skuCode,
+            pm.code AS itemCode,
+            pm.name AS itemName,
+            inf.code AS warehouseCode,
+            inf.name AS warehouseName,
+            COALESCE(pc.name, cc.name) AS parentCategory,
+            cc.name AS childCategory,
+            ps.color AS color,
+            ps.size AS size,
+            COALESCE(i.available_quantity, 0) AS availableQuantity
+        FROM inventory i
+        JOIN infrastructure inf ON inf.id = i.location_id
+        JOIN product_sku ps ON ps.id = i.sku_id
+        JOIN product_master pm ON pm.code = ps.product_code
+        LEFT JOIN category cc ON cc.code = pm.category_code
+        LEFT JOIN category pc ON pc.id = cc.parent_id
+        WHERE i.inventory_status = 'CIRCULAR'
+          AND inf.location_type = 'WAREHOUSE'
+          AND COALESCE(i.available_quantity, 0) > 0
+          AND (:hasWarehouseCodes = false OR inf.code IN (:warehouseCodes))
+          AND (:keyword IS NULL OR (
+               LOWER(pm.code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(pm.name) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(ps.sku_code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR EXISTS (
+                SELECT 1
+                FROM product_material_composition pmc_k
+                JOIN material m_k ON m_k.id = pmc_k.material_id
+                WHERE pmc_k.product_id = pm.id
+                  AND LOWER(m_k.name_ko) LIKE CONCAT('%', LOWER(:keyword), '%')
+            )
+          ))
+          AND (
+              :materialGroupFilter IS NULL
+              OR (
+                :materialGroupFilter = 'NATURAL_SINGLE'
+                AND (SELECT COUNT(*) FROM product_material_composition pmc_cnt WHERE pmc_cnt.product_id = pm.id) = 1
+                AND EXISTS (
+                    SELECT 1
+                    FROM product_material_composition pmc_g
+                    JOIN material m_g ON m_g.id = pmc_g.material_id
+                    WHERE pmc_g.product_id = pm.id
+                      AND UPPER(m_g.material_group) = 'NATURAL'
+                )
+              )
+              OR (
+                :materialGroupFilter = 'SYNTHETIC'
+                AND (SELECT COUNT(*) FROM product_material_composition pmc_cnt WHERE pmc_cnt.product_id = pm.id) = 1
+                AND EXISTS (
+                    SELECT 1
+                    FROM product_material_composition pmc_g
+                    JOIN material m_g ON m_g.id = pmc_g.material_id
+                    WHERE pmc_g.product_id = pm.id
+                      AND UPPER(m_g.material_group) = 'SYNTHETIC'
+                )
+              )
+              OR (
+                :materialGroupFilter = 'BLEND'
+                AND (SELECT COUNT(*) FROM product_material_composition pmc_cnt WHERE pmc_cnt.product_id = pm.id) >= 2
+              )
+          )
+          AND (
+             :materialName IS NULL
+             OR EXISTS (
+                SELECT 1
+                FROM product_material_composition pmc_m
+                JOIN material m_m ON m_m.id = pmc_m.material_id
+                WHERE pmc_m.product_id = pm.id
+                  AND m_m.name_ko = :materialName
+                  AND (:minRatio <= 0 OR COALESCE(pmc_m.ratio, 0) >= :minRatio)
+             )
+          )
+        ORDER BY
+          CASE WHEN :sortField = 'quantity' AND :sortDirection = 'asc' THEN COALESCE(i.available_quantity, 0) END ASC,
+          CASE WHEN :sortField = 'quantity' AND :sortDirection = 'desc' THEN COALESCE(i.available_quantity, 0) END DESC,
+          CASE WHEN :sortField = 'skuCode' AND :sortDirection = 'desc' THEN ps.sku_code END DESC,
+          ps.sku_code ASC
+        """,
+            countQuery = """
+        SELECT COUNT(*)
+        FROM inventory i
+        JOIN infrastructure inf ON inf.id = i.location_id
+        JOIN product_sku ps ON ps.id = i.sku_id
+        JOIN product_master pm ON pm.code = ps.product_code
+        WHERE i.inventory_status = 'CIRCULAR'
+          AND inf.location_type = 'WAREHOUSE'
+          AND COALESCE(i.available_quantity, 0) > 0
+          AND (:hasWarehouseCodes = false OR inf.code IN (:warehouseCodes))
+          AND (:keyword IS NULL OR (
+               LOWER(pm.code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(pm.name) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR LOWER(ps.sku_code) LIKE CONCAT('%', LOWER(:keyword), '%')
+            OR EXISTS (
+                SELECT 1
+                FROM product_material_composition pmc_k
+                JOIN material m_k ON m_k.id = pmc_k.material_id
+                WHERE pmc_k.product_id = pm.id
+                  AND LOWER(m_k.name_ko) LIKE CONCAT('%', LOWER(:keyword), '%')
+            )
+          ))
+          AND (
+              :materialGroupFilter IS NULL
+              OR (
+                :materialGroupFilter = 'NATURAL_SINGLE'
+                AND (SELECT COUNT(*) FROM product_material_composition pmc_cnt WHERE pmc_cnt.product_id = pm.id) = 1
+                AND EXISTS (
+                    SELECT 1
+                    FROM product_material_composition pmc_g
+                    JOIN material m_g ON m_g.id = pmc_g.material_id
+                    WHERE pmc_g.product_id = pm.id
+                      AND UPPER(m_g.material_group) = 'NATURAL'
+                )
+              )
+              OR (
+                :materialGroupFilter = 'SYNTHETIC'
+                AND (SELECT COUNT(*) FROM product_material_composition pmc_cnt WHERE pmc_cnt.product_id = pm.id) = 1
+                AND EXISTS (
+                    SELECT 1
+                    FROM product_material_composition pmc_g
+                    JOIN material m_g ON m_g.id = pmc_g.material_id
+                    WHERE pmc_g.product_id = pm.id
+                      AND UPPER(m_g.material_group) = 'SYNTHETIC'
+                )
+              )
+              OR (
+                :materialGroupFilter = 'BLEND'
+                AND (SELECT COUNT(*) FROM product_material_composition pmc_cnt WHERE pmc_cnt.product_id = pm.id) >= 2
+              )
+          )
+          AND (
+             :materialName IS NULL
+             OR EXISTS (
+                SELECT 1
+                FROM product_material_composition pmc_m
+                JOIN material m_m ON m_m.id = pmc_m.material_id
+                WHERE pmc_m.product_id = pm.id
+                  AND m_m.name_ko = :materialName
+                  AND (:minRatio <= 0 OR COALESCE(pmc_m.ratio, 0) >= :minRatio)
+             )
+          )
+        """,
+            nativeQuery = true)
+    Page<CircularInventoryPageRow> findCircularInventoriesPaged(
+            @Param("hasWarehouseCodes") boolean hasWarehouseCodes,
+            @Param("warehouseCodes") List<String> warehouseCodes,
+            @Param("keyword") String keyword,
+            @Param("materialGroupFilter") String materialGroupFilter,
+            @Param("materialName") String materialName,
+            @Param("minRatio") int minRatio,
+            @Param("sortField") String sortField,
+            @Param("sortDirection") String sortDirection,
+            Pageable pageable
+    );
+
+    @Query(value = """
+        SELECT
+            pm.code AS itemCode,
+            m.code AS materialCode,
+            m.name_ko AS materialNameKo,
+            m.material_group AS materialGroup,
+            COALESCE(pmc.ratio, 0) AS ratio,
+            COALESCE(pmc.composition_order, 0) AS compositionOrder
+        FROM product_master pm
+        JOIN product_material_composition pmc ON pmc.product_id = pm.id
+        JOIN material m ON m.id = pmc.material_id
+        WHERE pm.code IN (:itemCodes)
+        ORDER BY pm.code ASC, pmc.composition_order ASC, pmc.id ASC
+        """, nativeQuery = true)
+    List<CircularInventoryCompositionRow> findCircularInventoryCompositionsByItemCodes(@Param("itemCodes") List<String> itemCodes);
 }
