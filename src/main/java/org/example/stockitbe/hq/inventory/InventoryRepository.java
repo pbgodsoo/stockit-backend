@@ -779,9 +779,19 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
             cc.name AS childCategory,
             ps.color AS color,
             ps.size AS size,
+            COALESCE(MAX(ps.unit_price), 0) AS unitPrice,
             COALESCE(SUM(i.quantity), 0) AS actualStock,
             COALESCE(SUM(i.available_quantity), 0) AS availableStock,
             COALESCE(pm.store_safety_stock, 0) AS safetyStock,
+            COALESCE((
+                SELECT SUM(woi.requested_quantity)
+                FROM wh_outbound_item woi
+                JOIN wh_outbound_header woh ON woh.id = woi.outbound_header_id
+                WHERE woi.sku_id = ps.id
+                  AND woh.destination_type = 'STORE'
+                  AND woh.destination_id = :locationId
+                  AND woh.status IN ('READY_TO_SHIP', 'IN_TRANSIT')
+            ), 0) AS inboundExpectedQuantity,
             CASE
                 WHEN COALESCE(SUM(i.available_quantity), 0) <= 0 THEN '품절'
                 WHEN COALESCE(SUM(i.available_quantity), 0) < COALESCE(pm.store_safety_stock, 0) THEN '부족'

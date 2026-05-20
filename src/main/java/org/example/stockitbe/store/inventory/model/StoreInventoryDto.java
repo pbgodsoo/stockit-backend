@@ -121,9 +121,11 @@ public class StoreInventoryDto {
         private String childCategory;
         private String color;
         private String size;
+        private Long unitPrice;
         private Integer actualStock;
         private Integer availableStock;
         private Integer safetyStock;
+        private Integer inboundExpectedQuantity;
         private String status;
 
         public static SkuRowRes from(String skuCode,
@@ -133,9 +135,11 @@ public class StoreInventoryDto {
                                      String childCategory,
                                      String color,
                                      String size,
+                                     long unitPrice,
                                      int actualStock,
                                      int availableStock,
                                      int safetyStock,
+                                     int inboundExpectedQuantity,
                                      String status) {
             return SkuRowRes.builder()
                     .skuCode(skuCode)
@@ -145,9 +149,11 @@ public class StoreInventoryDto {
                     .childCategory(childCategory)
                     .color(color)
                     .size(size)
+                    .unitPrice(unitPrice)
                     .actualStock(actualStock)
                     .availableStock(availableStock)
                     .safetyStock(safetyStock)
+                    .inboundExpectedQuantity(inboundExpectedQuantity)
                     .status(status)
                     .build();
         }
