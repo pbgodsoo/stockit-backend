@@ -697,6 +697,7 @@ public class InventoryService {
                                                                          String materialGroup,
                                                                          String materialName,
                                                                          Integer minRatio) {
+        // 1) 요청 파라미터를 안전한 기본값으로 정규화한다.
         int safePage = Math.max(0, page == null ? 0 : page);
         int safeSize = normalizePageSize(size);
         Sort sortSpec = parseCircularSort(sort);
@@ -716,6 +717,7 @@ public class InventoryService {
         String sortField = "quantity".equals(order.getProperty()) ? "quantity" : "skuCode";
         String sortDirection = order.getDirection() == Sort.Direction.DESC ? "desc" : "asc";
 
+        // 2) 메모리 슬라이싱이 아니라 DB 페이지 쿼리로 바로 조회한다.
         Pageable pageable = org.springframework.data.domain.PageRequest.of(safePage, safeSize);
         org.springframework.data.domain.Page<CircularInventoryPageRow> pageRows = inventoryRepository.findCircularInventoriesPaged(
                 hasWarehouseCodes,
@@ -732,6 +734,7 @@ public class InventoryService {
             return InventoryDto.CircularInventoryPageRes.from(List.of(), safePage, safeSize, pageRows.getTotalElements(), pageRows.getTotalPages(), false, safePage > 0);
         }
 
+        // 3) 현재 페이지에 포함된 itemCode만 추출해서 소재 구성 정보를 일괄 조회한다(N+1 방지).
         List<String> itemCodes = pageRows.getContent().stream()
                 .map(CircularInventoryPageRow::getItemCode)
                 .filter(Objects::nonNull)
@@ -742,6 +745,7 @@ public class InventoryService {
                 .collect(Collectors.groupingBy(CircularInventoryCompositionRow::getItemCode));
         Map<String, Integer> materialPriceByCode = loadActiveMaterialPriceByCode();
 
+        // 4) DB row + 소재 구성/단가 정책을 결합해 화면 응답 DTO를 조립한다.
         List<InventoryDto.CircularInventoryRes> content = pageRows.getContent().stream()
                 .map(row -> {
                     List<CircularInventoryCompositionRow> compositionRows = compositionRowsByItemCode.getOrDefault(row.getItemCode(), List.of());

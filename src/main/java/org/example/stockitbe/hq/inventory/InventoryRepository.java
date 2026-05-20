@@ -69,6 +69,7 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
      * @param scope        "ALL" | "STORE" | "WAREHOUSE"
      * @param locationCode null 이면 scope 그룹 적용, 값 있으면 그 위치만
      */
+
     @Query(value = """
     SELECT inf.code AS code,
            inf.name AS name,
@@ -916,6 +917,12 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
             @Param("keyword") String keyword
     );
 
+    /**
+     * 순환재고 조회 전용 DB 페이지 쿼리.
+     * - CIRCULAR + WAREHOUSE + available_quantity > 0 조건을 DB에서 먼저 거른다.
+     * - 키워드/창고/소재 그룹/소재명(비율) 필터를 SQL에서 처리한다.
+     * - 동적 정렬은 quantity/skuCode만 허용하고, 나머지는 skuCode ASC로 안정 정렬한다.
+     */
     @Query(value = """
         SELECT
             i.id AS inventoryId,
@@ -1073,6 +1080,10 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
             Pageable pageable
     );
 
+    /**
+     * 페이지 본문에 포함된 itemCode 집합 기준으로 소재 구성을 한 번에 조회한다.
+     * 서비스에서 itemCode별 그룹핑하여 DTO 조립 시 사용한다.
+     */
     @Query(value = """
         SELECT
             pm.code AS itemCode,
