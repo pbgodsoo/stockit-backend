@@ -2,6 +2,7 @@ package org.example.stockitbe.hq.circularbuyer;
 
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.model.BaseResponseStatus;
 import org.example.stockitbe.hq.circularbuyer.model.CircularBuyer;
@@ -25,6 +26,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CircularBuyerService {
 
     private static final Set<String> ALLOWED_MATERIAL_FITS = Set.of(
@@ -41,23 +43,15 @@ public class CircularBuyerService {
 
     private final CircularBuyerRepository circularBuyerRepository;
     private final CircularBuyerEmbeddingService embeddingService;
+    private final CircularBuyerEsSearchService esSearchService;
 
     // 4만 건+ 환경에서 페이지 없는 전체 조회는 응답 불가 수준의 부하. 최대 500건으로 제한.
     private static final int FIND_ALL_HARD_LIMIT = 500;
 
     @Transactional(readOnly = true)
     public List<CircularBuyerDto.ListRes> findAll(String keyword, String materialFit, String partnerType) {
-        if (materialFit != null && !materialFit.isBlank()) {
-            validateMaterialFit(materialFit);
-        }
-        if (partnerType != null && !partnerType.isBlank()) {
-            validatePartnerType(partnerType);
-        }
-        Specification<CircularBuyer> spec = buildSpec(keyword, materialFit, partnerType, true);
-        Page<CircularBuyer> page = circularBuyerRepository.findAll(spec, PageRequest.of(0, FIND_ALL_HARD_LIMIT));
-        return page.getContent().stream()
-                .map(CircularBuyerDto.ListRes::from)
-                .toList();
+        return findPage(keyword, materialFit, partnerType, PageRequest.of(0, FIND_ALL_HARD_LIMIT))
+                .getContent();
     }
 
     @Transactional(readOnly = true)
@@ -68,6 +62,15 @@ public class CircularBuyerService {
         if (partnerType != null && !partnerType.isBlank()) {
             validatePartnerType(partnerType);
         }
+        try {
+            return esSearchService.findPage(keyword, materialFit, partnerType, pageable);
+        } catch (Exception e) {
+            log.warn("순환재고 거래처 ES 조회 실패 — RDB fallback 수행. reason={}", e.getMessage());
+        }
+        return findPageFromRdb(keyword, materialFit, partnerType, pageable);
+    }
+
+    private CircularBuyerDto.PageRes findPageFromRdb(String keyword, String materialFit, String partnerType, Pageable pageable) {
         // embedding 컬럼 제외 JPQL 프로젝션 사용 — 행당 ~23KB JSON 역직렬화 방지.
         String kw = (keyword != null && !keyword.isBlank())
                 ? "%" + keyword.trim().toLowerCase() + "%"
