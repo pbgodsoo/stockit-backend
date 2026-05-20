@@ -43,3 +43,10 @@ out/
 
 # Keep ES folder local-only
 ES/**
+
+
+ES/*.md
+ES/*.yaml
+ES/*.yaml.example
+# Keep ES files local only
+ES/**
