@@ -85,6 +85,12 @@ public class InventoryService {
             MAT_BLEND, "혼방"
     );
 
+
+    private static final long CIRCULAR_INVENTORY_CACHE_TTL_MS = 15_000L;
+    private final Map<String, CircularInventoryCacheEntry> circularInventoryCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private record CircularInventoryCacheEntry(long createdAtMillis, List<InventoryDto.CircularInventoryRes> rows) {}
+
     // 전사 재고 불균형 SKU를 계산해 반환한다.
     @Transactional(readOnly = true)
     public List<InventoryDto.ImbalancedSkuRes> findImbalancedSkus() {
@@ -701,6 +707,13 @@ public class InventoryService {
         String safeMaterialGroup = materialGroup == null ? "" : materialGroup.trim();
         String safeMaterialName = materialName == null ? "" : normalizeMaterialName(materialName.trim());
         int safeMinRatio = Math.max(0, minRatio == null ? 0 : minRatio);
+        String cacheKey = buildCircularInventoryCacheKey(
+                sortSpec, safeKeyword, warehouseCodeSet, safeMaterialGroup, safeMaterialName, safeMinRatio
+        );
+        List<InventoryDto.CircularInventoryRes> cachedRows = getCachedCircularInventoryRows(cacheKey);
+        if (cachedRows != null) {
+            return buildCircularInventoryPage(cachedRows, safePage, safeSize, cachedRows.size());
+        }
 
         List<Inventory> circularInventories = inventoryRepository.findAllByInventoryStatus(InventoryStatus.CIRCULAR);
         if (circularInventories.isEmpty()) {
@@ -710,8 +723,16 @@ public class InventoryService {
         Map<Long, Infrastructure> warehouseById = infrastructureRepository.findAll().stream()
                 .filter(i -> i.getLocationType() == LocationType.WAREHOUSE)
                 .collect(Collectors.toMap(Infrastructure::getId, Function.identity()));
+        Set<Long> allowedWarehouseIds = warehouseById.values().stream()
+                .filter(warehouse -> warehouseCodeSet.isEmpty()
+                        || warehouseCodeSet.contains(safeText(warehouse.getCode()).toUpperCase(Locale.ROOT)))
+                .map(Infrastructure::getId)
+                .collect(Collectors.toSet());
+        if (allowedWarehouseIds.isEmpty()) {
+            return buildCircularInventoryPage(List.of(), safePage, safeSize, 0);
+        }
         List<Inventory> warehouseCirculars = circularInventories.stream()
-                .filter(inv -> warehouseById.containsKey(inv.getLocationId()))
+                .filter(inv -> allowedWarehouseIds.contains(inv.getLocationId()))
                 .filter(inv -> Math.max(0, n(inv.getAvailableQuantity())) > 0)
                 .toList();
         if (warehouseCirculars.isEmpty()) {
@@ -780,11 +801,51 @@ public class InventoryService {
                 .filter(row -> matchesMaterialFilter(row, safeMaterialGroup, safeMaterialName, safeMinRatio))
                 .sorted(buildCircularComparator(sortSpec))
                 .toList();
+        putCircularInventoryCache(cacheKey, filtered);
 
         return buildCircularInventoryPage(filtered, safePage, safeSize, filtered.size());
     }
 
     // 순환재고 페이지 응답 객체를 생성한다.
+    private String buildCircularInventoryCacheKey(Sort sortSpec,
+                                                  String keyword,
+                                                  Set<String> warehouseCodes,
+                                                  String materialGroup,
+                                                  String materialName,
+                                                  int minRatio) {
+        String sortValue = sortSpec.stream()
+                .map(order -> order.getProperty() + ":" + order.getDirection().name())
+                .collect(Collectors.joining("|"));
+        String warehouseValue = warehouseCodes == null
+                ? ""
+                : warehouseCodes.stream().sorted().collect(Collectors.joining(","));
+        return String.join("||",
+                sortValue,
+                safeText(keyword),
+                warehouseValue,
+                safeText(materialGroup),
+                safeText(materialName),
+                String.valueOf(minRatio)
+        );
+    }
+
+    private List<InventoryDto.CircularInventoryRes> getCachedCircularInventoryRows(String key) {
+        if (key == null || key.isBlank()) return null;
+        CircularInventoryCacheEntry entry = circularInventoryCache.get(key);
+        if (entry == null) return null;
+        long now = System.currentTimeMillis();
+        if (now - entry.createdAtMillis > CIRCULAR_INVENTORY_CACHE_TTL_MS) {
+            circularInventoryCache.remove(key);
+            return null;
+        }
+        return entry.rows;
+    }
+
+    private void putCircularInventoryCache(String key, List<InventoryDto.CircularInventoryRes> rows) {
+        if (key == null || key.isBlank()) return;
+        circularInventoryCache.put(key, new CircularInventoryCacheEntry(System.currentTimeMillis(), rows));
+    }
+
     private InventoryDto.CircularInventoryPageRes buildCircularInventoryPage(List<InventoryDto.CircularInventoryRes> rows,
                                                                              int page,
                                                                              int size,
