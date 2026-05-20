@@ -75,3 +75,8 @@ stockit:
     ai:
       embedding-timeout-ms: 15000
       rationale-timeout-ms: 60000
+  elasticsearch:
+    host: ${ES_HOST:stockit-es-es-http.stockit-elk.svc.cluster.local}
+    port: ${ES_PORT:9200}
+    user: ${ES_USER:elastic}
+    password: ${ES_PASSWORD:}
