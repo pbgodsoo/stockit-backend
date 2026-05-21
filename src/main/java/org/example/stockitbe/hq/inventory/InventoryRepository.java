@@ -1,6 +1,8 @@
 package org.example.stockitbe.hq.inventory;
 
 import jakarta.persistence.LockModeType;
+import org.example.stockitbe.hq.inventory.model.CircularInventoryCompositionRow;
+import org.example.stockitbe.hq.inventory.model.CircularInventoryPageRow;
 import org.example.stockitbe.hq.inventory.model.Inventory;
 import org.example.stockitbe.hq.inventory.model.InventoryStatus;
 import org.example.stockitbe.store.inventory.model.StoreItemRow;
