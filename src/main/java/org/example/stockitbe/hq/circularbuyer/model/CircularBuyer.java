@@ -35,7 +35,7 @@ public class CircularBuyer extends BaseEntity {
 
     // 생산품 키워드 배열 — JSON 컬럼 (정규화 X, 검색 빈도 낮음)
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "factory_product", columnDefinition = "json")
+    @Column(name = "factory_product", columnDefinition = "longtext")
     private List<String> factoryProduct;
 
     @Column(name = "description", columnDefinition = "TEXT")
@@ -67,7 +67,7 @@ public class CircularBuyer extends BaseEntity {
 
     // 임베딩 1536차원 — AI 추천 phase 에서 채움. NULL 허용 (ADR-021).
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "embedding", columnDefinition = "json")
+    @Column(name = "embedding", columnDefinition = "longtext")
     private List<Double> embedding;
 
     @Builder
