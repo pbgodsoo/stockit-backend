@@ -10,9 +10,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,17 +33,33 @@ public class CategoryService {
 
     @Transactional(readOnly = true)
     public List<CategoryDto.TreeRes> findAllTree() {
-        List<Category> roots = categoryRepository.findAllByParentIdIsNullOrderBySortOrderAscIdAsc();
+        List<Category> categories = categoryRepository.findAllByOrderByIdAsc();
+        Map<Long, List<Category>> childrenByParentId = categories.stream()
+                .filter(category -> category.getParentId() != null)
+                .collect(Collectors.groupingBy(Category::getParentId));
+
+        List<Category> roots = categories.stream()
+                .filter(category -> category.getParentId() == null)
+                .sorted(categoryDisplayOrder())
+                .toList();
         List<CategoryDto.TreeRes> result = new ArrayList<>();
 
         for (Category root : roots) {
-            List<Category> children = categoryRepository.findAllByParentIdOrderBySortOrderAscIdAsc(root.getId());
+            List<Category> children = childrenByParentId.getOrDefault(root.getId(), List.of()).stream()
+                    .sorted(categoryDisplayOrder())
+                    .toList();
             List<CategoryDto.TreeRes> childRes = children.stream()
                     .map(child -> CategoryDto.TreeRes.from(child, root.getCode(), List.of()))
                     .toList();
             result.add(CategoryDto.TreeRes.from(root, null, childRes));
         }
         return result;
+    }
+
+    private static Comparator<Category> categoryDisplayOrder() {
+        return Comparator
+                .comparing(Category::getSortOrder, Comparator.nullsLast(Integer::compareTo))
+                .thenComparing(Category::getId, Comparator.nullsLast(Long::compareTo));
     }
 
     @Transactional(readOnly = true)
