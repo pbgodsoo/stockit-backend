@@ -12,6 +12,7 @@ import org.example.stockitbe.hq.infrastructure.model.LocationType;
 import org.example.stockitbe.hq.inventory.InventoryRepository;
 import org.example.stockitbe.hq.inventory.InventoryService;
 import org.example.stockitbe.hq.inventory.model.Inventory;
+import org.example.stockitbe.hq.inventory.model.InventoryStatus;
 import org.example.stockitbe.hq.product.ProductMasterRepository;
 import org.example.stockitbe.hq.product.ProductSkuRepository;
 import org.example.stockitbe.hq.product.model.ProductMaster;
@@ -213,7 +214,8 @@ public class StoreSaleService {
         validateLineQuantity(line);
         ProductSku sku = lookupActiveSku(line.getSkuCode());
 
-        Inventory inventory = inventoryRepository.findBySkuIdAndLocationIdForUpdate(sku.getId(), store.getId())
+        Inventory inventory = inventoryRepository.findWithLockBySkuIdAndLocationIdAndInventoryStatus(
+                        sku.getId(), store.getId(), InventoryStatus.NORMAL)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.STORE_SALE_INSUFFICIENT_STOCK));
         if (!inventory.canSell(line.getQuantity())) {
             throw BaseException.from(BaseResponseStatus.STORE_SALE_INSUFFICIENT_STOCK);

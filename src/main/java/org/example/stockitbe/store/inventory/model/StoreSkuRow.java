@@ -12,5 +12,7 @@ public interface StoreSkuRow {
     Integer getActualStock();
     Integer getAvailableStock();
     Integer getSafetyStock();
+    Long getUnitPrice();
+    Integer getInboundExpectedQuantity();
     String getStatus();
 }

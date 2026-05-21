@@ -108,9 +108,11 @@ public class StoreInventoryService {
                 row.getChildCategory(),
                 row.getColor(),
                 row.getSize(),
+                l(row.getUnitPrice()),
                 n(row.getActualStock()),
                 n(row.getAvailableStock()),
                 n(row.getSafetyStock()),
+                n(row.getInboundExpectedQuantity()),
                 row.getStatus()
         ));
 
@@ -233,6 +235,10 @@ public class StoreInventoryService {
 
     private int n(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    private long l(Long value) {
+        return value == null ? 0L : value;
     }
 
     private String blankToNull(String value) {
