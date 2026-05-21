@@ -2,15 +2,17 @@ package org.example.stockitbe.hq.inventory;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.FieldValue;
+import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch._types.aggregations.Aggregate;
 import co.elastic.clients.elasticsearch._types.aggregations.LongTermsBucket;
 import co.elastic.clients.elasticsearch._types.aggregations.StringTermsBucket;
+import co.elastic.clients.elasticsearch._types.aggregations.TopHitsAggregate;
 import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch._types.query_dsl.TermsQueryField;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
-import co.elastic.clients.elasticsearch._types.aggregations.TopHitsAggregate;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
+import co.elastic.clients.util.NamedValue;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
@@ -39,18 +41,22 @@ import java.util.Set;
 // ADR-028 전사 재고 조회 Read-side — Elasticsearch CQRS.
 // Command(MariaDB)/Query(ES) 책임 분리. Logstash JDBC pipeline 으로 동기화된 `inventory` 인덱스를 조회.
 // QUERY_ALLOWED_STATUSES (NORMAL/CIRCULAR_CANDIDATE) 필터는 ES query 측에서 처리.
+// terms agg + bucket_sort (ES 측 페이지 자르기) + cardinality (totalElements) 패턴 — 메모리 subList 회귀 제거.
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class InventoryQueryService {
 
     private static final String INDEX = "inventory";
-    private static final int MAX_PRODUCT_BUCKETS = 1000;
+    private static final int MAX_PRODUCT_BUCKETS = 5000;
     private static final int MAX_SKU_BUCKETS = 5000;
 
     private final ElasticsearchClient esClient;
     private final InfrastructureRepository infrastructureRepository;
 
+    // 전사 재고(품목 단위) 페이지 조회 — terms agg + bucket_sort (ES 측 페이지 자르기) + cardinality (totalElements).
+    // 모놀리식 시기 응답 포맷(page/totalElements/totalPages) 그대로 유지 (FE 호환).
+    // ES 단순 이전(PR #320) 의 회귀(1000 buckets fetch + 메모리 subList) 제거 — buckets 자르기를 ES coordinator 가 수행.
     @Transactional(readOnly = true)
     public InventoryDto.CompanyWidePageRes findCompanyWide(LocationType locationType,
                                                             List<Long> locationIds,
@@ -69,6 +75,8 @@ public class InventoryQueryService {
                 Math.max(pageable.getPageNumber(), 0),
                 Math.max(pageable.getPageSize(), 1)
         );
+        int from = safePageable.getPageNumber() * safePageable.getPageSize();
+        int pageSize = safePageable.getPageSize();
 
         List<Query> filters = buildCommonFilters(
                 locationType, locationIds, safeParent, safeChild, safeCategory, status, safeKeyword
@@ -80,35 +88,41 @@ public class InventoryQueryService {
                     .size(0)
                     .query(q -> q.bool(b -> b.filter(filters)))
                     .aggregations("by_product", a -> a
-                            .terms(t -> t.field("product_code.keyword").size(MAX_PRODUCT_BUCKETS))
+                            .terms(t -> t.field("product_code.keyword")
+                                    .size(MAX_PRODUCT_BUCKETS)
+                                    .order(NamedValue.of("_key", SortOrder.Asc)))
                             .aggregations("total_quantity", sub -> sub.sum(sm -> sm.field("quantity")))
                             .aggregations("total_available", sub -> sub.sum(sm -> sm.field("available_quantity")))
                             .aggregations("last_update", sub -> sub.max(mx -> mx.field("update_date")))
                             .aggregations("safety_warehouse", sub -> sub
-                                    .filter(qf -> qf.term(t -> t.field("location_type").value("WAREHOUSE")))
+                                    .filter(qf -> qf.term(t -> t.field("location_type.keyword").value("WAREHOUSE")))
                                     .aggregations("sum_w", inner -> inner.sum(sm -> sm.field("warehouse_safety_stock"))))
                             .aggregations("safety_store", sub -> sub
-                                    .filter(qf -> qf.term(t -> t.field("location_type").value("STORE")))
+                                    .filter(qf -> qf.term(t -> t.field("location_type.keyword").value("STORE")))
                                     .aggregations("sum_s", inner -> inner.sum(sm -> sm.field("store_safety_stock"))))
                             .aggregations("product_meta", sub -> sub
                                     .topHits(th -> th.size(1)
                                             .source(src -> src.filter(f -> f.includes(
                                                     "product_name", "parent_category", "child_category"
                                             )))))
-                    ), InventoryDoc.class);
+                            // bucket_sort: terms buckets 를 coordinator 가 from/size 로 자른다 → BE 로 전송되는 buckets 는 pageSize 만.
+                            .aggregations("page_window", sub -> sub
+                                    .bucketSort(bs -> bs.from(from).size(pageSize)))
+                    )
+                    .aggregations("total_products", a -> a
+                            .cardinality(c -> c.field("product_code.keyword"))),
+                    InventoryDoc.class);
 
             Aggregate byProduct = response.aggregations().get("by_product");
             List<StringTermsBucket> buckets = byProduct.sterms().buckets().array();
 
-            List<InventoryDto.CompanyWideRes> all = buckets.stream()
+            List<InventoryDto.CompanyWideRes> pageContent = buckets.stream()
                     .map(this::toCompanyWideRes)
                     .toList();
 
-            int from = Math.min(safePageable.getPageNumber() * safePageable.getPageSize(), all.size());
-            int to = Math.min(from + safePageable.getPageSize(), all.size());
-            List<InventoryDto.CompanyWideRes> pageContent = all.subList(from, to);
+            long total = (long) response.aggregations().get("total_products").cardinality().value();
+            Page<InventoryDto.CompanyWideRes> page = new PageImpl<>(pageContent, safePageable, total);
 
-            Page<InventoryDto.CompanyWideRes> page = new PageImpl<>(pageContent, safePageable, all.size());
             return InventoryDto.CompanyWidePageRes.from(page, buildLocationOptions(locationType));
         } catch (Exception e) {
             log.error("findCompanyWide ES query failed", e);
@@ -213,6 +227,8 @@ public class InventoryQueryService {
                 Math.max(pageable.getPageNumber(), 0),
                 Math.max(pageable.getPageSize(), 1)
         );
+        int from = safePageable.getPageNumber() * safePageable.getPageSize();
+        int pageSize = safePageable.getPageSize();
 
         List<Query> filters = new ArrayList<>();
         filters.add(allowedStatusFilter());
@@ -236,14 +252,16 @@ public class InventoryQueryService {
                     .size(0)
                     .query(q -> q.bool(b -> b.filter(filters).must(musts)))
                     .aggregations("by_sku", a -> a
-                            .terms(t -> t.field("sku_id").size(MAX_SKU_BUCKETS))
+                            .terms(t -> t.field("sku_id")
+                                    .size(MAX_SKU_BUCKETS)
+                                    .order(NamedValue.of("_key", SortOrder.Asc)))
                             .aggregations("total_quantity", sub -> sub.sum(sm -> sm.field("quantity")))
                             .aggregations("total_available", sub -> sub.sum(sm -> sm.field("available_quantity")))
                             .aggregations("safety_warehouse", sub -> sub
-                                    .filter(qf -> qf.term(t -> t.field("location_type").value("WAREHOUSE")))
+                                    .filter(qf -> qf.term(t -> t.field("location_type.keyword").value("WAREHOUSE")))
                                     .aggregations("sum_w", inner -> inner.sum(sm -> sm.field("warehouse_safety_stock"))))
                             .aggregations("safety_store", sub -> sub
-                                    .filter(qf -> qf.term(t -> t.field("location_type").value("STORE")))
+                                    .filter(qf -> qf.term(t -> t.field("location_type.keyword").value("STORE")))
                                     .aggregations("sum_s", inner -> inner.sum(sm -> sm.field("store_safety_stock"))))
                             .aggregations("sku_meta", sub -> sub
                                     .topHits(th -> th.size(1)
@@ -252,20 +270,23 @@ public class InventoryQueryService {
                                                     "product_code", "product_name",
                                                     "parent_category", "child_category"
                                             )))))
-                    ), InventoryDoc.class);
+                            // bucket_sort: terms buckets 를 coordinator 가 from/size 로 자른다 → BE 로 전송되는 buckets 는 pageSize 만.
+                            .aggregations("page_window", sub -> sub
+                                    .bucketSort(bs -> bs.from(from).size(pageSize)))
+                    )
+                    .aggregations("total_skus", a -> a
+                            .cardinality(c -> c.field("sku_id"))),
+                    InventoryDoc.class);
 
             Aggregate bySku = response.aggregations().get("by_sku");
             List<LongTermsBucket> buckets = bySku.lterms().buckets().array();
 
-            List<InventoryDto.CompanyWideSkuRowRes> all = buckets.stream()
+            List<InventoryDto.CompanyWideSkuRowRes> pageContent = buckets.stream()
                     .map(this::toSkuRowRes)
-                    .sorted(Comparator.comparing(r -> r.getSkuCode() == null ? "" : r.getSkuCode()))
                     .toList();
 
-            int from = Math.min(safePageable.getPageNumber() * safePageable.getPageSize(), all.size());
-            int to = Math.min(from + safePageable.getPageSize(), all.size());
-            List<InventoryDto.CompanyWideSkuRowRes> pageContent = all.subList(from, to);
-            Page<InventoryDto.CompanyWideSkuRowRes> page = new PageImpl<>(pageContent, safePageable, all.size());
+            long total = (long) response.aggregations().get("total_skus").cardinality().value();
+            Page<InventoryDto.CompanyWideSkuRowRes> page = new PageImpl<>(pageContent, safePageable, total);
 
             if (safeStatus != null) {
                 List<InventoryDto.CompanyWideSkuRowRes> filtered = page.getContent().stream()
@@ -310,8 +331,8 @@ public class InventoryQueryService {
                     .index(INDEX)
                     .size(0)
                     .query(q -> q.bool(b -> b.filter(filters).must(musts)))
-                    .aggregations("colors", a -> a.terms(t -> t.field("color").size(100)))
-                    .aggregations("sizes", a -> a.terms(t -> t.field("size").size(100))),
+                    .aggregations("colors", a -> a.terms(t -> t.field("color.keyword").size(100)))
+                    .aggregations("sizes", a -> a.terms(t -> t.field("size.keyword").size(100))),
                     Void.class);
 
             List<String> colors = response.aggregations().get("colors").sterms().buckets().array().stream()
@@ -368,12 +389,15 @@ public class InventoryQueryService {
                 .map(s -> FieldValue.of(s.name()))
                 .toList();
         return Query.of(q -> q.terms(t -> t
-                .field("inventory_status")
+                .field("inventory_status.keyword")
                 .terms(TermsQueryField.of(tf -> tf.value(values)))));
     }
 
+    // text 필드는 keyword 서브필드 사용 (Logstash dynamic mapping 기준 ES 기본값).
+    // 호출처에서 이미 ".keyword" 명시한 경우 그대로 사용.
     private Query termQuery(String field, String value) {
-        return Query.of(q -> q.term(t -> t.field(field).value(value)));
+        String f = field.endsWith(".keyword") ? field : field + ".keyword";
+        return Query.of(q -> q.term(t -> t.field(f).value(value)));
     }
 
     private Query termsLongQuery(String field, List<Long> ids) {
