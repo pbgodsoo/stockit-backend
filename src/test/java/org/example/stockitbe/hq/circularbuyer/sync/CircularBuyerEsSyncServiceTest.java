@@ -33,6 +33,8 @@ class CircularBuyerEsSyncServiceTest {
         Map<String, Object> doc = service.toEsDocument(buyer);
 
         assertThat(doc.get("code")).isEqualTo("RCV-00001");
+        assertThat(doc.get("company_name_chosung")).isEqualTo("ㅎㅇㅍㄹㅅ");
+        assertThat(doc.get("manager_name_chosung")).isEqualTo("ㅇㄷㅇ");
         assertThat(doc.get("factory_product")).isInstanceOf(List.class);
         assertThat((List<String>) doc.get("factory_product")).contains("작업용 점퍼", "린넨 셔츠");
         assertThat(doc.get("embedding")).isInstanceOf(List.class);

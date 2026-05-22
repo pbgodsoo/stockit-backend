@@ -84,7 +84,7 @@ stockit:
     port: ${ES_PORT:9200}
     user: ${ES_USER:elastic}
     password: ${ES_PASSWORD:}
-    circular-buyer-index: ${ES_CIRCULAR_BUYER_INDEX:circular-buyer-v1}
+    circular-buyer-index: ${ES_CIRCULAR_BUYER_INDEX:circular-buyer-search}
     sync:
       enabled: ${ES_SYNC_ENABLED:true}
       embedding-model: ${ES_SYNC_EMBEDDING_MODEL:text-embedding-3-small}
