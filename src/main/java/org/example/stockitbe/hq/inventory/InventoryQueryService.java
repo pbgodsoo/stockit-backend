@@ -94,10 +94,11 @@ public class InventoryQueryService {
                     ProductInventoryDoc.class);
 
             long total = response.hits().total() == null ? 0L : response.hits().total().value();
+            final List<Long> safeLocationIds = locationIds;
             List<InventoryDto.CompanyWideRes> items = response.hits().hits().stream()
                     .map(Hit::source)
                     .filter(d -> d != null)
-                    .map(d -> toCompanyWideResFromDoc(d, locationType))
+                    .map(d -> toCompanyWideResFromDoc(d, locationType, safeLocationIds))
                     .toList();
 
             Page<InventoryDto.CompanyWideRes> page = new PageImpl<>(items, safePageable, total);
@@ -159,10 +160,11 @@ public class InventoryQueryService {
                     SkuInventoryDoc.class);
 
             long total = response.hits().total() == null ? 0L : response.hits().total().value();
+            final List<Long> safeLocationIds = locationIds;
             List<InventoryDto.CompanyWideSkuRowRes> items = response.hits().hits().stream()
                     .map(Hit::source)
                     .filter(d -> d != null)
-                    .map(d -> toSkuRowResFromDoc(d, locationType))
+                    .map(d -> toSkuRowResFromDoc(d, locationType, safeLocationIds))
                     .toList();
 
             Page<InventoryDto.CompanyWideSkuRowRes> page = new PageImpl<>(items, safePageable, total);
@@ -220,11 +222,12 @@ public class InventoryQueryService {
                     SkuInventoryDoc.class);
 
             final LocationType lt = locationType;
+            final List<Long> safeLocationIds = locationIds;
             return response.hits().hits().stream()
                     .map(Hit::source)
                     .filter(d -> d != null)
                     .filter(d -> nz(d.getTotalQuantity()) > 0 || nz(d.getTotalAvailable()) > 0)
-                    .map(d -> toSkuDetailResFromDoc(d, lt))
+                    .map(d -> toSkuDetailResFromDoc(d, lt, safeLocationIds))
                     .toList();
         } catch (Exception e) {
             log.error("findCompanyWideSkuDetails ES query failed", e);
@@ -310,13 +313,30 @@ public class InventoryQueryService {
         return Query.of(q -> q.term(t -> t.field(field).value(value)));
     }
 
-    // locationType 별로 store_*, warehouse_*, total_* field 선택.
+    // locationIds (특정 거점) > locationType (매장/창고) > 전체 우선순위로 재고 합산.
+    // locationIds 있으면 doc.by_location 의 matching element 만 합산 (sub-group 색인이 거점 단위 element 보장).
     private static class StockTriple {
         final int actual, available, safety;
         StockTriple(int a, int av, int s) { this.actual = a; this.available = av; this.safety = s; }
     }
 
-    private StockTriple pickProductStocks(ProductInventoryDoc d, LocationType lt) {
+    private StockTriple sumByLocations(List<ProductInventoryDoc.LocationStock> byLocation, List<Long> locationIds) {
+        if (byLocation == null) return new StockTriple(0, 0, 0);
+        int q = 0, a = 0, s = 0;
+        for (ProductInventoryDoc.LocationStock loc : byLocation) {
+            if (loc.getLocationId() != null && locationIds.contains(loc.getLocationId())) {
+                q += nz(loc.getQuantity());
+                a += nz(loc.getAvailableQuantity());
+                s += nz(loc.getSafetyStock());
+            }
+        }
+        return new StockTriple(q, a, s);
+    }
+
+    private StockTriple pickProductStocks(ProductInventoryDoc d, LocationType lt, List<Long> locationIds) {
+        if (locationIds != null && !locationIds.isEmpty()) {
+            return sumByLocations(d.getByLocation(), locationIds);
+        }
         if (lt == LocationType.STORE) {
             return new StockTriple(nz(d.getStoreQuantity()), nz(d.getStoreAvailable()), nz(d.getStoreSafety()));
         } else if (lt == LocationType.WAREHOUSE) {
@@ -325,7 +345,10 @@ public class InventoryQueryService {
         return new StockTriple(nz(d.getTotalQuantity()), nz(d.getTotalAvailable()), nz(d.getTotalSafety()));
     }
 
-    private StockTriple pickSkuStocks(SkuInventoryDoc d, LocationType lt) {
+    private StockTriple pickSkuStocks(SkuInventoryDoc d, LocationType lt, List<Long> locationIds) {
+        if (locationIds != null && !locationIds.isEmpty()) {
+            return sumByLocations(d.getByLocation(), locationIds);
+        }
         if (lt == LocationType.STORE) {
             return new StockTriple(nz(d.getStoreQuantity()), nz(d.getStoreAvailable()), nz(d.getStoreSafety()));
         } else if (lt == LocationType.WAREHOUSE) {
@@ -334,8 +357,8 @@ public class InventoryQueryService {
         return new StockTriple(nz(d.getTotalQuantity()), nz(d.getTotalAvailable()), nz(d.getTotalSafety()));
     }
 
-    private InventoryDto.CompanyWideRes toCompanyWideResFromDoc(ProductInventoryDoc doc, LocationType locationType) {
-        StockTriple s = pickProductStocks(doc, locationType);
+    private InventoryDto.CompanyWideRes toCompanyWideResFromDoc(ProductInventoryDoc doc, LocationType locationType, List<Long> locationIds) {
+        StockTriple s = pickProductStocks(doc, locationType, locationIds);
         return InventoryDto.CompanyWideRes.builder()
                 .itemCode(doc.getProductCode())
                 .parentCategory(nullToEmpty(doc.getParentCategory()))
@@ -349,8 +372,8 @@ public class InventoryQueryService {
                 .build();
     }
 
-    private InventoryDto.CompanyWideSkuRowRes toSkuRowResFromDoc(SkuInventoryDoc doc, LocationType locationType) {
-        StockTriple s = pickSkuStocks(doc, locationType);
+    private InventoryDto.CompanyWideSkuRowRes toSkuRowResFromDoc(SkuInventoryDoc doc, LocationType locationType, List<Long> locationIds) {
+        StockTriple s = pickSkuStocks(doc, locationType, locationIds);
         return InventoryDto.CompanyWideSkuRowRes.builder()
                 .skuCode(nullToEmpty(doc.getSkuCode()))
                 .itemCode(nullToEmpty(doc.getProductCode()))
@@ -366,8 +389,8 @@ public class InventoryQueryService {
                 .build();
     }
 
-    private InventoryDto.CompanyWideSkuDetailRes toSkuDetailResFromDoc(SkuInventoryDoc doc, LocationType locationType) {
-        StockTriple s = pickSkuStocks(doc, locationType);
+    private InventoryDto.CompanyWideSkuDetailRes toSkuDetailResFromDoc(SkuInventoryDoc doc, LocationType locationType, List<Long> locationIds) {
+        StockTriple s = pickSkuStocks(doc, locationType, locationIds);
         return InventoryDto.CompanyWideSkuDetailRes.builder()
                 .skuCode(nullToEmpty(doc.getSkuCode()))
                 .color(nullToEmpty(doc.getColor()))
