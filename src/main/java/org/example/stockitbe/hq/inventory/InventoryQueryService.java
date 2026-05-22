@@ -21,7 +21,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -44,7 +43,6 @@ public class InventoryQueryService {
     private final InfrastructureRepository infrastructureRepository;
 
     // 전사 재고(품목 단위) 페이지 조회 — inventory-master 인덱스 + match + from/size + nested filter.
-    @Transactional(readOnly = true)
     public InventoryDto.CompanyWidePageRes findCompanyWide(LocationType locationType,
                                                             List<Long> locationIds,
                                                             String parentCategory,
@@ -111,7 +109,6 @@ public class InventoryQueryService {
     }
 
     // 전사 재고(SKU 단위) 페이지 조회 — inventory-sku 인덱스 + match + from/size + nested filter.
-    @Transactional(readOnly = true)
     public InventoryDto.CompanyWideSkuPageRes findCompanyWideSkus(LocationType locationType,
                                                                     List<Long> locationIds,
                                                                     String parentCategory,
@@ -185,7 +182,6 @@ public class InventoryQueryService {
     }
 
     // 전사 재고 SKU 상세 조회 (특정 product 의 SKU 들) — inventory-sku 인덱스 + term: product_code.
-    @Transactional(readOnly = true)
     public List<InventoryDto.CompanyWideSkuDetailRes> findCompanyWideSkuDetails(String itemCode,
                                                                                  LocationType locationType,
                                                                                  List<Long> locationIds,
@@ -237,7 +233,6 @@ public class InventoryQueryService {
     }
 
     // SKU facets (color/size distinct) — inventory-sku 인덱스 + 단순 terms agg.
-    @Transactional(readOnly = true)
     public InventoryDto.CompanyWideSkuFacetsRes findCompanyWideSkuFacets(LocationType locationType,
                                                                           List<Long> locationIds,
                                                                           String parentCategory,
