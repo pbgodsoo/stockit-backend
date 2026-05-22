@@ -33,7 +33,8 @@ class CircularBuyerEsSyncServiceTest {
         Map<String, Object> doc = service.toEsDocument(buyer);
 
         assertThat(doc.get("code")).isEqualTo("RCV-00001");
-        assertThat(doc.get("company_name_chosung")).isEqualTo("ㅎㅇㅍㄹㅅ");
+        assertThat(doc.get("company_name_normalized")).isEqualTo("홍익플러스");
+        assertThat(doc.get("company_name_chosung")).isEqualTo("ㅈㅎㅇㅍㄹㅅ");
         assertThat(doc.get("manager_name_chosung")).isEqualTo("ㅇㄷㅇ");
         assertThat(doc.get("factory_product")).isInstanceOf(List.class);
         assertThat((List<String>) doc.get("factory_product")).contains("작업용 점퍼", "린넨 셔츠");
@@ -69,7 +70,7 @@ class CircularBuyerEsSyncServiceTest {
 
     private CircularBuyer sampleBuyer() {
         CircularBuyerDto.CreateReq req = CircularBuyerDto.CreateReq.builder()
-                .companyName("홍익플러스")
+                .companyName("(주) 홍익플러스")
                 .industryGroup("의복 제조업")
                 .factoryProduct(List.of("작업용 점퍼", "린넨 셔츠"))
                 .description("순환 거래처")

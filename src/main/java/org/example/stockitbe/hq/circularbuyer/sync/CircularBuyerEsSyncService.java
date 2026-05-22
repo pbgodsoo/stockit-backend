@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.stockitbe.hq.circularbuyer.ChosungUtils;
+import org.example.stockitbe.hq.circularbuyer.CorporateNameNormalizer;
 import org.example.stockitbe.hq.circularbuyer.model.CircularBuyer;
 import org.example.stockitbe.hq.circularbuyer.sync.model.EsSyncOperationType;
 import org.example.stockitbe.hq.circularbuyer.sync.model.EsSyncOutbox;
@@ -86,6 +87,7 @@ public class CircularBuyerEsSyncService {
         doc.put("buyer_id", buyer.getId());
         doc.put("code", buyer.getCode());
         doc.put("company_name", buyer.getCompanyName());
+        doc.put("company_name_normalized", CorporateNameNormalizer.stripLeadingMarker(buyer.getCompanyName()));
         doc.put("company_name_chosung", ChosungUtils.toChosung(buyer.getCompanyName()));
         doc.put("industry_group", buyer.getIndustryGroup());
         doc.put("factory_product", buyer.getFactoryProduct() == null ? List.of() : buyer.getFactoryProduct());

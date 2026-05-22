@@ -47,6 +47,7 @@ public class CircularBuyerEsSearchService {
         List<Query> musts = new ArrayList<>();
         if (safeKeyword != null) {
             String chosungKeyword = ChosungUtils.toChosung(safeKeyword);
+            String normalizedKeyword = CorporateNameNormalizer.stripLeadingMarker(safeKeyword);
             List<Query> shoulds = new ArrayList<>();
             shoulds.add(Query.of(q -> q.multiMatch(m -> m
                     .query(safeKeyword)
@@ -59,6 +60,15 @@ public class CircularBuyerEsSearchService {
                             "factory_product",
                             "industry_group.text"
                     ))));
+            if (!normalizedKeyword.isBlank() && !normalizedKeyword.equals(safeKeyword)) {
+                shoulds.add(Query.of(q -> q.multiMatch(m -> m
+                        .query(normalizedKeyword)
+                        .fields(
+                                "company_name_normalized^5",
+                                "company_name.ngram^2",
+                                "company_name^2"
+                        ))));
+            }
             if (!chosungKeyword.isBlank()) {
                 shoulds.add(prefixQuery("company_name_chosung", chosungKeyword));
                 shoulds.add(prefixQuery("manager_name_chosung", chosungKeyword));
