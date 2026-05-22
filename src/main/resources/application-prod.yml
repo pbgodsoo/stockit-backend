@@ -85,3 +85,12 @@ stockit:
     user: ${ES_USER:elastic}
     password: ${ES_PASSWORD:}
     circular-buyer-index: ${ES_CIRCULAR_BUYER_INDEX:circular-buyer-v1}
+    sync:
+      enabled: ${ES_SYNC_ENABLED:true}
+      embedding-model: ${ES_SYNC_EMBEDDING_MODEL:text-embedding-3-small}
+      embedding-version: ${ES_SYNC_EMBEDDING_VERSION:1}
+      retry:
+        interval-ms: ${ES_SYNC_RETRY_INTERVAL_MS:30000}
+        base-delay-ms: ${ES_SYNC_RETRY_BASE_DELAY_MS:30000}
+        max-attempts: ${ES_SYNC_RETRY_MAX_ATTEMPTS:8}
+        batch-size: ${ES_SYNC_RETRY_BATCH_SIZE:100}
