@@ -9,6 +9,8 @@ import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
 import org.example.stockitbe.hq.inventory.model.CircularMaterialPricePolicy;
+import org.example.stockitbe.hq.inventory.model.CircularInventoryCompositionRow;
+import org.example.stockitbe.hq.inventory.model.CircularInventoryPageRow;
 import org.example.stockitbe.hq.inventory.model.Inventory;
 import org.example.stockitbe.hq.inventory.model.InventoryCandidateCondition;
 import org.example.stockitbe.hq.inventory.model.InventoryDto;
@@ -84,6 +86,12 @@ public class InventoryService {
             "ELASTANE", "스판덱스",
             MAT_BLEND, "혼방"
     );
+
+
+    private static final long CIRCULAR_INVENTORY_CACHE_TTL_MS = 15_000L;
+    private final Map<String, CircularInventoryCacheEntry> circularInventoryCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private record CircularInventoryCacheEntry(long createdAtMillis, List<InventoryDto.CircularInventoryRes> rows) {}
 
     // 전사 재고 불균형 SKU를 계산해 반환한다.
     @Transactional(readOnly = true)
@@ -689,6 +697,7 @@ public class InventoryService {
                                                                          String materialGroup,
                                                                          String materialName,
                                                                          Integer minRatio) {
+        // 1) 요청 파라미터를 안전한 기본값으로 정규화한다.
         int safePage = Math.max(0, page == null ? 0 : page);
         int safeSize = normalizePageSize(size);
         Sort sortSpec = parseCircularSort(sort);
@@ -701,89 +710,132 @@ public class InventoryService {
         String safeMaterialGroup = materialGroup == null ? "" : materialGroup.trim();
         String safeMaterialName = materialName == null ? "" : normalizeMaterialName(materialName.trim());
         int safeMinRatio = Math.max(0, minRatio == null ? 0 : minRatio);
+        boolean hasWarehouseCodes = !warehouseCodeSet.isEmpty();
+        List<String> warehouseCodeParams = hasWarehouseCodes ? warehouseCodeSet.stream().sorted().toList() : List.of("");
+        String materialGroupFilter = normalizeCircularMaterialGroupFilter(safeMaterialGroup);
+        Sort.Order order = sortSpec.stream().findFirst().orElse(Sort.Order.asc("skuCode"));
+        String sortField = "quantity".equals(order.getProperty()) ? "quantity" : "skuCode";
+        String sortDirection = order.getDirection() == Sort.Direction.DESC ? "desc" : "asc";
 
-        List<Inventory> circularInventories = inventoryRepository.findAllByInventoryStatus(InventoryStatus.CIRCULAR);
-        if (circularInventories.isEmpty()) {
-            return buildCircularInventoryPage(List.of(), safePage, safeSize, 0);
+        // 2) 메모리 슬라이싱이 아니라 DB 페이지 쿼리로 바로 조회한다.
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(safePage, safeSize);
+        org.springframework.data.domain.Page<CircularInventoryPageRow> pageRows = inventoryRepository.findCircularInventoriesPaged(
+                hasWarehouseCodes,
+                warehouseCodeParams,
+                safeKeyword.isBlank() ? null : safeKeyword,
+                materialGroupFilter,
+                safeMaterialName.isBlank() ? null : safeMaterialName,
+                safeMinRatio,
+                sortField,
+                sortDirection,
+                pageable
+        );
+        if (pageRows.isEmpty()) {
+            return InventoryDto.CircularInventoryPageRes.from(List.of(), safePage, safeSize, pageRows.getTotalElements(), pageRows.getTotalPages(), false, safePage > 0);
         }
 
-        Map<Long, Infrastructure> warehouseById = infrastructureRepository.findAll().stream()
-                .filter(i -> i.getLocationType() == LocationType.WAREHOUSE)
-                .collect(Collectors.toMap(Infrastructure::getId, Function.identity()));
-        List<Inventory> warehouseCirculars = circularInventories.stream()
-                .filter(inv -> warehouseById.containsKey(inv.getLocationId()))
+        // 3) 현재 페이지에 포함된 itemCode만 추출해서 소재 구성 정보를 일괄 조회한다(N+1 방지).
+        List<String> itemCodes = pageRows.getContent().stream()
+                .map(CircularInventoryPageRow::getItemCode)
+                .filter(Objects::nonNull)
+                .distinct()
                 .toList();
-        if (warehouseCirculars.isEmpty()) {
-            return buildCircularInventoryPage(List.of(), safePage, safeSize, 0);
-        }
-
-        Set<Long> skuIds = warehouseCirculars.stream().map(Inventory::getSkuId).collect(Collectors.toSet());
-        Map<Long, ProductSku> skuById = productSkuRepository.findAllById(skuIds).stream()
-                .collect(Collectors.toMap(ProductSku::getId, Function.identity()));
-        Set<String> productCodes = skuById.values().stream().map(ProductSku::getProductCode).collect(Collectors.toSet());
-        Map<String, ProductMaster> masterByCode = productMasterRepository.findAllByCodeIn(productCodes).stream()
-                .collect(Collectors.toMap(ProductMaster::getCode, Function.identity()));
-        Map<String, Material> materialByCode = materialRepository.findAllByActiveTrueOrderByCodeAsc().stream()
-                .collect(Collectors.toMap(Material::getCode, Function.identity()));
-
-        List<Category> categories = categoryRepository.findAllByOrderByIdAsc();
-        Map<String, Category> categoryByCode = categories.stream().collect(Collectors.toMap(Category::getCode, Function.identity()));
-        Map<Long, Category> categoryById = categories.stream().collect(Collectors.toMap(Category::getId, Function.identity()));
+        Map<String, List<CircularInventoryCompositionRow>> compositionRowsByItemCode = inventoryRepository
+                .findCircularInventoryCompositionsByItemCodes(itemCodes).stream()
+                .collect(Collectors.groupingBy(CircularInventoryCompositionRow::getItemCode));
         Map<String, Integer> materialPriceByCode = loadActiveMaterialPriceByCode();
 
-        List<InventoryDto.CircularInventoryRes> rows = warehouseCirculars.stream()
-                .map(inv -> {
-                    ProductSku sku = skuById.get(inv.getSkuId());
-                    if (sku == null) return null;
-                    ProductMaster master = masterByCode.get(sku.getProductCode());
-                    if (master == null) return null;
-                    Infrastructure warehouse = warehouseById.get(inv.getLocationId());
-                    if (warehouse == null) return null;
-                    Category child = categoryByCode.get(master.getCategoryCode());
-                    if (child == null) return null;
-                    Category parent = child.getParentId() == null ? child : categoryById.get(child.getParentId());
-
-                    int availableQuantity = Math.max(0, n(inv.getAvailableQuantity()));
-                    double unitWeightKg = resolveCategoryUnitWeightKg(child.getName());
+        // 4) DB row + 소재 구성/단가 정책을 결합해 화면 응답 DTO를 조립한다.
+        List<InventoryDto.CircularInventoryRes> content = pageRows.getContent().stream()
+                .map(row -> {
+                    List<CircularInventoryCompositionRow> compositionRows = compositionRowsByItemCode.getOrDefault(row.getItemCode(), List.of());
+                    List<InventoryDto.MaterialCompositionRes> compositions = compositionRows.stream()
+                            .map(comp -> InventoryDto.MaterialCompositionRes.builder()
+                                    .materialCode(safeText(comp.getMaterialCode()))
+                                    .materialNameKo(safeText(comp.getMaterialNameKo()))
+                                    .ratio(n(comp.getRatio()))
+                                    .build())
+                            .toList();
+                    String materialType = deriveMaterialTypeFromRows(compositionRows);
+                    int materialKgPrice = resolveMaterialKgPriceFromRows(compositionRows, materialPriceByCode);
+                    int availableQuantity = Math.max(0, n(row.getAvailableQuantity()));
+                    double unitWeightKg = resolveCategoryUnitWeightKg(safeText(row.getChildCategory()));
                     double totalWeightKg = round3(availableQuantity * unitWeightKg);
-
-                    List<ProductMaterialComposition> materialCompositions = master.getMaterialCompositions();
-                    String materialType = resolveMaterialTypeLabel(materialCompositions, materialByCode);
-                    List<InventoryDto.MaterialCompositionRes> compositions = toMaterialCompositionRes(materialCompositions, materialByCode);
-                    int materialKgPrice = resolveMaterialKgPrice(materialCompositions, materialByCode, materialPriceByCode);
                     long circularSalePrice = Math.round(totalWeightKg * materialKgPrice);
 
-                    return InventoryDto.CircularInventoryRes.from(
-                            inv.getId(),
-                            sku,
-                            master,
-                            warehouse.getCode(),
-                            warehouse.getName(),
-                            parent == null ? "" : parent.getName(),
-                            child.getName(),
-                            availableQuantity,
-                            materialType,
-                            compositions,
-                            materialKgPrice,
-                            unitWeightKg,
-                            totalWeightKg,
-                            circularSalePrice
-                    );
+                    return InventoryDto.CircularInventoryRes.builder()
+                            .inventoryId(row.getInventoryId())
+                            .skuCode(safeText(row.getSkuCode()))
+                            .itemCode(safeText(row.getItemCode()))
+                            .itemName(safeText(row.getItemName()))
+                            .warehouseCode(safeText(row.getWarehouseCode()))
+                            .warehouseName(safeText(row.getWarehouseName()))
+                            .parentCategory(safeText(row.getParentCategory()))
+                            .childCategory(safeText(row.getChildCategory()))
+                            .color(safeText(row.getColor()))
+                            .size(safeText(row.getSize()))
+                            .availableQuantity(availableQuantity)
+                            .materialType(materialType)
+                            .materialCompositions(compositions)
+                            .materialKgPrice(materialKgPrice)
+                            .unitWeightKg(unitWeightKg)
+                            .totalWeightKg(totalWeightKg)
+                            .circularSalePrice(circularSalePrice)
+                            .build();
                 })
-                .filter(Objects::nonNull)
                 .toList();
 
-        List<InventoryDto.CircularInventoryRes> filtered = rows.stream()
-                .filter(row -> matchesCircularKeyword(row, safeKeyword))
-                .filter(row -> matchesWarehouseCodes(row, warehouseCodeSet))
-                .filter(row -> matchesMaterialFilter(row, safeMaterialGroup, safeMaterialName, safeMinRatio))
-                .sorted(buildCircularComparator(sortSpec))
-                .toList();
-
-        return buildCircularInventoryPage(filtered, safePage, safeSize, filtered.size());
+        return InventoryDto.CircularInventoryPageRes.from(
+                content,
+                pageRows.getNumber(),
+                pageRows.getSize(),
+                pageRows.getTotalElements(),
+                pageRows.getTotalPages(),
+                pageRows.hasNext(),
+                pageRows.hasPrevious()
+        );
     }
 
     // 순환재고 페이지 응답 객체를 생성한다.
+    private String buildCircularInventoryCacheKey(Sort sortSpec,
+                                                  String keyword,
+                                                  Set<String> warehouseCodes,
+                                                  String materialGroup,
+                                                  String materialName,
+                                                  int minRatio) {
+        String sortValue = sortSpec.stream()
+                .map(order -> order.getProperty() + ":" + order.getDirection().name())
+                .collect(Collectors.joining("|"));
+        String warehouseValue = warehouseCodes == null
+                ? ""
+                : warehouseCodes.stream().sorted().collect(Collectors.joining(","));
+        return String.join("||",
+                sortValue,
+                safeText(keyword),
+                warehouseValue,
+                safeText(materialGroup),
+                safeText(materialName),
+                String.valueOf(minRatio)
+        );
+    }
+
+    private List<InventoryDto.CircularInventoryRes> getCachedCircularInventoryRows(String key) {
+        if (key == null || key.isBlank()) return null;
+        CircularInventoryCacheEntry entry = circularInventoryCache.get(key);
+        if (entry == null) return null;
+        long now = System.currentTimeMillis();
+        if (now - entry.createdAtMillis > CIRCULAR_INVENTORY_CACHE_TTL_MS) {
+            circularInventoryCache.remove(key);
+            return null;
+        }
+        return entry.rows;
+    }
+
+    private void putCircularInventoryCache(String key, List<InventoryDto.CircularInventoryRes> rows) {
+        if (key == null || key.isBlank()) return;
+        circularInventoryCache.put(key, new CircularInventoryCacheEntry(System.currentTimeMillis(), rows));
+    }
+
     private InventoryDto.CircularInventoryPageRes buildCircularInventoryPage(List<InventoryDto.CircularInventoryRes> rows,
                                                                              int page,
                                                                              int size,
@@ -1002,6 +1054,41 @@ public class InventoryService {
             case "linen" -> "리넨";
             default -> normalized;
         };
+    }
+
+    private String normalizeCircularMaterialGroupFilter(String materialGroup) {
+        String normalized = materialGroup == null ? "" : materialGroup.trim();
+        if (normalized.isBlank()) return null;
+        return switch (normalized) {
+            case "천연 단일 섬유" -> "NATURAL_SINGLE";
+            case "합성 섬유" -> "SYNTHETIC";
+            case "혼방" -> "BLEND";
+            default -> null;
+        };
+    }
+
+    private String deriveMaterialTypeFromRows(List<CircularInventoryCompositionRow> rows) {
+        if (rows == null || rows.isEmpty()) return "혼방";
+        if (rows.size() >= 2) return "혼방";
+        String group = safeText(rows.get(0).getMaterialGroup()).trim().toUpperCase(Locale.ROOT);
+        if ("NATURAL".equals(group)) return "천연 단일 섬유";
+        if ("SYNTHETIC".equals(group)) return "합성 섬유";
+        return "혼방";
+    }
+
+    private int resolveMaterialKgPriceFromRows(List<CircularInventoryCompositionRow> rows,
+                                               Map<String, Integer> materialPriceByCode) {
+        if (rows == null || rows.isEmpty()) {
+            return materialPriceByCode.getOrDefault(MAT_BLEND, 1000);
+        }
+        if (rows.size() >= 2) {
+            return materialPriceByCode.getOrDefault(MAT_BLEND, 1000);
+        }
+        String materialCode = safeText(rows.get(0).getMaterialCode()).trim().toUpperCase(Locale.ROOT);
+        if (materialCode.isBlank()) {
+            return materialPriceByCode.getOrDefault(MAT_BLEND, 1000);
+        }
+        return materialPriceByCode.getOrDefault(materialCode, materialPriceByCode.getOrDefault(MAT_BLEND, 1000));
     }
 
     // -------- 순환재고 단가 정책 --------

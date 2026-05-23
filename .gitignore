@@ -40,3 +40,9 @@ out/
 .env.prod
 .bkit
 .claude
+
+ES/*.md
+ES/*.yaml
+ES/*.yaml.example
+# Keep ES files local only
+ES/**
