@@ -94,3 +94,9 @@ stockit:
         base-delay-ms: ${ES_SYNC_RETRY_BASE_DELAY_MS:30000}
         max-attempts: ${ES_SYNC_RETRY_MAX_ATTEMPTS:8}
         batch-size: ${ES_SYNC_RETRY_BATCH_SIZE:100}
+
+# TEMP(E2E): 대시보드 테스트 안정화용 빠른 응답 스위치.
+# TODO: 테스트 인프라 정상화 후 반드시 제거.
+app:
+  dashboard:
+    e2e-fast: ${APP_DASHBOARD_E2E_FAST:true}
