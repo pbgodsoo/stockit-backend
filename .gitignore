@@ -46,3 +46,5 @@ ES/*.yaml
 ES/*.yaml.example
 # Keep ES files local only
 ES/**
+
+CICD/k8s/back-secret.yaml
