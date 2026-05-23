@@ -6,17 +6,16 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.example.stockitbe.common.model.BaseEntity;
-import org.example.stockitbe.notification.model.entity.NotificationSeverity;
-import org.example.stockitbe.notification.model.entity.NotificationType;
 
-import java.util.Date;
-
+// 알림 본문 (broadcast 패턴 — 권한군에 1행 INSERT).
+// 읽음 상태는 NotificationRead 매핑 테이블에서 사용자별로 추적 (B3 해결).
+//   - 본 엔티티에서 is_read / read_at 필드는 폐기됨 (2026-05-23)
 @Entity
 @Table(name = "notification", indexes = {
-        @Index(name = "idx_notification_role_loc_unread",
-                columnList = "target_role,target_location_code,is_read,create_date"),
-        @Index(name = "idx_notification_user_unread",
-                columnList = "target_user_id,is_read,create_date"),
+        @Index(name = "idx_notification_role_loc",
+                columnList = "target_role,target_location_code,create_date"),
+        @Index(name = "idx_notification_user",
+                columnList = "target_user_id,create_date"),
         @Index(name = "idx_notification_ref",
                 columnList = "ref_type,ref_id")
 })
@@ -56,12 +55,6 @@ public class Notification extends BaseEntity {
     @Column(name = "ref_id", length = 100)
     private String refId;
 
-    @Column(name = "is_read", nullable = false)
-    private boolean read;
-
-    @Column(name = "read_at")
-    private Date readAt;
-
     @Builder
     private Notification(NotificationType type, NotificationSeverity severity,
                          String title, String message,
@@ -76,11 +69,5 @@ public class Notification extends BaseEntity {
         this.targetUserId = targetUserId;
         this.refType = refType;
         this.refId = refId;
-        this.read = false;
-    }
-
-    public void markAsRead(Date now) {
-        this.read = true;
-        this.readAt = now;
     }
 }

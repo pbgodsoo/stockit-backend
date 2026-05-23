@@ -41,7 +41,8 @@ public class Material extends BaseEntity {
     private String description;
 
     @Builder
-    private Material(String code, String nameKo, String materialGroup, Boolean active, String description) {
+    private Material(String code, String nameKo, String materialGroup,
+                     BigDecimal carbonFactor, Boolean active, String description) {
         this.code = code;
         this.nameKo = nameKo;
         this.materialGroup = materialGroup;

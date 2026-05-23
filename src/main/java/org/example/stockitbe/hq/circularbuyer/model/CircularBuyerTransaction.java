@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -47,19 +48,32 @@ public class CircularBuyerTransaction {
     @Column(name = "transacted_at", nullable = false)
     private LocalDateTime transactedAt;
 
+    // Phase 2: 혼방 거래의 70% 주 소재 코드. 단일 거래는 NULL.
+    // ScoreEventsService 가 effective factor 계산 시 materialCode='BLEND' + mainMaterialCode 존재
+    // → (material.carbon_factor[mainMaterialCode]) × mainMaterialRatio 로 가중 적용.
+    @Column(name = "main_material_code", length = 32)
+    private String mainMaterialCode;
+
+    // 주 소재 비율 (예: 0.70). 단일 거래는 NULL.
+    @Column(name = "main_material_ratio", precision = 3, scale = 2)
+    private BigDecimal mainMaterialRatio;
+
     @Column(name = "create_date", nullable = false)
     private LocalDateTime createDate;
 
     @Builder
     private CircularBuyerTransaction(CircularBuyer buyer, String materialCode,
                                       Integer weightKg, Integer unitPrice,
-                                      Long totalAmount, LocalDateTime transactedAt) {
+                                      Long totalAmount, LocalDateTime transactedAt,
+                                      String mainMaterialCode, BigDecimal mainMaterialRatio) {
         this.buyer = buyer;
         this.materialCode = materialCode;
         this.weightKg = weightKg;
         this.unitPrice = unitPrice;
         this.totalAmount = totalAmount;
         this.transactedAt = transactedAt;
+        this.mainMaterialCode = mainMaterialCode;
+        this.mainMaterialRatio = mainMaterialRatio;
         this.createDate = LocalDateTime.now();
     }
 }

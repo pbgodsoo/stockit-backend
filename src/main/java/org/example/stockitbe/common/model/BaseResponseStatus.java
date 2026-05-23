@@ -138,6 +138,7 @@ public enum BaseResponseStatus {
     USER_ALREADY_WITHDRAWN(false, 4802, "이미 탈퇴 처리된 사용자입니다."),
     USER_PASSWORD_SAME(false, 4803, "새 비밀번호가 기존 비밀번호와 동일합니다."),
     EMPLOYEE_CODE_SEQUENCE_NOT_FOUND(false, 4804, "사원코드 시퀀스가 초기화되지 않았습니다. 관리자에게 문의해주세요."),
+    USER_CONCURRENT_MODIFICATION(false, 4805, "다른 관리자가 먼저 처리했습니다. 새로고침 후 다시 시도해주세요."),
     // 5000번대 실패
     FAIL(false, 5000, "요청 실패"),
 

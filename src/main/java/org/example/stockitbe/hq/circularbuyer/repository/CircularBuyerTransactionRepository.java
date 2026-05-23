@@ -106,22 +106,35 @@ public interface CircularBuyerTransactionRepository extends JpaRepository<Circul
     /**
      * 지정 연도의 월별 수익/거래 건수 집계.
      * 결과 컬럼: month(1~12), revenue(SUM total_amount), cnt(COUNT)
+     *
+     * 성능 개선 (2026-05-23): WHERE 절에서 YEAR(transacted_at) 함수 제거 → 범위 조건으로 변경.
+     *   - Before: WHERE YEAR(transacted_at) = ?  → 컬럼에 함수 적용으로 인덱스 사용 불가 (풀 스캔)
+     *   - After : WHERE transacted_at >= :from AND transacted_at < :to → transacted_at 인덱스 활용
+     *   - GROUP BY MONTH(...) 는 결과 그룹핑용이라 인덱스 영향 없음 (유지)
      */
     @Query(value = """
         SELECT MONTH(t.transacted_at) AS m,
                COALESCE(SUM(t.total_amount), 0) AS revenue,
                COUNT(t.id) AS cnt
         FROM circular_buyer_transaction t
-        WHERE YEAR(t.transacted_at) = :year
+        WHERE t.transacted_at >= :from
+          AND t.transacted_at <  :to
         GROUP BY MONTH(t.transacted_at)
         ORDER BY MONTH(t.transacted_at)
         """, nativeQuery = true)
-    List<Object[]> aggregateMonthlyRevenue(@Param("year") int year);
+    List<Object[]> aggregateMonthlyRevenue(@Param("from") Date from, @Param("to") Date to);
 
 
     /**
-     * 점수 페이지용 — 지정 연도의 거래 이벤트 + 거래처 첫 거래일(neyBuyer 판정용).
-     * 결과 컬럼: id, transacted_at, company_name, material_code, weight_kg, first_tx_at
+     * 점수 페이지용 — 지정 기간의 거래 이벤트 + 거래처 첫 거래일(newBuyer 판정용) + partner_type + 혼방 주 소재.
+     * 결과 컬럼:
+     *   r[0] id, r[1] transacted_at, r[2] company_name, r[3] material_code,
+     *   r[4] weight_kg, r[5] first_tx_at,
+     *   r[6] partner_type            (Phase 2: isLocalPartner 매핑용)
+     *   r[7] main_material_code      (Phase 2: 혼방 70% 주 소재. 단일은 NULL)
+     *   r[8] main_material_ratio     (Phase 2: 0.70 또는 NULL)
+     *
+     * 성능 개선 (2026-05-23): WHERE YEAR(transacted_at) 함수 제거 → 범위 조건. 인덱스 활용.
      */
     @Query(value = """
         SELECT t.id,
@@ -131,13 +144,17 @@ public interface CircularBuyerTransactionRepository extends JpaRepository<Circul
                t.weight_kg,
                (SELECT MIN(t2.transacted_at)
                   FROM circular_buyer_transaction t2
-                 WHERE t2.buyer_id = t.buyer_id) AS first_tx_at
+                 WHERE t2.buyer_id = t.buyer_id) AS first_tx_at,
+               b.partner_type,
+               t.main_material_code,
+               t.main_material_ratio
         FROM circular_buyer_transaction t
         JOIN circular_buyer b ON b.id = t.buyer_id
-        WHERE YEAR(t.transacted_at) = :year
-        ORDER BY t.transacted_at DESC
+        WHERE t.transacted_at >= :from
+          AND t.transacted_at <  :to
+        ORDER BY t.id DESC
         """, nativeQuery = true)
-    List<Object[]> findEventsForYear(@Param("year") int year);
+    List<Object[]> findEventsForYear(@Param("from") Date from, @Param("to") Date to);
 
 
 }

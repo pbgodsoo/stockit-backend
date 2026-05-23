@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.stockitbe.notification.model.dto.NotificationDto;
 import org.example.stockitbe.notification.model.entity.Notification;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -19,6 +20,14 @@ public class NotificationSseService {
     private static final long EMITTER_TIMEOUT_MS = 30 * 60 * 1000L; // 30분
 
     private final Map<Long, EmitterEntry> emitters = new ConcurrentHashMap<>();
+
+    // SSE push 비동기 fan-out 전용 스레드 풀 (AsyncConfig#notificationExecutor)
+    // 1500+ HQ admin fan-out 시 사용자별 emitter.send 를 별도 스레드에서 병렬 실행.
+    private final ThreadPoolTaskExecutor notificationExecutor;
+
+    public NotificationSseService(ThreadPoolTaskExecutor notificationExecutor) {
+        this.notificationExecutor = notificationExecutor;
+    }
 
     @PreDestroy
     void shutdown() {
@@ -43,21 +52,34 @@ public class NotificationSseService {
         return emitter;
     }
 
+    // 알림 fan-out 디스패치.
+    // 도메인 응답 스레드(EventListener) 는 emitter 목록 순회 + executor.execute(submit) 만 수행 → 즉시 반환.
+    // 실제 emitter.send 는 notificationExecutor 풀에서 사용자별 병렬 실행.
+    //   - 1500명 fan-out 시 동기 직렬: 50ms × 1500 = 75초 (도메인 응답 묶임)
+    //   - 비동기 병렬 (32 스레드): 도메인 응답 즉시 반환 + send 실제 시간 ~2.3초
     public void push(Notification n) {
         NotificationDto.SsePayload payload = NotificationDto.SsePayload.from(n);
 
         if (n.getTargetUserId() != null) {
+            // 직접 수신 — 해당 사용자 emitter 만 비동기 send
             EmitterEntry entry = emitters.get(n.getTargetUserId());
-            if (entry != null) sendOne(n.getTargetUserId(), entry, payload);
+            if (entry != null) {
+                final Long uid = n.getTargetUserId();
+                notificationExecutor.execute(() -> sendOne(uid, entry, payload));
+            }
             return;
         }
         if (n.getTargetRole() == null) return;
+
+        // broadcast — 권한군의 모든 emitter 에 비동기 fan-out
         for (Map.Entry<Long, EmitterEntry> kv : emitters.entrySet()) {
             EmitterEntry e = kv.getValue();
             if (!n.getTargetRole().equals(e.role)) continue;
             if (n.getTargetLocationCode() != null
                     && !n.getTargetLocationCode().equals(e.locationCode)) continue;
-            sendOne(kv.getKey(), e, payload);
+            // 사용자별 send 를 별도 스레드 풀로 위임 (병렬 실행)
+            final Long uid = kv.getKey();
+            notificationExecutor.execute(() -> sendOne(uid, e, payload));
         }
     }
 
