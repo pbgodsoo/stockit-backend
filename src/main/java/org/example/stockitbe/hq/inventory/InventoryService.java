@@ -1370,7 +1370,9 @@ public class InventoryService {
         if (material == null || material.getMaterialGroup() == null) return ProductMaterialType.BLEND;
 
         String group = material.getMaterialGroup().trim().toUpperCase(Locale.ROOT);
-        if ("NATURAL".equals(group)) return ProductMaterialType.NATURAL_SINGLE;
+        // Phase 1: material.material_group 어휘를 'NATURAL' → 'NATURAL_SINGLE' 로 통일하면서
+        //          기존 'NATURAL' 도 안전망으로 함께 수용 (시드 적용 전/후 호환).
+        if ("NATURAL_SINGLE".equals(group) || "NATURAL".equals(group)) return ProductMaterialType.NATURAL_SINGLE;
         if ("SYNTHETIC".equals(group)) return ProductMaterialType.SYNTHETIC;
         return ProductMaterialType.BLEND;
     }

@@ -7,7 +7,9 @@ import org.example.stockitbe.common.model.BaseResponseStatus;
 import org.example.stockitbe.hq.category.CategoryRepository;
 import org.example.stockitbe.hq.category.model.Category;
 import org.example.stockitbe.hq.circularbuyer.model.CircularBuyer;
+import org.example.stockitbe.hq.circularbuyer.model.CircularBuyerTransaction;
 import org.example.stockitbe.hq.circularbuyer.repository.CircularBuyerRepository;
+import org.example.stockitbe.hq.circularbuyer.repository.CircularBuyerTransactionRepository;
 import org.example.stockitbe.hq.circularsale.model.CircularSaleStatus;
 import org.example.stockitbe.hq.circularsale.model.dto.CircularSaleDto;
 import org.example.stockitbe.hq.circularsale.model.entity.CircularSaleHeader;
@@ -78,6 +80,8 @@ public class CircularSaleService {
     private final CircularSaleItemMaterialRepository saleItemMaterialRepository;
     private final CircularSaleStatusHistoryRepository saleStatusHistoryRepository;
     private final CircularBuyerRepository circularBuyerRepository;
+    // Phase 3: 실제 판매 시 ESG 점수 가산용 거래 row 를 함께 INSERT 하기 위한 Repository
+    private final CircularBuyerTransactionRepository transactionRepository;
     private final ProductSkuRepository productSkuRepository;
     private final ProductMasterRepository productMasterRepository;
     private final CategoryRepository categoryRepository;
@@ -598,7 +602,11 @@ public class CircularSaleService {
                 .reason("CIRCULAR_SALE_CREATE")
                 .build());
 
-        // 6) 생성 결과 반환
+        // 6) Phase 3 — 실제 판매를 ESG 점수에 즉시 반영 (circular_buyer_transaction 자동 INSERT)
+        //    sale_item 별로 transaction 1건씩 생성 + 혼방 product 의 70% 주 소재 자동 분배
+        createTransactionsFromSale(header, buyer, savedItems, contexts);
+
+        // 7) 생성 결과 반환
         return new SalePersistResult(header, outbound, savedItems, materialRows);
     }
 
@@ -641,6 +649,92 @@ public class CircularSaleService {
         return items.get(0).getProductName() + " 외 " + (items.size() - 1) + "건";
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Phase 3 — 운영 판매 → ESG 점수 가산 파이프라인
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * 사용하는 메서드: persistSaleAndOutbound
+     * Phase 3: 실제 판매 완료 시 ESG 점수 가산을 위해 circular_buyer_transaction 에도 거래 row 를 INSERT.
+     *  - sale_item 별로 transaction 1건씩 생성 (product 별 정밀 ESG 점수)
+     *  - 혼방 product 의 경우 70% 주 소재 코드와 비율도 함께 기록 (ScoreEventsService 의 가중 산식 입력)
+     *  - 거래 시점 단가/금액은 sale_item 의 값을 그대로 스냅샷 (KAU 시세와 무관, 실제 거래가 기준)
+     */
+    private void createTransactionsFromSale(CircularSaleHeader header,
+                                             CircularBuyer buyer,
+                                             List<CircularSaleItem> savedItems,
+                                             List<LineContext> contexts) {
+        // sold_at(Date) → LocalDateTime(KST) 변환 — circular_buyer_transaction.transacted_at 컬럼 매칭
+        java.time.LocalDateTime soldAt = header.getSoldAt().toInstant()
+                .atZone(KST).toLocalDateTime();
+
+        List<CircularBuyerTransaction> rows = new ArrayList<>();
+        for (int i = 0; i < savedItems.size(); i++) {
+            CircularSaleItem item = savedItems.get(i);
+            ProductMaster master = contexts.get(i).master;
+
+            // composition 기반으로 material_code / main_material_code / main_material_ratio 산출
+            TxMaterial tx = deriveTransactionMaterial(master);
+
+            rows.add(CircularBuyerTransaction.builder()
+                    .buyer(buyer)
+                    .materialCode(tx.materialCode())
+                    .weightKg(item.getActualWeightKg() != null
+                            ? item.getActualWeightKg().intValue()
+                            : 0)
+                    // CircularSaleItem.unitPrice 는 Long, CircularBuyerTransaction.unitPrice 는 Integer
+                    // → 시드/운영 단가가 Integer 범위(약 21억) 내라 안전하게 intValue() 변환
+                    .unitPrice(item.getUnitPrice() != null ? item.getUnitPrice().intValue() : 0)
+                    .totalAmount(item.getLineAmount() != null ? item.getLineAmount() : 0L)
+                    .transactedAt(soldAt)
+                    .mainMaterialCode(tx.mainMaterialCode())
+                    .mainMaterialRatio(tx.mainMaterialRatio())
+                    .build());
+        }
+
+        if (!rows.isEmpty()) {
+            transactionRepository.saveAll(rows);
+        }
+    }
+
+    /**
+     * 사용하는 메서드: createTransactionsFromSale
+     * product 의 composition 분포로 transaction.material_code / main_material_code / main_material_ratio 산출.
+     *  - composition row 2개 이상 → 'BLEND' + composition[0] 의 material/ratio 를 main 으로
+     *  - composition 단일       → 그 material code, main 정보는 NULL
+     *  - composition 없음       → 'BLEND' 폴백 (예외 케이스)
+     *
+     * Phase 1 의 material_group 어휘와는 별개 — 여기서는 거래 단위의 material_code 만 결정.
+     */
+    private TxMaterial deriveTransactionMaterial(ProductMaster master) {
+        List<ProductMaterialComposition> comps = master.getMaterialCompositions();
+        if (comps == null || comps.isEmpty()) {
+            return new TxMaterial("BLEND", null, null);
+        }
+        // composition_order 오름차순 기준 가장 작은 (즉 주 소재) 1개 선별
+        ProductMaterialComposition primary = comps.stream()
+                .min((a, b) -> Integer.compare(
+                        a.getCompositionOrder() == null ? Integer.MAX_VALUE : a.getCompositionOrder(),
+                        b.getCompositionOrder() == null ? Integer.MAX_VALUE : b.getCompositionOrder()))
+                .orElse(comps.get(0));
+
+        String primaryCode = primary.getMaterial().getCode();
+
+        // 단일 composition → 자기 material 코드 그대로, main 은 NULL
+        if (comps.size() == 1) {
+            return new TxMaterial(primaryCode, null, null);
+        }
+
+        // 2개 이상 → BLEND, 주 소재는 primary, 비율은 ratio/100
+        BigDecimal ratio = primary.getRatio() != null
+                ? BigDecimal.valueOf(primary.getRatio()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
+                : BigDecimal.valueOf(0.70);  // 안전 폴백 (시드 표준 70%)
+        return new TxMaterial("BLEND", primaryCode, ratio);
+    }
+
+    /** Phase 3 — transaction 의 material 결정 결과 보관용 record */
+    private record TxMaterial(String materialCode, String mainMaterialCode, BigDecimal mainMaterialRatio) {}
+
     // 사용하는 메서드: create
     // 소재 조합 기반으로 판매 소재 구분 라벨을 산출한다.
     private String deriveMaterialType(ProductMaster master) {
@@ -653,7 +747,9 @@ public class CircularSaleService {
         }
         ProductMaterialComposition single = comps.get(0);
         String group = single.getMaterial().getMaterialGroup();
-        if ("NATURAL".equalsIgnoreCase(group)) {
+        // Phase 1: material_group 어휘를 'NATURAL' → 'NATURAL_SINGLE' 로 통일하면서
+        //          기존 'NATURAL' 도 안전망으로 함께 수용 (시드 적용 전/후 호환).
+        if ("NATURAL_SINGLE".equalsIgnoreCase(group) || "NATURAL".equalsIgnoreCase(group)) {
             return "천연 단일 섬유";
         }
         if ("SYNTHETIC".equalsIgnoreCase(group)) {

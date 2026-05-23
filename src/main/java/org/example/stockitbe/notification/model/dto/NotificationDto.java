@@ -14,28 +14,29 @@ public class NotificationDto {
     @AllArgsConstructor
     @Builder
     public static class NotificationRes {
+        // 응답 필드 최소화 (2026-05-23) — FE 가 실제로 사용하는 7개만 응답.
+        // 제거된 필드: refType, refId, readAt (FE 미사용 — 통신량 약 25%↓ + 페이로드 의도 명확화)
+        // 제거 정책 근거: docs/plan/notification/응답 필드 최소화.md (예정) — DB 컬럼/Entity 필드는 유지.
         private Long id;
         private String type;
         private String severity;
         private String title;
         private String message;
-        private String refType;
-        private String refId;
         private boolean read;
-        private Date readAt;
         private Date createdAt;
 
-        public static NotificationRes from(Notification e) {
+        // 본인 기준 읽음 상태와 함께 변환.
+        // myReadAt 가 null 이면 본인이 아직 읽지 않은 알림 → read=false.
+        // (개별 읽음 추적: notification_read 매핑 테이블에서 LEFT JOIN 으로 가져온 본인 read_at)
+        // 시그니처 (Notification, Date) 는 유지 — Service.list 의 V2 호출부 호환성 보장.
+        public static NotificationRes from(Notification e, Date myReadAt) {
             return NotificationRes.builder()
                     .id(e.getId())
                     .type(e.getType().name())
                     .severity(e.getSeverity().name())
                     .title(e.getTitle())
                     .message(e.getMessage())
-                    .refType(e.getRefType())
-                    .refId(e.getRefId())
-                    .read(e.isRead())
-                    .readAt(e.getReadAt())
+                    .read(myReadAt != null)
                     .createdAt(e.getCreatedAt())
                     .build();
         }
