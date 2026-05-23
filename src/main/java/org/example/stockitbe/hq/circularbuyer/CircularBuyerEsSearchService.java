@@ -23,7 +23,7 @@ public class CircularBuyerEsSearchService {
 
     private final ElasticsearchClient esClient;
 
-    @Value("${stockit.elasticsearch.circular-buyer-index:circular-buyer-v1}")
+    @Value("${stockit.elasticsearch.circular-buyer-index:circular-buyer-search}")
     private String indexName;
 
     public CircularBuyerDto.PageRes findPage(String keyword,
@@ -46,7 +46,10 @@ public class CircularBuyerEsSearchService {
 
         List<Query> musts = new ArrayList<>();
         if (safeKeyword != null) {
-            musts.add(Query.of(q -> q.multiMatch(m -> m
+            String chosungKeyword = ChosungUtils.toChosung(safeKeyword);
+            String normalizedKeyword = CorporateNameNormalizer.stripLeadingMarker(safeKeyword);
+            List<Query> shoulds = new ArrayList<>();
+            shoulds.add(Query.of(q -> q.multiMatch(m -> m
                     .query(safeKeyword)
                     .fields(
                             "code^4",
@@ -57,6 +60,23 @@ public class CircularBuyerEsSearchService {
                             "factory_product",
                             "industry_group.text"
                     ))));
+            if (!normalizedKeyword.isBlank() && !normalizedKeyword.equals(safeKeyword)) {
+                shoulds.add(Query.of(q -> q.multiMatch(m -> m
+                        .query(normalizedKeyword)
+                        .fields(
+                                "company_name_normalized^5",
+                                "company_name.ngram^2",
+                                "company_name^2"
+                        ))));
+            }
+            if (!chosungKeyword.isBlank()) {
+                shoulds.add(prefixQuery("company_name_chosung", chosungKeyword));
+                shoulds.add(prefixQuery("manager_name_chosung", chosungKeyword));
+            }
+            musts.add(Query.of(q -> q.bool(b -> b
+                    .should(shoulds)
+                    .minimumShouldMatch("1")
+            )));
         }
 
         SearchResponse<Map> response = esClient.search(s -> {
@@ -120,6 +140,10 @@ public class CircularBuyerEsSearchService {
 
     private Query termQuery(String field, String value) {
         return Query.of(q -> q.term(t -> t.field(field).value(FieldValue.of(value))));
+    }
+
+    private Query prefixQuery(String field, String value) {
+        return Query.of(q -> q.prefix(p -> p.field(field).value(value)));
     }
 
     private static String blankToNull(String value) {

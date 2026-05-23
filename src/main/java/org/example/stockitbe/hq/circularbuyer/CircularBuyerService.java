@@ -9,6 +9,7 @@ import org.example.stockitbe.hq.circularbuyer.model.CircularBuyer;
 import org.example.stockitbe.hq.circularbuyer.model.CircularBuyerDto;
 import org.example.stockitbe.hq.circularbuyer.repository.CircularBuyerListView;
 import org.example.stockitbe.hq.circularbuyer.repository.CircularBuyerRepository;
+import org.example.stockitbe.hq.circularbuyer.sync.CircularBuyerEsSyncService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,6 +17,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -44,6 +47,7 @@ public class CircularBuyerService {
     private final CircularBuyerRepository circularBuyerRepository;
     private final CircularBuyerEmbeddingService embeddingService;
     private final CircularBuyerEsSearchService esSearchService;
+    private final CircularBuyerEsSyncService esSyncService;
 
     // 4만 건+ 환경에서 페이지 없는 전체 조회는 응답 불가 수준의 부하. 최대 500건으로 제한.
     private static final int FIND_ALL_HARD_LIMIT = 500;
@@ -124,6 +128,7 @@ public class CircularBuyerService {
         }
         // ADR-021 — 등록 시 항상 임베딩 생성. 실패해도 등록은 성공.
         embeddingService.embedAndApply(saved);
+        runAfterCommit(() -> esSyncService.syncUpsert(saved));
         return CircularBuyerDto.DetailRes.from(saved);
     }
 
@@ -174,13 +179,16 @@ public class CircularBuyerService {
         if (rebuildEmbedding) {
             embeddingService.embedAndApply(v);
         }
+        runAfterCommit(() -> esSyncService.syncUpsert(v));
         return CircularBuyerDto.DetailRes.from(v);
     }
 
     @Transactional
     public void delete(String code) {
         CircularBuyer v = lookup(code);
+        String buyerCode = v.getCode();
         circularBuyerRepository.delete(v);
+        runAfterCommit(() -> esSyncService.syncDelete(buyerCode));
     }
 
     /** primaryMaterialFit 별 전체 건수 — 통계 카드용. */
@@ -241,6 +249,19 @@ public class CircularBuyerService {
     private static boolean listChanged(List<String> oldList, List<String> newList) {
         if (newList == null) return false;
         return !Objects.equals(oldList, newList);
+    }
+
+    private static void runAfterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+            return;
+        }
+        action.run();
     }
 
     /**
