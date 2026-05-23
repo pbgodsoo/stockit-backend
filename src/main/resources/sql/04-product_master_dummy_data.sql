@@ -4,18 +4,27 @@
 INSERT INTO material
 (code, name_ko, material_group, carbon_factor, active, create_date, update_date)
 VALUES
-('COTTON','면','NATURAL', 1.800,1,NOW(),NOW()),
-('WOOL','울','NATURAL',1.200, 1,NOW(),NOW()),
-('CASHMERE','캐시미어','NATURAL',1.300, 1,NOW(),NOW()),
-('SILK','실크','NATURAL',1.300, 1,NOW(),NOW()),
-('LINEN','린넨','NATURAL',1.700, 1,NOW(),NOW()),
-('POLYESTER','폴리에스터','SYNTHETIC', 2.300, 1,NOW(),NOW()),
-('ACRYLIC','아크릴','SYNTHETIC',2.400, 1,NOW(),NOW()),
-('POLYAMIDE','나일론','SYNTHETIC',2.500, 1,NOW(),NOW()),
-('ELASTANE','스판덱스','SYNTHETIC',2.200, 1,NOW(),NOW()),
-('RAYON','레이온','SYNTHETIC',2.700,1,NOW(),NOW())
-ON DUPLICATE KEY UPDATE
-name_ko=VALUES(name_ko), material_group=VALUES(material_group), active=VALUES(active), update_date=NOW();
+    -- material_group 어휘는 ProductMasterService.MATERIAL_GROUP_NATURAL='NATURAL' 상수 호환을 위해
+    -- 'NATURAL' 유지 (Phase 1 옵션 C — 팀원 코드 기준에 맞춤). FE 는 esgStore.fetchMaterialFactors 에서
+    -- NATURAL → NATURAL_SINGLE 로 정규화하여 일관성 유지.
+    ('COTTON',    '면',         'NATURAL',   6.000, 1, NOW(), NOW()),
+    ('WOOL',      '울',         'NATURAL',   5.000, 1, NOW(), NOW()),  -- cap 적용
+    ('CASHMERE',  '캐시미어',   'NATURAL',   8.000, 1, NOW(), NOW()),  -- cap 적용
+    ('SILK',      '실크',       'NATURAL',   5.000, 1, NOW(), NOW()),  -- cap 적용
+    ('LINEN',     '린넨',       'NATURAL',   1.800, 1, NOW(), NOW()),
+    ('POLYESTER', '폴리에스터', 'SYNTHETIC', 6.500, 1, NOW(), NOW()),
+    ('ACRYLIC',   '아크릴',     'SYNTHETIC', 5.700, 1, NOW(), NOW()),
+    ('POLYAMIDE', '나일론',     'SYNTHETIC', 8.000, 1, NOW(), NOW()),
+    ('ELASTANE',  '스판덱스',   'SYNTHETIC', 12.000, 1, NOW(), NOW()),
+    ('RAYON',     '레이온',     'SYNTHETIC', 4.500, 1, NOW(), NOW()),
+    ('BLEND',     '혼방',       'BLEND',     5.500, 1, NOW(), NOW())
+    ON DUPLICATE KEY UPDATE
+                         name_ko = VALUES(name_ko),
+                         material_group = VALUES(material_group),
+                         carbon_factor = VALUES(carbon_factor),
+                         active = VALUES(active),
+                         update_date = NOW();
+
 
 INSERT INTO product_master
 (code, name, category_code, base_price, lead_time_days, warehouse_safety_stock, store_safety_stock, main_vendor_code, status, create_date, update_date)
