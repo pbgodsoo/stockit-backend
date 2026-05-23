@@ -50,3 +50,5 @@ ES/*.yaml
 ES/*.yaml.example
 
 worklog/**
+
+back-secret.yaml
