@@ -7,7 +7,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 @Service
@@ -25,8 +27,15 @@ public class CircularRevenueService {
     public CircularRevenueDto.Response getMonthlyRevenue(Integer year) {
         int targetYear = (year != null) ? year : LocalDate.now().getYear();
 
+        // year → [yyyy-01-01 00:00, (yyyy+1)-01-01 00:00) 범위로 변환.
+        // Repository 가 WHERE transacted_at >= :from AND < :to 형태로 인덱스 활용.
+        Date from = Date.from(LocalDate.of(targetYear, 1, 1)
+                .atStartOfDay(ZoneId.systemDefault()).toInstant());
+        Date to   = Date.from(LocalDate.of(targetYear + 1, 1, 1)
+                .atStartOfDay(ZoneId.systemDefault()).toInstant());
+
         // [{ m, revenue, count }, ...] 형태로 BE 에서 받음 (거래 있는 월만)
-        List<Object[]> rows = txRepo.aggregateMonthlyRevenue(targetYear);
+        List<Object[]> rows = txRepo.aggregateMonthlyRevenue(from, to);
 
         // 12개월 버킷 초기화
         long[] revByMonth = new long[12];
