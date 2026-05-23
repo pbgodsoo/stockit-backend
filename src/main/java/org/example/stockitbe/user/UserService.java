@@ -13,6 +13,7 @@ import org.example.stockitbe.user.model.entity.User;
 import org.example.stockitbe.user.model.entity.UserRole;
 import org.example.stockitbe.user.model.dto.UserDto;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -20,17 +21,23 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.regex.Pattern;
+
 
 
 @Service
 @RequiredArgsConstructor
 public class UserService implements UserDetailsService {
 
+    // 정규식 Pattern 1회 컴파일 후 재사용 — 매 매칭마다 컴파일 비용 회피.
+    // String.matches() 는 내부적으로 매 호출 시 Pattern.compile() 수행 → 회원가입 폭주 시 누적 부담.
+    // Pattern 인스턴스는 thread-safe 이므로 static final 로 안전하게 공유.
+
     // 전화번호: 하이픈 없이 010 + 숫자 8자리 (총 11자리)
-    private static final String PHONE_REGEX = "^010\\d{8}$";
+    private static final Pattern PHONE_PATTERN = Pattern.compile("^010\\d{8}$");
     // 비밀번호 정책: 대소문자, 숫자, 특수문자(!@#$%^&*) 포함 8자 이상
-    private static final String PASSWORD_REGEX =
-            "^(?=.*[A-Z])(?=.*[a-z])(?=.*\\d)(?=.*[!@#$%^&*]).{8,}$";
+    private static final Pattern PASSWORD_PATTERN =
+            Pattern.compile("^(?=.*[A-Z])(?=.*[a-z])(?=.*\\d)(?=.*[!@#$%^&*]).{8,}$");
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -51,11 +58,11 @@ public class UserService implements UserDetailsService {
             throw BaseException.from(BaseResponseStatus.SIGNUP_DUPLICATE_EMAIL);
         }
 
-        if (dto.getPassword() == null || !dto.getPassword().matches(PASSWORD_REGEX)) {
+        if (dto.getPassword() == null || !PASSWORD_PATTERN.matcher(dto.getPassword()).matches()) {
             throw BaseException.from(BaseResponseStatus.SIGNUP_INVALID_PASSWORD);
         }
 
-        if (dto.getPhoneNumber() == null || !dto.getPhoneNumber().matches(PHONE_REGEX)) {
+        if (dto.getPhoneNumber() == null || !PHONE_PATTERN.matcher(dto.getPhoneNumber()).matches()) {
             throw BaseException.from(BaseResponseStatus.SIGNUP_INVALID_PHONE);
         }
 
@@ -98,47 +105,59 @@ public class UserService implements UserDetailsService {
     /**
      * 전화번호 수정.
      * - FE 에서 하이픈 없이 11자리 숫자 전송 (예: "01012345678")
+     * - User 의 @Version 으로 동시 UPDATE 충돌 자동 감지 → OptimisticLockingFailureException 발생 시
+     *   USER_CONCURRENT_MODIFICATION 으로 변환하여 친화 메시지 전달.
      */
     @Transactional
     public UserDto.MypageRes updatePhone(String employeeCode, String phoneNumber) {
-        User user = userRepository.findByEmployeeCode(employeeCode)
-                .orElseThrow(() -> BaseException.from(BaseResponseStatus.USER_NOT_FOUND));
+        try {
+            User user = userRepository.findByEmployeeCode(employeeCode)
+                    .orElseThrow(() -> BaseException.from(BaseResponseStatus.USER_NOT_FOUND));
 
-        if (phoneNumber == null || !phoneNumber.matches(PHONE_REGEX)) {
-            throw BaseException.from(BaseResponseStatus.SIGNUP_INVALID_PHONE);
+            if (phoneNumber == null || !PHONE_PATTERN.matcher(phoneNumber).matches()) {
+                throw BaseException.from(BaseResponseStatus.SIGNUP_INVALID_PHONE);
+            }
+
+            user.updatePhone(phoneNumber);
+            return UserDto.MypageRes.from(user);
+        } catch (OptimisticLockingFailureException ex) {
+            // 두 탭/디바이스 동시 UPDATE 충돌 — 본인 정보 수정의 lost update 방지.
+            throw BaseException.from(BaseResponseStatus.USER_CONCURRENT_MODIFICATION);
         }
-
-        user.updatePhone(phoneNumber);
-        return UserDto.MypageRes.from(user);
     }
 
     /**
      * 비밀번호 변경.
      * - 현재 비밀번호 검증 → 새 비밀번호 정책 검증 → 동일 비번 차단 → 인코딩 저장
      * - (보안) 본인 포함 모든 Refresh Token 삭제 → 모든 디바이스 강제 로그아웃
+     * - User 의 @Version 으로 동시 UPDATE 충돌 자동 감지.
      */
     @Transactional
     public void updatePassword(String employeeCode, String currentPassword, String newPassword) {
-        User user = userRepository.findByEmployeeCode(employeeCode)
-                .orElseThrow(() -> BaseException.from(BaseResponseStatus.USER_NOT_FOUND));
+        try {
+            User user = userRepository.findByEmployeeCode(employeeCode)
+                    .orElseThrow(() -> BaseException.from(BaseResponseStatus.USER_NOT_FOUND));
 
-        // 1) 현재 비밀번호 검증
-        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
-            throw BaseException.from(BaseResponseStatus.PASSWORD_WRONG);
-        }
-        // 2) 새 비밀번호 정책 검증 (대소문자/숫자/특수문자 포함 8자 이상)
-        if (newPassword == null || !newPassword.matches(PASSWORD_REGEX)) {
-            throw BaseException.from(BaseResponseStatus.SIGNUP_INVALID_PASSWORD);
-        }
-        // 3) 동일 비밀번호 차단
-        if (passwordEncoder.matches(newPassword, user.getPassword())) {
-            throw BaseException.from(BaseResponseStatus.USER_PASSWORD_SAME);
-        }
+            // 1) 현재 비밀번호 검증
+            if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+                throw BaseException.from(BaseResponseStatus.PASSWORD_WRONG);
+            }
+            // 2) 새 비밀번호 정책 검증 (대소문자/숫자/특수문자 포함 8자 이상)
+            if (newPassword == null || !PASSWORD_PATTERN.matcher(newPassword).matches()) {
+                throw BaseException.from(BaseResponseStatus.SIGNUP_INVALID_PASSWORD);
+            }
+            // 3) 동일 비밀번호 차단
+            if (passwordEncoder.matches(newPassword, user.getPassword())) {
+                throw BaseException.from(BaseResponseStatus.USER_PASSWORD_SAME);
+            }
 
-        user.updatePassword(passwordEncoder.encode(newPassword));
+            user.updatePassword(passwordEncoder.encode(newPassword));
 
-        // (보안) 모든 디바이스 강제 로그아웃 — 본인 디바이스도 포함
-        jwtRefreshRepository.deleteAllByEmployeeCode(employeeCode);
+            // (보안) 모든 디바이스 강제 로그아웃 — 본인 디바이스도 포함
+            jwtRefreshRepository.deleteAllByEmployeeCode(employeeCode);
+        } catch (OptimisticLockingFailureException ex) {
+            throw BaseException.from(BaseResponseStatus.USER_CONCURRENT_MODIFICATION);
+        }
     }
 
     /**

@@ -55,6 +55,12 @@ public class User {
 
     private LocalDateTime processedAt; // 본사 관리자의 회원가입 처리일시
 
+    // 동시 승인 방지용 낙관적 락 (2026-05-23).
+    // 두 admin 이 같은 PENDING 신청을 동시에 승인 시도 시 OptimisticLockingFailureException 발생 →
+    // 사번 시퀀스 중복 발급(lost update) 방지. nullable 로 둬서 기존 행 호환.
+    @Version
+    private Long version;
+
 
     //  본사 관리자가 가입 신청을 승인할 때 호출
     public void approve(String employeeCode) {

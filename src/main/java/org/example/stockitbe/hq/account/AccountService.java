@@ -11,6 +11,7 @@ import org.example.stockitbe.user.UserRepository;
 import org.example.stockitbe.user.model.entity.User;
 import org.example.stockitbe.user.model.entity.UserRole;
 import org.example.stockitbe.user.model.entity.UserStatus;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -38,36 +39,49 @@ public class AccountService {
 
     @Transactional
     public AccountDto.ProcessRes approve(Long accountId) {
-        User user = findUserOrThrow(accountId);
-        validatePending(user);
+        try {
+            User user = findUserOrThrow(accountId);
+            validatePending(user);
 
-        String employeeCode = generateEmployeeCode(user.getRole());
-        user.approve(employeeCode);
+            String employeeCode = generateEmployeeCode(user.getRole());
+            user.approve(employeeCode);
 
-        return AccountDto.ProcessRes.from(user);
+            return AccountDto.ProcessRes.from(user);
+        } catch (OptimisticLockingFailureException ex) {
+            // 두 admin 동시 승인 충돌 — @Version 가드. 사번 시퀀스 중복 발급 방지됨.
+            throw BaseException.from(BaseResponseStatus.USER_CONCURRENT_MODIFICATION);
+        }
     }
 
     @Transactional
     public AccountDto.ProcessRes reject(Long accountId) {
-        User user = findUserOrThrow(accountId);
-        validatePending(user);
+        try {
+            User user = findUserOrThrow(accountId);
+            validatePending(user);
 
-        user.reject();
+            user.reject();
 
-        return AccountDto.ProcessRes.from(user);
+            return AccountDto.ProcessRes.from(user);
+        } catch (OptimisticLockingFailureException ex) {
+            throw BaseException.from(BaseResponseStatus.USER_CONCURRENT_MODIFICATION);
+        }
     }
 
     //  본사 관리자가 사용자 계정을 탈퇴 처리
     @Transactional
     public AccountDto.ProcessRes withdraw(Long accountId) {
-        User user = findUserOrThrow(accountId);
-        validateApproved(user);
+        try {
+            User user = findUserOrThrow(accountId);
+            validateApproved(user);
 
-        user.withdraw();
-        // 탈퇴 사용자의 모든 Refresh Token 삭제 → 즉시 강제 로그아웃 효과
-        jwtRefreshRepository.deleteAllByEmployeeCode(user.getEmployeeCode());
+            user.withdraw();
+            // 탈퇴 사용자의 모든 Refresh Token 삭제 → 즉시 강제 로그아웃 효과
+            jwtRefreshRepository.deleteAllByEmployeeCode(user.getEmployeeCode());
 
-        return AccountDto.ProcessRes.from(user);
+            return AccountDto.ProcessRes.from(user);
+        } catch (OptimisticLockingFailureException ex) {
+            throw BaseException.from(BaseResponseStatus.USER_CONCURRENT_MODIFICATION);
+        }
     }
 
 
