@@ -178,7 +178,9 @@ public class NotificationSseService {
         try {
             entry.emitter.send(SseEmitter.event().name("notification").data(payload));
         } catch (Exception ex) {
-            log.warn("[NotificationSseService] push 실패 sessionId={} userId={} — emitter 정리",
+            // 의미: BE 가 알림을 send 했는데 IOException — 거의 항상 클라이언트가 이미 끊긴 상태.
+            // "실패" 라는 단어가 장애로 오인되어 메시지를 중립적으로 변경 (정상 회수 메커니즘).
+            log.warn("[NotificationSseService] 클라이언트 연결 종료 감지 — emitter 회수 (push 실패) sessionId={} userId={}",
                     sessionId, entry.userId);
             // compare-and-remove — 같은 sessionId 에 다른 entry 가 들어간 경우 건드리지 않음
             emitters.remove(sessionId, entry);
@@ -209,7 +211,10 @@ public class NotificationSseService {
         try {
             entry.emitter.send(SseEmitter.event().comment("ping"));
         } catch (Exception ex) {
-            log.warn("[NotificationSseService] heartbeat 실패 sessionId={} userId={} — emitter 정리",
+            // 의미: 30초 ping 이 IOException — 클라이언트가 close()/탭종료/네트워크끊김 등으로 이미 사라진 상태.
+            // sendBeacon 도달 못 한 케이스 (브라우저 강제종료/노트북 절전 등) 의 안전망 cleanup.
+            // "실패" 라는 단어가 장애로 오인되어 메시지를 중립적으로 변경 (정상 회수 메커니즘).
+            log.warn("[NotificationSseService] 클라이언트 연결 종료 감지 — emitter 회수 (heartbeat 무응답) sessionId={} userId={}",
                     sessionId, entry.userId);
             emitters.remove(sessionId, entry);
             try { entry.emitter.complete(); } catch (Exception ignored) {}
