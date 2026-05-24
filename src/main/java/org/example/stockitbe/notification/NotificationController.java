@@ -23,6 +23,18 @@ public class NotificationController {
         return service.subscribe(me);
     }
 
+    // SSE 명시적 종료 — FE 가 페이지 unload (탭 닫기/F5/창 닫기) 시 navigator.sendBeacon 으로 호출.
+    // TCP FIN 도달 못 하는 unload 상황에서도 BE Map 에서 즉시 정리되게 함.
+    // sendBeacon 은 POST 만 지원 → DELETE 가 아닌 POST 채택.
+    @PostMapping("/stream/{sessionId}/close")
+    public BaseResponse<Void> closeStream(
+            @AuthenticationPrincipal AuthUserDetails me,
+            @PathVariable String sessionId) {
+        // 1. 요청 받기 2. 서비스 호출 (내부에서 sessionId owner 검증) 3. 응답 반환
+        service.unsubscribeStream(sessionId, me);
+        return BaseResponse.success(null);
+    }
+
     // 본인 수신 알림 목록
     @GetMapping
     public BaseResponse<NotificationDto.NotificationListRes> list(
