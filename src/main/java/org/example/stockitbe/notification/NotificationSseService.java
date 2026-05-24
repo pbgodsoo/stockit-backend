@@ -66,31 +66,77 @@ public class NotificationSseService {
         SseEmitter emitter = new SseEmitter(EMITTER_TIMEOUT_MS);
         EmitterEntry entry = new EmitterEntry(emitter, userId, role, locationCode);
         emitters.put(sessionId, entry);
+        // SSE 생명주기 모니터링 — 평소 운영(INFO)에서는 조용, application-dev.yml 의 DEBUG 설정 시 가시화.
+        // 운영 진단 필요 시 actuator/loggers 로 런타임 토글 가능 (재시작 불필요).
+        log.debug("[SSE] subscribe sessionId={} userId={} role={} (총 emitters={})",
+                sessionId, userId, role, emitters.size());
 
         // compare-and-remove — emitters.remove(K, V) 가 false 면 이미 다른 콜백이 정리한 상태이거나
         // 같은 sessionId 에 새 entry 가 들어간 상태라 안전하게 통과.
         // onError/onTimeout 모두 complete() 명시 호출 — 안 하면 Tomcat async request 가 정상 종료 안 돼
         // 'RecycleRequiredException' (Encountered a non-recycled request) 발화 가능.
-        emitter.onCompletion(() -> emitters.remove(sessionId, entry));
+        emitter.onCompletion(() -> {
+            if (emitters.remove(sessionId, entry)) {
+                // TCP 끊김 감지 경로 — sendBeacon 으로 정리 안 된 경우 (FE close() / 네트워크 끊김)
+                log.debug("[SSE] onCompletion sessionId={} userId={} (남은={})", sessionId, userId, emitters.size());
+            }
+        });
         emitter.onTimeout(() -> {
-            emitters.remove(sessionId, entry);
+            if (emitters.remove(sessionId, entry)) {
+                log.debug("[SSE] onTimeout sessionId={} userId={} (남은={})", sessionId, userId, emitters.size());
+            }
             try { emitter.complete(); } catch (Exception ignored) {}
         });
         emitter.onError((e) -> {
-            emitters.remove(sessionId, entry);
+            if (emitters.remove(sessionId, entry)) {
+                log.debug("[SSE] onError sessionId={} userId={} (남은={})", sessionId, userId, emitters.size());
+            }
             try { emitter.complete(); } catch (Exception ignored) {}
         });
 
         // 초기 connect 이벤트 — lock 보호 (이론상 첫 send 는 단일 스레드지만 일관성 위해)
+        // payload 로 sessionId 전달 — FE 가 받아 보관 후, 페이지 unload 시 sendBeacon 으로
+        // POST /api/notifications/stream/{sessionId}/close 호출하여 BE Map 에서 즉시 정리되게 함.
         entry.lock.lock();
         try {
-            emitter.send(SseEmitter.event().name("connect").data("ok"));
+            emitter.send(SseEmitter.event().name("connect").data(sessionId));
         } catch (IOException e) {
             emitters.remove(sessionId, entry);
         } finally {
             entry.lock.unlock();
         }
         return emitter;
+    }
+
+    /**
+     * 명시적 unsubscribe — FE 가 페이지 unload (탭 닫기/F5/창 닫기) 시 sendBeacon 으로 호출.
+     *  - TCP FIN 도달 못 하는 unload 상황에서도 즉시 Map 에서 정리 → heartbeat 30초 대기 불필요.
+     *  - userId 검증: 다른 사용자의 sessionId 를 임의로 끄지 못하게 (보안).
+     *  - 이미 정리된 sessionId 거나 mismatch 면 silent return — idempotent.
+     */
+    public void unsubscribeOne(String sessionId, Long userId) {
+        if (sessionId == null || userId == null) return;
+        EmitterEntry entry = emitters.get(sessionId);
+        if (entry == null) {
+            // 이미 다른 콜백 (heartbeat / TCP) 이 정리한 상태 — beacon 도착 전 TCP 가 더 빨랐을 때
+            log.debug("[SSE] unsubscribeOne (이미 정리됨) sessionId={} userId={}", sessionId, userId);
+            return;
+        }
+        if (!userId.equals(entry.userId)) {                     // 보안: 타 사용자 sessionId 차단
+            log.warn("[NotificationSseService] unsubscribeOne userId 불일치 sessionId={} entryUserId={} requestUserId={}",
+                    sessionId, entry.userId, userId);
+            return;
+        }
+        entry.lock.lock();
+        try {
+            try { entry.emitter.complete(); } catch (Exception ignored) {}
+        } finally {
+            entry.lock.unlock();
+        }
+        boolean removed = emitters.remove(sessionId, entry);
+        // 명시적 beacon close 가시화 — 가장 중요한 모니터링 라인 (DEBUG 활성화 시)
+        log.debug("[SSE] unsubscribeOne (sendBeacon) sessionId={} userId={} removed={} (남은={})",
+                sessionId, userId, removed, emitters.size());
     }
 
     /**
