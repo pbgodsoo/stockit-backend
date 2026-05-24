@@ -1,0 +1,94 @@
+package org.example.stockitbe.user.model.entity;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+
+@NoArgsConstructor
+@AllArgsConstructor
+@Getter
+@Builder
+@Entity
+@Table(name = "user", indexes = {
+        @Index(name = "uk_user_email", columnList = "email", unique = true),
+        @Index(name = "idx_user_status_applied_at", columnList = "status, applied_at")
+})
+public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(unique = true)
+    private String employeeCode;   // 로그인용 사원코드
+
+    @Column(nullable = false)
+    private String password;    // 로그인 비밀번호
+
+    @Column(nullable = false)
+    private String name;        // 회원가입용 이름
+
+    @Column(nullable = false, unique = true)
+    private String email;       // 회원가입용 이메일
+
+    @Column(nullable = false)
+    private String phoneNumber;  // 회원가입용 전화번호
+
+    @Column(nullable = false)
+    private String locationCode;  // 회원가입용 지점 코드
+
+    @Column(nullable = false)
+    private String locationName;  // 회원가입용 지점명
+
+    private String applicationReason; // 신청 사유(가입 신청 시 입력)
+
+    @Enumerated(EnumType.STRING)
+    private UserRole role;                  // 권한
+
+    @Enumerated(EnumType.STRING)
+    private UserStatus status;    // 회원가입 시 상태(대기, 승인, 거절)
+
+    private LocalDateTime appliedAt;  // 회원가입 신청일시
+
+    private LocalDateTime processedAt; // 본사 관리자의 회원가입 처리일시
+
+    // 동시 승인 방지용 낙관적 락 (2026-05-23).
+    // 두 admin 이 같은 PENDING 신청을 동시에 승인 시도 시 OptimisticLockingFailureException 발생 →
+    // 사번 시퀀스 중복 발급(lost update) 방지. nullable 로 둬서 기존 행 호환.
+    @Version
+    private Long version;
+
+
+    //  본사 관리자가 가입 신청을 승인할 때 호출
+    public void approve(String employeeCode) {
+        this.employeeCode = employeeCode;
+        this.status = UserStatus.APPROVED;
+        this.processedAt = LocalDateTime.now();
+    }
+
+    //  본사 관리자가 가입 신청을 거절할 때 호출
+    public void reject() {
+        this.status = UserStatus.REJECTED;
+        this.processedAt = LocalDateTime.now();
+    }
+
+    //  본사 관리자가 사용자 계정을 탈퇴 처리
+    public void withdraw() {
+        this.status = UserStatus.WITHDRAWN;
+        this.processedAt = LocalDateTime.now();
+    }
+
+    //  본인이 마이페이지에서 전화번호 수정
+    public void updatePhone(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
+    }
+
+    //  본인이 마이페이지에서 비밀번호 변경
+    public void updatePassword(String encodedPassword) {
+        this.password = encodedPassword;
+    }
+
+}

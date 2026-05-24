@@ -7,16 +7,96 @@ spring:
     url: ${DB_URL}
     username: ${DB_USER}
     password: ${DB_PASS}
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      minimum-idle: ${DB_POOL_MIN_IDLE:1}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:15000}
+      leak-detection-threshold: ${DB_LEAK_DETECTION_THRESHOLD_MS:20000}
 
   jpa:
     database-platform: org.hibernate.dialect.MariaDBDialect
+    open-in-view: false
     hibernate:
       ddl-auto: update
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
+
+  # ADR-021 AI 거래처 추천 — 임베딩(text-embedding-3-small) + 추천 사유(gpt-4o-mini)
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      embedding:
+        options:
+          model: text-embedding-3-small
+      chat:
+        options:
+          model: gpt-4o-mini
 
 logging:
   level:
-    org.hibernate.SQL: debug
-    org.hibernate.orm.jdbc.bind: trace
+    org.hibernate.SQL: warn
+    org.hibernate.orm.jdbc.bind: warn
+
+# SYS-001 본사 발주 자동 전환 배치
+purchase-order:
+  batch:
+    delay-ms: 300000      # 스케줄러 fixedDelay (5분)
+    wait-minutes: 30      # PENDING/APPROVED 30분 경과 시 자동 전환
+
+
+jwt:
+  secret: ${JWT_SECRET}
+  access-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS}
+  refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS}
+
+esg:
+  carbon-api:
+    base-url: https://apis.data.go.kr/1160100/service/GetGeneralProductInfoService
+    service-key: ${PUBLIC_DATA_API_KEY}
+    target-symbol: KAU25       # 현재 거래 활성 종목
+    fallback-price: 9200
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  health:
+    elasticsearch:
+      enabled: false
+  metrics:
+    tags:
+      application: stockit-be
+
+stockit:
+  circular-buyer:
+    ai:
+      embedding-timeout-ms: 15000
+      rationale-timeout-ms: 60000
+  elasticsearch:
+    host: ${ES_HOST:stockit-es-es-http.stockit-elk.svc.cluster.local}
+    port: ${ES_PORT:9200}
+    user: ${ES_USER:elastic}
+    password: ${ES_PASSWORD:}
+    circular-buyer-index: ${ES_CIRCULAR_BUYER_INDEX:circular-buyer-search}
+    sync:
+      enabled: ${ES_SYNC_ENABLED:true}
+      embedding-model: ${ES_SYNC_EMBEDDING_MODEL:text-embedding-3-small}
+      embedding-version: ${ES_SYNC_EMBEDDING_VERSION:1}
+      retry:
+        interval-ms: ${ES_SYNC_RETRY_INTERVAL_MS:30000}
+        base-delay-ms: ${ES_SYNC_RETRY_BASE_DELAY_MS:30000}
+        max-attempts: ${ES_SYNC_RETRY_MAX_ATTEMPTS:8}
+        batch-size: ${ES_SYNC_RETRY_BATCH_SIZE:100}
+
+# TEMP(E2E): 대시보드 테스트 안정화용 빠른 응답 스위치.
+# TODO: 테스트 인프라 정상화 후 반드시 제거.
+app:
+  dashboard:
+    e2e-fast: ${APP_DASHBOARD_E2E_FAST:true}

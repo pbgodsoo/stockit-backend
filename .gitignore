@@ -38,3 +38,21 @@ out/
 
 .env
 .env.prod
+.bkit
+.claude
+
+# Keep ES folder local-only
+ES/**
+
+
+ES/*.md
+ES/*.yaml
+ES/*.yaml.example
+
+worklog/**
+
+back-secret.yaml
+
+CICD/k8s/back-secret.yaml
+
+

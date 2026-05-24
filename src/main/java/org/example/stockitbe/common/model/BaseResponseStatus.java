@@ -17,6 +17,7 @@ public enum BaseResponseStatus {
     SIGNUP_INVALID_UUID(false, 3005, "유효하지 않은 인증값"),
     USER_NOT_FOUND(false, 3006, "존재하지 않는 사용자입니다."),
     PASSWORD_WRONG(false, 3007, "비밀번호가 일치하지 않습니다."),
+    NOT_AUTHENTICATED(false, 3008, "인증되지 않은 요청입니다."),
 
     // 4000번대 실패
     REQUEST_ERROR(false, 4001, "입력값이 잘못되었습니다."),
@@ -24,9 +25,10 @@ public enum BaseResponseStatus {
     ALREADY_JOINED(false, 4003, "이미 참여 중인 모집글이 있습니다."),
     RECRUIT_FULL(false, 4004, "모집이 마감되었거나 인원이 초과되었습니다."),
     ALREADY_CALLED(false, 4005, "이미 기사님 호출이 완료되어 나갈 수 없습니다."),
-    LOGIN_FAILED(false, 4006, "로그인에 실패하였습니다."),
+    LOGIN_FAILED(false, 4006, "사원코드 또는 비밀번호가 일치하지 않습니다."),
     DRIVER_ROLE_REQUIRED(false, 4007, "드라이버 계정만 로그인할 수 있습니다."),
-    ADMIN_ONLY_ACCESS(false, 4008, "관리자 계정만 공지사항 작업을 할 수 있습니다."),
+    JWT_REFRESH_NOT_APPROVED(false, 4008, "승인된 계정이 아닙니다."),
+    SIGNUP_INVALID_PHONE(false, 4009, "전화번호는 010으로 시작하는 11자리 숫자여야 합니다."),
 
     // 4100번대~ 결제 관련
     PAYMENT_UNAUTHENTICATED_USER(false, 4100, "인증받지 않은 사용자입니다."),
@@ -36,8 +38,123 @@ public enum BaseResponseStatus {
     PAYMENT_BILLING_INVALID_OWNER(false, 4104, "결제 수단의 소유자가 아닙니다."),
     PAYMENT_BILLING_REQUIRED(false, 4105, "최소 1개의 결제 수단이 필요합니다."),
     PAYMENT_DEFAULT_BILLING_REQUIRED(false, 4106, "기본 결제 수단이 존재하지 않습니다."),
+
+    // 4200번대~ 공급처별 제품 (CEN-027~031, 033)
+    VENDOR_NOT_FOUND(false, 4200, "공급처를 찾을 수 없습니다."),
+    VENDOR_PRODUCT_NOT_FOUND(false, 4201, "공급처별 제품 계약을 찾을 수 없습니다."),
+    DUPLICATE_VENDOR_PRODUCT_CODE(false, 4202, "이미 등록된 공급처-제품 코드 조합입니다."),
+    CATEGORY_NOT_FOUND(false, 4203, "카테고리를 찾을 수 없습니다."),
+    DUPLICATE_CATEGORY_NAME(false, 4204, "동일한 범위에 같은 카테고리명이 이미 존재합니다."),
+    CATEGORY_PARENT_REQUIRED(false, 4205, "소분류 등록 시 상위 카테고리가 필요합니다."),
+    CATEGORY_PARENT_NOT_FOUND(false, 4206, "상위 카테고리를 찾을 수 없습니다."),
+    CATEGORY_PARENT_NOT_ROOT(false, 4207, "상위 카테고리는 대분류만 지정할 수 있습니다."),
+    CATEGORY_ROOT_PARENT_DISALLOWED(false, 4208, "대분류는 상위 카테고리를 가질 수 없습니다."),
+    CATEGORY_DELETE_HAS_CHILDREN(false, 4209, "하위 카테고리가 존재하여 삭제할 수 없습니다."),
+    STORE_NOT_FOUND(false, 4210, "매장을 찾을 수 없습니다."),
+    WAREHOUSE_NOT_FOUND(false, 4211, "창고를 찾을 수 없습니다."),
+    DUPLICATE_STORE_NAME(false, 4212, "이미 등록된 매장명입니다."),
+    DUPLICATE_WAREHOUSE_NAME(false, 4213, "이미 등록된 창고명입니다."),
+    STORE_WAREHOUSE_MAPPING_INVALID_ROLE(false, 4230, "매장-창고 매핑 역할이 올바르지 않습니다."),
+    STORE_WAREHOUSE_MAPPING_DUPLICATE_ROLE(false, 4231, "매장별 동일 역할의 매핑이 이미 존재합니다."),
+    STORE_WAREHOUSE_MAPPING_DUPLICATE_WAREHOUSE(false, 4232, "동일 매장에 같은 창고를 중복 매핑할 수 없습니다."),
+    STORE_WAREHOUSE_MAPPING_PRIMARY_REQUIRED(false, 4233, "주 창고는 필수입니다."),
+    STORE_WAREHOUSE_MAPPING_PRIMARY_BACKUP_SAME(false, 4234, "주 창고와 예비 창고는 같을 수 없습니다."),
+    PRODUCT_MASTER_NOT_FOUND(false, 4214, "제품 마스터를 찾을 수 없습니다."),
+    PRODUCT_SKU_NOT_FOUND(false, 4215, "SKU를 찾을 수 없습니다."),
+    DUPLICATE_PRODUCT_MASTER_NAME(false, 4216, "이미 등록된 제품명입니다."),
+    DUPLICATE_PRODUCT_SKU_OPTION(false, 4217, "이미 등록된 SKU 옵션입니다."),
+    INVALID_SKU_PRICE(false, 4218, "SKU 가격은 0 이상이어야 합니다."),
+    VENDOR_PRODUCT_VENDOR_MISMATCH(false, 4219, "이 제품의 메인 공급처가 아닙니다."),
+    VENDOR_INACTIVE(false, 4220, "비활성 공급처는 선택할 수 없습니다."),
+    INVALID_PRODUCT_MATERIAL_SPEC(false, 4221, "제품 소재 정보가 올바르지 않습니다."),
+
+    // 4300번대~ 본사 발주 (CEN-035~040)
+    PURCHASE_ORDER_NOT_FOUND(false, 4300, "본사 발주를 찾을 수 없습니다."),
+    PURCHASE_ORDER_INVALID_STATUS_TRANSITION(false, 4301, "허용되지 않는 발주 상태 전환입니다."),
+    PURCHASE_ORDER_EMPTY_ITEMS(false, 4302, "발주 품목이 비어 있습니다."),
+    PURCHASE_ORDER_VENDOR_PRODUCT_MISMATCH(false, 4303, "발주 공급처와 품목의 공급처가 일치하지 않습니다."),
+    PURCHASE_ORDER_CANCEL_REASON_REQUIRED(false, 4304, "발주 취소 사유는 필수입니다."),
+    PURCHASE_ORDER_SKU_PRODUCT_MISMATCH(false, 4305, "발주 품목의 SKU가 공급처 계약 제품의 옵션이 아닙니다."),
+    PURCHASE_ORDER_BATCH_EMPTY(false, 4306, "분할 발주에 품목이 없습니다."),
+
+    // 4400번대~ 순환재고 관련 (ADR-020 / ADR-021)
+    CIRCULAR_BUYER_NOT_FOUND(false, 4400, "순환재고 거래처를 찾을 수 없습니다."),
+    DUPLICATE_CIRCULAR_BUYER_CODE(false, 4401, "이미 등록된 순환재고 거래처 코드입니다."),
+    INVALID_MATERIAL_FIT(false, 4402, "유효하지 않은 소재 적합도입니다."),
+    CIRCULAR_BUYER_CODE_EXHAUSTED(false, 4403, "순환재고 거래처 코드(RCV-999)가 모두 소진되었습니다."),
+    CONCURRENT_CIRCULAR_BUYER_REGISTRATION(false, 4404, "동시 등록 충돌이 발생했습니다. 다시 시도해주세요."),
+    INVALID_PARTNER_TYPE(false, 4405, "유효하지 않은 파트너 유형입니다."),
+    CIRCULAR_SALE_NOT_FOUND(false, 4406, "순환재고 판매 내역을 찾을 수 없습니다."),
+    CIRCULAR_SALE_EMPTY_ITEMS(false, 4407, "순환재고 판매 항목이 비어 있습니다."),
+    CIRCULAR_SALE_INVALID_QUANTITY(false, 4408, "순환재고 판매 수량이 올바르지 않습니다."),
+    CIRCULAR_SALE_SKU_NOT_FOUND(false, 4409, "순환재고 판매 SKU를 찾을 수 없습니다."),
+    CIRCULAR_SALE_INSUFFICIENT_STOCK(false, 4410, "순환재고가 부족하여 판매를 확정할 수 없습니다."),
+    CIRCULAR_SALE_BUYER_NOT_FOUND(false, 4411, "순환재고 판매 거래처를 찾을 수 없습니다."),
+    CIRCULAR_SALE_INVALID_WAREHOUSE(false, 4412, "순환재고 판매 출고 창고 정보가 올바르지 않습니다."),
+    CIRCULAR_SALE_INVALID_STATUS_TRANSITION(false, 4413, "순환재고 판매 상태 전이가 올바르지 않습니다."),
+    CIRCULAR_SALE_INVALID_REQUEST(false, 4414, "순환재고 판매 요청값이 올바르지 않습니다."),
+
+    // 4500번대~ 매장 판매
+    STORE_SALE_NOT_FOUND(false, 4500, "판매 내역을 찾을 수 없습니다."),
+    STORE_SALE_EMPTY_ITEMS(false, 4501, "판매 항목이 비어 있습니다."),
+    STORE_SALE_INVALID_QUANTITY(false, 4502, "판매 수량이 올바르지 않습니다."),
+    STORE_SALE_STORE_NOT_FOUND(false, 4503, "매장 정보를 찾을 수 없습니다."),
+    STORE_SALE_SKU_NOT_FOUND(false, 4504, "판매 SKU를 찾을 수 없습니다."),
+    STORE_SALE_INSUFFICIENT_STOCK(false, 4505, "재고가 부족하여 판매를 확정할 수 없습니다."),
+    STORE_SALE_SCOPE_FORBIDDEN(false, 4506, "로그인한 매장 범위를 벗어난 요청입니다."),
+
+    // 4600번대~ 매장 발주
+    STORE_ORDER_NOT_FOUND(false, 4600, "매장 발주를 찾을 수 없습니다."),
+    STORE_ORDER_EMPTY_ITEMS(false, 4601, "발주 품목이 비어 있습니다."),
+    STORE_ORDER_INVALID_QUANTITY(false, 4602, "요청 수량이 올바르지 않습니다."),
+    STORE_ORDER_STORE_NOT_FOUND(false, 4603, "매장 정보를 찾을 수 없습니다."),
+    STORE_ORDER_WAREHOUSE_NOT_FOUND(false, 4604, "창고 정보를 찾을 수 없습니다."),
+    STORE_ORDER_SKU_NOT_FOUND(false, 4605, "발주 SKU를 찾을 수 없습니다."),
+    STORE_ORDER_INVALID_STATUS_TRANSITION(false, 4606, "허용되지 않는 발주 상태 전환입니다."),
+    STORE_ORDER_CANCEL_REASON_REQUIRED(false, 4607, "발주 취소 사유는 필수입니다."),
+    STORE_ORDER_SCOPE_FORBIDDEN(false, 4608, "로그인한 매장 범위를 벗어난 요청입니다."),
+    STORE_ORDER_BATCH_STORE_CODE_REQUIRED(false, 4609, "배치 승인 STORE 모드에서는 storeCode가 필수입니다."),
+    STORE_ORDER_BATCH_SCOPE_INVALID(false, 4610, "유효하지 않은 배치 승인 범위입니다."),
+    STORE_ORDER_APPROVE_INSUFFICIENT_WAREHOUSE_STOCK(false, 4611, "Primary/Backup 창고 합산 재고가 부족하여 발주를 승인할 수 없습니다."),
+
+
+    // 4700번대~ 창고 입고 (WHS-005/007/008 + ADR-013/015/019 정정)
+    INBOUND_NOT_FOUND(false, 4700, "해당 입고 정보를 찾을 수 없습니다."),
+    DUPLICATE_INBOUND_CODE(false, 4701, "이미 존재하는 입고번호입니다."),
+    INVALID_INBOUND_STATUS_TRANSITION(false, 4702, "허용되지 않은 입고 상태 전환입니다."),
+    INBOUND_ALREADY_EXISTS_FOR_SOURCE(false, 4703, "해당 발주/이동에 대한 입고가 이미 존재합니다."),
+    INBOUND_NOT_CONFIRMABLE(false, 4704, "입고 확정 가능한 상태가 아닙니다."),
+    INBOUND_OUTBOUND_NOT_FOUND(false, 4705, "입고에 연결된 출고 정보를 찾을 수 없습니다."),
+
+    // 4900번대~ 창고 출고
+    OUTBOUND_NOT_FOUND(false, 4900, "해당 출고 정보를 찾을 수 없습니다."),
+    OUTBOUND_INVALID_STATUS_TRANSITION(false, 4901, "허용되지 않은 출고 상태 전환입니다."),
+    OUTBOUND_SCOPE_FORBIDDEN(false, 4902, "로그인한 창고 범위를 벗어난 출고 요청입니다."),
+    OUTBOUND_RESERVED_STOCK_NOT_ENOUGH(false, 4903, "예약 재고가 부족하여 출고를 확정할 수 없습니다."),
+
+    // 4800번대 회원 관리
+    USER_NOT_PENDING(false, 4800, "대기 상태인 신청만 처리할 수 있습니다."),
+    USER_NOT_APPROVED(false, 4801, "승인된 사용자만 탈퇴 처리할 수 있습니다."),
+    USER_ALREADY_WITHDRAWN(false, 4802, "이미 탈퇴 처리된 사용자입니다."),
+    USER_PASSWORD_SAME(false, 4803, "새 비밀번호가 기존 비밀번호와 동일합니다."),
+    EMPLOYEE_CODE_SEQUENCE_NOT_FOUND(false, 4804, "사원코드 시퀀스가 초기화되지 않았습니다. 관리자에게 문의해주세요."),
+    USER_CONCURRENT_MODIFICATION(false, 4805, "다른 관리자가 먼저 처리했습니다. 새로고침 후 다시 시도해주세요."),
     // 5000번대 실패
-    FAIL(false, 5000, "요청 실패");
+    FAIL(false, 5000, "요청 실패"),
+
+
+    // 5100번대 외부 API 관련 (시스템 에러)
+    EXTERNAL_API_ERROR(false, 5100, "외부 API 호출 중 오류가 발생했습니다."),
+    CARBON_PRICE_UNAVAILABLE(false, 5101, "배출권 시세 정보를 불러올 수 없습니다."),
+
+
+    //  5200번대 알림
+    NOTIFICATION_NOT_FOUND(false, 5200, "알림을 찾을 수 없습니다."),
+    NOTIFICATION_FORBIDDEN(false, 5201, "본인 수신 알림이 아닙니다."),
+    NOTIFICATION_ALREADY_READ(false, 5202, "이미 읽음 처리된 알림입니다."),
+    NOTIFICATION_SSE_CONNECT_FAILED(false, 5203, "실시간 알림 연결에 실패했습니다.");
+
+
 
     private final boolean success;
     private final int code;

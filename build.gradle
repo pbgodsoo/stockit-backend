@@ -18,6 +18,16 @@ repositories {
     mavenCentral()
 }
 
+ext {
+    springAiVersion = '1.0.0'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.ai:spring-ai-bom:${springAiVersion}"
+    }
+}
+
 dependencies {
     // --- 스타터팩 ---
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -30,14 +40,47 @@ dependencies {
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
 
+    // --- Spring Security 관련 ---
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // --- JWT 토큰 관련 ---
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+
     // --- Swagger 관련 ---
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.4'
+
+    // --- Spring AI (ADR-021 AI 거래처 추천) ---
+    implementation 'org.springframework.ai:spring-ai-starter-model-openai'
+
+    // --- Elasticsearch (ADR-028 전사재고 CQRS Read-side) ---
+    implementation 'co.elastic.clients:elasticsearch-java:8.13.4'
+    implementation 'jakarta.json:jakarta.json-api:2.1.3'
 
     // --- 테스트 관련 ---
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+// Gradle problems report 이동 시 기존 파일이 있으면 FileAlreadyExistsException 이 발생할 수 있어
+// 빌드 시작 전에 대상 파일을 정리한다.
+def problemsReportFile = layout.buildDirectory.file("reports/problems/problems-report.html")
+
+tasks.register('cleanProblemsReportFile') {
+    doLast {
+        delete(problemsReportFile)
+    }
+}
+
+tasks.matching { it.name in ['build', 'test', 'bootRun', 'bootJar', 'check'] }.configureEach {
+    dependsOn(tasks.named('cleanProblemsReportFile'))
 }
