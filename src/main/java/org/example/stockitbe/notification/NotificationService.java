@@ -37,6 +37,15 @@ public class NotificationService {
         return sseService.subscribe(u.getId(), u.getRole().name(), u.getLocationCode());
     }
 
+    /**
+     * 명시적 unsubscribe — FE 가 페이지 unload 시 sendBeacon 으로 호출.
+     * sseService.unsubscribeOne 에서 sessionId 의 owner 가 본인 (userId 일치) 인지 검증.
+     */
+    public void unsubscribeStream(String sessionId, AuthUserDetails me) {
+        User u = findUserOrThrow(me);
+        sseService.unsubscribeOne(sessionId, u.getId());
+    }
+
     @Transactional(readOnly = true)
     public NotificationDto.NotificationListRes list(AuthUserDetails me, int page, int size, Boolean unreadOnly) {
         User u = findUserOrThrow(me);

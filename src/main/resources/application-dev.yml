@@ -37,6 +37,11 @@ logging:
   level:
     org.hibernate.SQL: info
     org.hibernate.orm.jdbc.bind: info
+    # SSE 생명주기 가시화 — 로컬 개발 시 subscribe/unsubscribe/onCompletion 등 흐름 추적용.
+    # 운영(prod) 에서는 기본 INFO 라 조용. 운영 진단 필요 시 actuator/loggers 로 런타임 토글:
+    #   curl -X POST host/actuator/loggers/org.example.stockitbe.notification \
+    #     -H 'Content-Type: application/json' -d '{"configuredLevel":"DEBUG"}'
+    org.example.stockitbe.notification: debug
 
 # SYS-001 본사 발주 자동 전환 배치
 purchase-order:
