@@ -55,6 +55,10 @@ dependencies {
     // --- Spring AI (ADR-021 AI 거래처 추천) ---
     implementation 'org.springframework.ai:spring-ai-starter-model-openai'
 
+    // --- Elasticsearch (ADR-028 전사재고 CQRS Read-side) ---
+    implementation 'co.elastic.clients:elasticsearch-java:8.13.4'
+    implementation 'jakarta.json:jakarta.json-api:2.1.3'
+
     // --- 테스트 관련 ---
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

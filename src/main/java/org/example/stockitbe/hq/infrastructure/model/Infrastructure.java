@@ -10,6 +10,9 @@ import org.example.stockitbe.common.model.BaseEntity;
 @Entity
 @Table(name = "infrastructure", uniqueConstraints = {
         @UniqueConstraint(name = "uk_infrastructure_code", columnNames = "code")
+}, indexes = {
+        @Index(name = "idx_infrastructure_type_status_region_id", columnList = "location_type,status,region,id"),
+        @Index(name = "idx_infrastructure_type_region_id", columnList = "location_type,region,id")
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

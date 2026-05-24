@@ -128,18 +128,17 @@ public class InfrastructureService {
     }
 
     private Map<Long, Long> mappedStoreCountByWarehouseId(List<Infrastructure> rows) {
-        List<Infrastructure> warehouses = rows.stream()
+        List<Long> warehouseIds = rows.stream()
                 .filter(it -> it.getLocationType() == LocationType.WAREHOUSE)
+                .map(Infrastructure::getId)
                 .toList();
-        if (warehouses.isEmpty()) {
+        if (warehouseIds.isEmpty()) {
             return Map.of();
         }
 
         Map<Long, Long> mappedStoreCountByWarehouseId = new HashMap<>();
-        List<StoreWarehouseMap> maps = storeWarehouseMapRepository.findByWarehouseIn(warehouses);
-        for (StoreWarehouseMap map : maps) {
-            Long warehouseId = map.getWarehouse().getId();
-            mappedStoreCountByWarehouseId.put(warehouseId, mappedStoreCountByWarehouseId.getOrDefault(warehouseId, 0L) + 1L);
+        for (StoreWarehouseMapRepository.WarehouseStoreCount row : storeWarehouseMapRepository.countStoresByWarehouseIds(warehouseIds)) {
+            mappedStoreCountByWarehouseId.put(row.getWarehouseId(), row.getStoreCount());
         }
         return mappedStoreCountByWarehouseId;
     }
