@@ -13,7 +13,7 @@ import java.util.List;
 
 /**
  * ADR-021 AI 거래처 추천 — 임베딩 단계 전용.
- * 거래처 자연어 설명을 OpenAI text-embedding-3-small 로 1536차원 벡터화하여 circular_buyer.embedding JSON 컬럼에 저장.
+ * 거래처 임베딩용 설명을 OpenAI text-embedding-3-small 로 1536차원 벡터화하여 circular_buyer.embedding JSON 컬럼에 저장.
  * Vector DB 미사용 (CLAUDE.md / ADR-021).
  */
 @Service
@@ -31,11 +31,14 @@ public class CircularBuyerEmbeddingService {
         String factoryProduct = v.getFactoryProduct() != null
                 ? String.join(",", v.getFactoryProduct())
                 : "";
+        String embeddingDescription = hasText(v.getEmbeddingDescription())
+                ? v.getEmbeddingDescription()
+                : v.getDescription();
         return String.join(" ",
                 safe(v.getCompanyName()),
                 safe(v.getIndustryGroup()),
                 factoryProduct,
-                safe(v.getDescription()),
+                safe(embeddingDescription),
                 safe(v.getPrimaryMaterialFit()),
                 safe(v.getAddress())
         ).trim();
@@ -74,6 +77,10 @@ public class CircularBuyerEmbeddingService {
 
     private static String safe(String s) {
         return s == null ? "" : s;
+    }
+
+    private static boolean hasText(String s) {
+        return s != null && !s.isBlank();
     }
 
     private static List<Double> toDoubleList(float[] arr) {

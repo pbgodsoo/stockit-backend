@@ -92,6 +92,7 @@ public class CircularBuyerEsSyncService {
         doc.put("industry_group", buyer.getIndustryGroup());
         doc.put("factory_product", buyer.getFactoryProduct() == null ? List.of() : buyer.getFactoryProduct());
         doc.put("description", buyer.getDescription());
+        doc.put("embedding_description", buyer.getEmbeddingDescription());
         doc.put("primary_material_fit", buyer.getPrimaryMaterialFit());
         doc.put("manager_name", buyer.getManagerName());
         doc.put("manager_name_chosung", ChosungUtils.toChosung(buyer.getManagerName()));

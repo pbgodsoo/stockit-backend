@@ -175,7 +175,8 @@ public class CircularBuyerService {
                 req.getAddress(),
                 req.getPartnerType()
         );
-        // ADR-021 — 의미 필드 중 하나라도 변경된 경우에만 임베딩 재생성. managerName/phone 만 바뀌면 OpenAI 콜 절약.
+        // ADR-021 — 임베딩 입력 필드 중 하나라도 변경된 경우에만 임베딩 재생성.
+        // description 은 화면 표시용 설명이라 변경되어도 OpenAI 콜을 발생시키지 않는다.
         if (rebuildEmbedding) {
             embeddingService.embedAndApply(v);
         }
@@ -237,7 +238,6 @@ public class CircularBuyerService {
                 || changed(v.getIndustryGroup(), req.getIndustryGroup())
                 || changed(v.getPrimaryMaterialFit(), req.getPrimaryMaterialFit())
                 || changed(v.getAddress(), req.getAddress())
-                || changed(v.getDescription(), req.getDescription())
                 || listChanged(v.getFactoryProduct(), req.getFactoryProduct());
     }
 

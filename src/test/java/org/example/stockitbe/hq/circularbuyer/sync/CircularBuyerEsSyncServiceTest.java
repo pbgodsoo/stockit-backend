@@ -36,6 +36,8 @@ class CircularBuyerEsSyncServiceTest {
         assertThat(doc.get("company_name_normalized")).isEqualTo("홍익플러스");
         assertThat(doc.get("company_name_chosung")).isEqualTo("ㅈㅎㅇㅍㄹㅅ");
         assertThat(doc.get("manager_name_chosung")).isEqualTo("ㅇㄷㅇ");
+        assertThat(doc.get("description")).isEqualTo("순환 거래처");
+        assertThat(doc.get("embedding_description")).isEqualTo("추천 검색용 거래처 프로필");
         assertThat(doc.get("factory_product")).isInstanceOf(List.class);
         assertThat((List<String>) doc.get("factory_product")).contains("작업용 점퍼", "린넨 셔츠");
         assertThat(doc.get("embedding")).isInstanceOf(List.class);
@@ -82,6 +84,7 @@ class CircularBuyerEsSyncServiceTest {
                 .build();
 
         CircularBuyer buyer = req.toEntity("RCV-00001");
+        ReflectionTestUtils.setField(buyer, "embeddingDescription", "추천 검색용 거래처 프로필");
         ReflectionTestUtils.setField(buyer, "id", 1L);
         ReflectionTestUtils.setField(buyer, "createdAt", Timestamp.from(Instant.parse("2026-05-21T00:00:00Z")));
         ReflectionTestUtils.setField(buyer, "updatedAt", Timestamp.from(Instant.parse("2026-05-21T00:10:00Z")));
