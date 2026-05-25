@@ -23,7 +23,9 @@ spec:
         prometheus.io/path: "/actuator/prometheus"
         prometheus.istio.io/merge-metrics: "true"
     spec:
-      terminationGracePeriodSeconds: 25
+      # graceful shutdown 강화 — Blue/Green 전환 시 1500+ SSE emitter complete() 시간 확보
+      # 부하 테스트 중 강제 종료로 인한 RecycleRequiredException 차단 목적
+      terminationGracePeriodSeconds: 90
       containers:
         - name: stockit-be
           image: sunyeoplee/stockit-backend:latest
@@ -34,6 +36,11 @@ spec:
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: prod
+            # JVM heap 명시 — memory limit (4Gi) 의 75% 를 heap 으로 명시 (이전 25% 자동 할당의 한계 제거).
+            # G1GC + MaxGCPauseMillis 200ms 로 부하 시 GC pause 최소화 → heartbeat 지연 차단.
+            # HeapDumpOnOutOfMemoryError 로 OOM 진단 자료 확보.
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Xmx3000m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp"
             - name: DB_URL
               valueFrom:
                 configMapKeyRef:
@@ -117,12 +124,15 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 5
           lifecycle:
+            # preStop sleep 30 — Service selector 가 다른 pod 으로 옮겨갈 시간 확보.
+            # 30초 동안 새 요청은 다른 pod 으로 라우팅 → 현 pod 의 진행 중 SSE 정리 시간 보장.
+            # 이전 7초는 부하 시 SSE 1500 emitter graceful 정리에 부족.
             preStop:
               exec:
                 command:
                   - /bin/sh
                   - -c
-                  - sleep 7
+                  - sleep 30
           startupProbe:
             httpGet:
               path: /actuator/health/readiness
@@ -132,9 +142,13 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 60
           resources:
+            # CPU 자원 — 운영 동기화 + 부하 대응 강화.
+            # 이전 git: cpu limit 500m → 운영에서 직접 cpu '2' 로 수정한 상태였음.
+            # 이번 PR 의 JVM heap 3GB 활용 + Tomcat thread max 200 + GC 병렬 처리 위해 cpu '2' 필수.
+            # 다음 Jenkins 배포 시 운영이 500m 으로 회귀하는 사고 방지 목적.
             requests:
-              cpu: 250m
-              memory: 1536Mi
+              cpu: '500m'
+              memory: 2Gi
             limits:
-              cpu: 500m
+              cpu: '2'
               memory: 4Gi
