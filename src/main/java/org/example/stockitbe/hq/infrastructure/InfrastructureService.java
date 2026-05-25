@@ -54,7 +54,8 @@ public class InfrastructureService {
         }
 
         Map<Long, Long> mappedStoreCountByWarehouseId = mappedStoreCountByWarehouseId(rows);
-        return rows.stream().map(row -> toRes(row, mappedStoreCountByWarehouseId)).toList();
+        Map<Long, StoreWarehouseMap> primaryWarehouseMapByStoreId = primaryWarehouseMapByStoreId(rows);
+        return rows.stream().map(row -> toRes(row, mappedStoreCountByWarehouseId, primaryWarehouseMapByStoreId)).toList();
     }
 
     @Transactional(readOnly = true)
@@ -62,7 +63,8 @@ public class InfrastructureService {
         Infrastructure infra = infrastructureRepository.findByCode(code)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.NOT_FOUND_DATA));
         Map<Long, Long> mappedStoreCountByWarehouseId = mappedStoreCountByWarehouseId(List.of(infra));
-        return toRes(infra, mappedStoreCountByWarehouseId);
+        Map<Long, StoreWarehouseMap> primaryWarehouseMapByStoreId = primaryWarehouseMapByStoreId(List.of(infra));
+        return toRes(infra, mappedStoreCountByWarehouseId, primaryWarehouseMapByStoreId);
     }
 
     @Transactional
@@ -72,7 +74,7 @@ public class InfrastructureService {
             throw BaseException.from(duplicateNameStatus(req.getLocationType()));
         }
         Infrastructure saved = saveWithGeneratedCode(req);
-        return toRes(saved, Map.of());
+        return toRes(saved, Map.of(), Map.of());
     }
 
     @Transactional
@@ -98,7 +100,8 @@ public class InfrastructureService {
                 req.getStatus()
         );
         Map<Long, Long> mappedStoreCountByWarehouseId = mappedStoreCountByWarehouseId(List.of(infra));
-        return toRes(infra, mappedStoreCountByWarehouseId);
+        Map<Long, StoreWarehouseMap> primaryWarehouseMapByStoreId = primaryWarehouseMapByStoreId(List.of(infra));
+        return toRes(infra, mappedStoreCountByWarehouseId, primaryWarehouseMapByStoreId);
     }
 
     private Infrastructure saveWithGeneratedCode(InfrastructureDto.UpsertReq req) {
@@ -119,12 +122,18 @@ public class InfrastructureService {
         resolveRegionCode(req.getRegion());
     }
 
-    private InfrastructureDto.Res toRes(Infrastructure infra, Map<Long, Long> mappedStoreCountByWarehouseId) {
+    private InfrastructureDto.Res toRes(Infrastructure infra,
+                                        Map<Long, Long> mappedStoreCountByWarehouseId,
+                                        Map<Long, StoreWarehouseMap> primaryWarehouseMapByStoreId) {
         Long mappedStoreCount = null;
         if (infra.getLocationType() == LocationType.WAREHOUSE) {
             mappedStoreCount = mappedStoreCountByWarehouseId.getOrDefault(infra.getId(), 0L);
         }
-        return InfrastructureDto.Res.from(infra, mappedStoreCount);
+        StoreWarehouseMap primaryWarehouseMap = null;
+        if (infra.getLocationType() == LocationType.STORE) {
+            primaryWarehouseMap = primaryWarehouseMapByStoreId.get(infra.getId());
+        }
+        return InfrastructureDto.Res.from(infra, mappedStoreCount, primaryWarehouseMap);
     }
 
     private Map<Long, Long> mappedStoreCountByWarehouseId(List<Infrastructure> rows) {
@@ -142,6 +151,22 @@ public class InfrastructureService {
             mappedStoreCountByWarehouseId.put(warehouseId, mappedStoreCountByWarehouseId.getOrDefault(warehouseId, 0L) + 1L);
         }
         return mappedStoreCountByWarehouseId;
+    }
+
+    private Map<Long, StoreWarehouseMap> primaryWarehouseMapByStoreId(List<Infrastructure> rows) {
+        List<Long> storeIds = rows.stream()
+                .filter(it -> it.getLocationType() == LocationType.STORE)
+                .map(Infrastructure::getId)
+                .toList();
+        if (storeIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, StoreWarehouseMap> primaryWarehouseMapByStoreId = new HashMap<>();
+        for (StoreWarehouseMap map : storeWarehouseMapRepository.findByStoreIdsAndRoleWithWarehouse(storeIds, StoreWarehouseRole.PRIMARY)) {
+            primaryWarehouseMapByStoreId.put(map.getStore().getId(), map);
+        }
+        return primaryWarehouseMapByStoreId;
     }
 
     private BaseResponseStatus duplicateNameStatus(LocationType type) {
