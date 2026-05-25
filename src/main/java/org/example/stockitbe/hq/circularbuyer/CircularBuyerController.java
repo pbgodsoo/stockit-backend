@@ -66,13 +66,23 @@ public class CircularBuyerController {
     }
 
     /**
-     * ADR-021 시드 backfill — embedding == null 인 거래처들을 일괄 임베딩.
+     * ADR-021 backfill — embedding == null 인 거래처들을 limit 건씩 나눠 remaining == 0 까지 임베딩.
      * 인증 가드는 ADR-011 미정으로 추후 추가.
      */
     @PostMapping("/embeddings/backfill")
-    public BaseResponse<Map<String, Integer>> backfillEmbeddings() {
-        int processed = service.backfillEmbeddings();
-        return BaseResponse.success(Map.of("processed", processed));
+    public BaseResponse<Map<String, Object>> backfillEmbeddings(
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "1000") int maxBatches) {
+        CircularBuyerEmbeddingService.BackfillRunResult result = service.backfillEmbeddings(limit, maxBatches);
+        return BaseResponse.success(Map.of(
+                "batches", (long) result.batches(),
+                "processed", (long) result.processed(),
+                "succeeded", (long) result.succeeded(),
+                "failed", (long) result.failed(),
+                "remaining", result.remaining(),
+                "completed", result.remaining() == 0,
+                "stopReason", result.stopReason()
+        ));
     }
 
     /**

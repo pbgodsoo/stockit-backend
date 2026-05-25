@@ -46,6 +46,12 @@ public interface CircularBuyerRepository
     @Query("SELECT b.primaryMaterialFit as materialFit, COUNT(b) as count FROM CircularBuyer b GROUP BY b.primaryMaterialFit")
     List<CircularBuyerMaterialFitCount> countGroupByMaterialFit();
 
+    @Query("SELECT b FROM CircularBuyer b WHERE b.embedding IS NULL ORDER BY b.id ASC")
+    List<CircularBuyer> findNullEmbeddingBatch(Pageable pageable);
+
+    @Query("SELECT COUNT(b) FROM CircularBuyer b WHERE b.embedding IS NULL")
+    long countNullEmbeddings();
+
     /**
      * 자동 코드 부여 시 동시성 제어 — 마지막(max code) row 에 PESSIMISTIC_WRITE 락.
      * 두 트랜잭션이 동시에 호출하면 한 쪽은 락 대기 → 깨어나면 새 max 다시 조회 → 충돌 회피.

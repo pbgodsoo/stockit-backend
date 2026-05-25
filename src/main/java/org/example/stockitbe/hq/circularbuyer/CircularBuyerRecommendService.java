@@ -40,12 +40,11 @@ import java.util.stream.Collectors;
 
 /**
  * ADR-021 AI 거래처 추천 — 3층 RAG 파이프라인.
- *  1층: primary_material_fit 단일 SQL 룰 (Phase 1 선제 추상화 차단 — status/minOrderQty 등 추가 룰 X).
- *  2층: 쿼리 임베딩 + 후보 embedding 인메모리 코사인 유사도 → top 5.
+ *  1층: primary_material_fit 단일 룰 필터.
+ *  2층: 쿼리 임베딩 + Elasticsearch dense_vector kNN → 거리 가중치 재정렬 → top 5.
  *  3층: 단일 ChatModel 호출로 5개 사유 한꺼번에 생성. 실패 시 fallback 텍스트.
  *
- * 비용 — 추천 1회 = 임베딩 1콜 + chat 1콜 ≈ 1~2원, 1.5~2.5초 (CLAUDE.md 명시 budget).
- * Vector DB / VectorStore 추상화 미사용 (Phase 1 제약 — Phase 2 ES 전환 시점에 도입).
+ * ES/임베딩 장애 시 기존 RDB cosine 또는 앞 N건 fallback 으로 등록 흐름을 보호한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -56,6 +55,7 @@ public class CircularBuyerRecommendService {
             "natural-single", "synthetic", "blended"
     );
     private static final int TOP_K = 5;
+    private static final int ES_CANDIDATE_K = 50;
     private static final double SIM_WEIGHT = 0.7;
     private static final double DIST_WEIGHT = 0.3;
     private static final double DIST_NORM_KM = 30.0;
@@ -77,6 +77,7 @@ public class CircularBuyerRecommendService {
     );
 
     private final CircularBuyerRepository circularBuyerRepository;
+    private final CircularBuyerRecommendSearchService recommendSearchService;
     private final InfrastructureRepository infrastructureRepository;
     private final ProductMasterRepository productMasterRepository;
     private final EmbeddingModel embeddingModel;
@@ -91,48 +92,47 @@ public class CircularBuyerRecommendService {
 
     @Transactional(readOnly = true)
     public CircularBuyerDto.RecommendRes recommend(CircularBuyerDto.RecommendReq req) {
-        // 1층 — SQL 룰 필터
         validateMaterialFit(req.getMaterialFit());
-        List<CircularBuyer> candidates = circularBuyerRepository.findAll(
-                materialFitEqualSpec(req.getMaterialFit())
-        );
-        if (candidates.isEmpty()) {
+
+        WarehousePoint warehousePoint = resolveWarehousePoint(req.getWarehouseCode());
+        RankingResult rankingResult = rankByScore(req, buildQueryText(req), warehousePoint);
+        List<RankedBuyer> rankedTop = rankingResult.rankedTop();
+        if (rankedTop.isEmpty()) {
             return CircularBuyerDto.RecommendRes.builder()
                     .recommendations(List.of())
                     .build();
         }
 
-        // 2층 — 쿼리 임베딩 + 코사인 top 5
-        WarehousePoint warehousePoint = resolveWarehousePoint(req.getWarehouseCode());
-        List<RankedBuyer> rankedTop = rankByScore(candidates, buildQueryText(req), warehousePoint);
-        List<CircularBuyer> top = rankedTop.stream().map(RankedBuyer::buyer).toList();
+        List<RecommendedCandidate> top = rankedTop.stream().map(RankedBuyer::buyer).toList();
 
         // 3층 — LLM 사유 생성 (실패 시 fallback)
-        Map<String, String> rationales = generateRationales(top, req);
+        Map<String, String> rationales = rankingResult.rationaleGenerationAllowed()
+                ? generateRationales(top, req)
+                : Map.of();
         Map<String, RankedBuyer> rankedByCode = rankedTop.stream()
                 .filter(Objects::nonNull)
                 .collect(Collectors.toMap(
-                        r -> r.buyer().getCode(),
+                        r -> r.buyer().code(),
                         r -> r,
                         (left, right) -> left
                 ));
 
         List<CircularBuyerDto.RecommendItem> items = top.stream()
                 .map(b -> {
-                    RankedBuyer rankedBuyer = rankedByCode.get(b.getCode());
+                    RankedBuyer rankedBuyer = rankedByCode.get(b.code());
                     Double distanceKm = rankedBuyer == null ? null : rankedBuyer.distanceKm();
                     return CircularBuyerDto.RecommendItem.builder()
-                        .code(b.getCode())
-                        .companyName(b.getCompanyName())
-                        .primaryMaterialFit(b.getPrimaryMaterialFit())
-                        .industryGroup(b.getIndustryGroup())
-                        .partnerType(b.getPartnerType())
-                        .factoryProduct(b.getFactoryProduct())
-                        .managerName(b.getManagerName())
-                        .phone(b.getPhone())
-                        .address(b.getAddress())
+                        .code(b.code())
+                        .companyName(b.companyName())
+                        .primaryMaterialFit(b.primaryMaterialFit())
+                        .industryGroup(b.industryGroup())
+                        .partnerType(b.partnerType())
+                        .factoryProduct(b.factoryProduct())
+                        .managerName(b.managerName())
+                        .phone(b.phone())
+                        .address(b.address())
                         .distanceKm(distanceKm)
-                        .rationale(rationales.getOrDefault(b.getCode(), fallbackRationale()))
+                        .rationale(rationales.getOrDefault(b.code(), fallbackRationale()))
                         .build();
                 })
                 .toList();
@@ -201,11 +201,7 @@ public class CircularBuyerRecommendService {
         });
     }
 
-    private List<RankedBuyer> rankByScore(
-            List<CircularBuyer> candidates,
-            String queryText,
-            WarehousePoint warehousePoint
-    ) {
+    private RankingResult rankByScore(CircularBuyerDto.RecommendReq req, String queryText, WarehousePoint warehousePoint) {
         float[] q;
         try {
             q = callAiWithTimeout(
@@ -215,12 +211,31 @@ public class CircularBuyerRecommendService {
             );
         } catch (Exception e) {
             log.warn("쿼리 임베딩 생성 실패 — 코사인 정렬 없이 fallback 정렬(앞 N건). reason={}", e.getMessage());
-            return candidates.stream()
-                    .limit(TOP_K)
-                    .map(b -> new RankedBuyer(b, null, 0.0))
-                    .toList();
+            return new RankingResult(fallbackWithoutEmbedding(req.getMaterialFit()), false);
         }
+
+        try {
+            List<CircularBuyerRecommendSearchService.RecommendedBuyer> esCandidates =
+                    recommendSearchService.searchTopKByKnn(q, req.getMaterialFit(), ES_CANDIDATE_K);
+            if (!esCandidates.isEmpty()) {
+                List<RankedBuyer> rankedTop = esCandidates.stream()
+                        .map(candidate -> toRankedBuyer(candidate, warehousePoint))
+                        .sorted((a, b) -> Double.compare(b.score(), a.score()))
+                        .limit(TOP_K)
+                        .toList();
+                return new RankingResult(rankedTop, true);
+            }
+            log.warn("순환재고 거래처 ES kNN 추천 결과 없음 — RDB cosine fallback 수행. materialFit={}", req.getMaterialFit());
+        } catch (Exception e) {
+            log.warn("순환재고 거래처 ES kNN 추천 실패 — RDB cosine fallback 수행. reason={}", e.getMessage());
+        }
+
         List<Double> qVec = toDoubleList(q);
+        return new RankingResult(fallbackByCosine(req.getMaterialFit(), qVec, warehousePoint), true);
+    }
+
+    private List<RankedBuyer> fallbackByCosine(String materialFit, List<Double> qVec, WarehousePoint warehousePoint) {
+        List<CircularBuyer> candidates = circularBuyerRepository.findAll(materialFitEqualSpec(materialFit));
         return candidates.stream()
                 .map(buyer -> toRankedBuyer(buyer, qVec, warehousePoint))
                 .sorted((a, b) -> Double.compare(b.score(), a.score()))
@@ -228,12 +243,39 @@ public class CircularBuyerRecommendService {
                 .toList();
     }
 
+    private List<RankedBuyer> fallbackWithoutEmbedding(String materialFit) {
+        return circularBuyerRepository.findAll(materialFitEqualSpec(materialFit)).stream()
+                .limit(TOP_K)
+                .map(b -> new RankedBuyer(toCandidate(b), null, 0.0))
+                .toList();
+    }
+
+    private RankedBuyer toRankedBuyer(
+            CircularBuyerRecommendSearchService.RecommendedBuyer candidate,
+            WarehousePoint warehousePoint
+    ) {
+        double simScore = candidate.score() == null ? 0.0 : candidate.score();
+        boolean canUseDistance = warehousePoint != null
+                && isValidLatLng(candidate.latitude(), candidate.longitude());
+        RecommendedCandidate buyer = toCandidate(candidate);
+        if (!canUseDistance) {
+            return new RankedBuyer(buyer, null, simScore);
+        }
+        double distanceKm = haversineKm(
+                warehousePoint.latitude(), warehousePoint.longitude(),
+                candidate.latitude(), candidate.longitude()
+        );
+        double distScore = 1.0 / (1.0 + (distanceKm / DIST_NORM_KM));
+        double finalScore = (SIM_WEIGHT * simScore) + (DIST_WEIGHT * distScore);
+        return new RankedBuyer(buyer, round2(distanceKm), finalScore);
+    }
+
     private RankedBuyer toRankedBuyer(CircularBuyer buyer, List<Double> qVec, WarehousePoint warehousePoint) {
         double simScore = cosine(qVec, buyer.getEmbedding());
         boolean canUseDistance = warehousePoint != null
                 && isValidLatLng(buyer.getLatitude(), buyer.getLongitude());
         if (!canUseDistance) {
-            return new RankedBuyer(buyer, null, simScore);
+            return new RankedBuyer(toCandidate(buyer), null, simScore);
         }
         double distanceKm = haversineKm(
                 warehousePoint.latitude(), warehousePoint.longitude(),
@@ -241,7 +283,7 @@ public class CircularBuyerRecommendService {
         );
         double distScore = 1.0 / (1.0 + (distanceKm / DIST_NORM_KM));
         double finalScore = (SIM_WEIGHT * simScore) + (DIST_WEIGHT * distScore);
-        return new RankedBuyer(buyer, round2(distanceKm), finalScore);
+        return new RankedBuyer(toCandidate(buyer), round2(distanceKm), finalScore);
     }
 
     private static double cosine(List<Double> a, List<Double> b) {
@@ -266,7 +308,7 @@ public class CircularBuyerRecommendService {
      * 단일 ChatModel 호출로 5개 사유 한꺼번에 받기. 실패 시 빈 Map 반환 → 호출자가 fallback 텍스트 박음.
      * 응답 형식 강제 — JSON 배열 [{"code":..., "rationale":...}, ...] 만 허용.
      */
-    private Map<String, String> generateRationales(List<CircularBuyer> top, CircularBuyerDto.RecommendReq req) {
+    private Map<String, String> generateRationales(List<RecommendedCandidate> top, CircularBuyerDto.RecommendReq req) {
         if (top.isEmpty()) return Map.of();
         try {
             String prompt = buildPrompt(top, req);
@@ -298,7 +340,7 @@ public class CircularBuyerRecommendService {
         }
     }
 
-    private String buildPrompt(List<CircularBuyer> top, CircularBuyerDto.RecommendReq req) {
+    private String buildPrompt(List<RecommendedCandidate> top, CircularBuyerDto.RecommendReq req) {
         StringBuilder sb = new StringBuilder();
         WarehousePoint wp = resolveWarehousePoint(req.getWarehouseCode());
         sb.append("너는 SPA 브랜드 본사 관리자에게 순환재고 처리 거래처를 추천하는 한국어 어시스턴트야.\n");
@@ -325,28 +367,28 @@ public class CircularBuyerRecommendService {
 
         sb.append("\n[후보 거래처 ").append(top.size()).append("곳]\n");
         for (int i = 0; i < top.size(); i++) {
-            CircularBuyer b = top.get(i);
-            sb.append(i + 1).append(". code=").append(b.getCode())
-                    .append(" / 회사=").append(b.getCompanyName())
-                    .append(" / 산업군=").append(safe(b.getIndustryGroup()));
-            if (b.getFactoryProduct() != null && !b.getFactoryProduct().isEmpty()) {
-                sb.append(" / 취급=").append(String.join(",", b.getFactoryProduct()));
+            RecommendedCandidate b = top.get(i);
+            sb.append(i + 1).append(". code=").append(b.code())
+                    .append(" / 회사=").append(b.companyName())
+                    .append(" / 산업군=").append(safe(b.industryGroup()));
+            if (b.factoryProduct() != null && !b.factoryProduct().isEmpty()) {
+                sb.append(" / 취급=").append(String.join(",", b.factoryProduct()));
             }
-            if (b.getAddress() != null) sb.append(" / 주소=").append(b.getAddress());
-            if (isValidLatLng(b.getLatitude(), b.getLongitude()) && wp != null) {
-                double d = haversineKm(wp.latitude(), wp.longitude(), b.getLatitude(), b.getLongitude());
+            if (b.address() != null) sb.append(" / 주소=").append(b.address());
+            if (isValidLatLng(b.latitude(), b.longitude()) && wp != null) {
+                double d = haversineKm(wp.latitude(), wp.longitude(), b.latitude(), b.longitude());
                 sb.append(" / 거리=").append(round2(d)).append("km");
             } else {
                 sb.append(" / 거리=거리 정보 없음");
             }
-            if (b.getDescription() != null) sb.append(" / 설명=").append(b.getDescription());
+            if (b.description() != null) sb.append(" / 설명=").append(b.description());
             sb.append("\n");
         }
 
         sb.append("\n반드시 아래 JSON 배열 형식으로만 답해 (다른 텍스트·코드블록·마크다운 절대 금지):\n");
         sb.append("[\n");
         for (int i = 0; i < top.size(); i++) {
-            sb.append("  {\"code\": \"").append(top.get(i).getCode())
+            sb.append("  {\"code\": \"").append(top.get(i).code())
                     .append("\", \"rationale\": \"<2~3문장 120~180자 사유 한 문단>\"}");
             if (i < top.size() - 1) sb.append(",");
             sb.append("\n");
@@ -443,6 +485,55 @@ public class CircularBuyerRecommendService {
         return Math.round(value * 100.0) / 100.0;
     }
 
+    private static RecommendedCandidate toCandidate(CircularBuyer buyer) {
+        return new RecommendedCandidate(
+                buyer.getCode(),
+                buyer.getCompanyName(),
+                buyer.getPrimaryMaterialFit(),
+                buyer.getIndustryGroup(),
+                buyer.getPartnerType(),
+                buyer.getFactoryProduct(),
+                buyer.getManagerName(),
+                buyer.getPhone(),
+                buyer.getAddress(),
+                buyer.getDescription(),
+                buyer.getLatitude(),
+                buyer.getLongitude()
+        );
+    }
+
+    private static RecommendedCandidate toCandidate(CircularBuyerRecommendSearchService.RecommendedBuyer buyer) {
+        return new RecommendedCandidate(
+                buyer.code(),
+                buyer.companyName(),
+                buyer.primaryMaterialFit(),
+                buyer.industryGroup(),
+                buyer.partnerType(),
+                buyer.factoryProduct(),
+                buyer.managerName(),
+                buyer.phone(),
+                buyer.address(),
+                buyer.description(),
+                buyer.latitude(),
+                buyer.longitude()
+        );
+    }
+
     private record WarehousePoint(double latitude, double longitude) {}
-    private record RankedBuyer(CircularBuyer buyer, Double distanceKm, double score) {}
+    private record RankingResult(List<RankedBuyer> rankedTop, boolean rationaleGenerationAllowed) {}
+    private record RankedBuyer(RecommendedCandidate buyer, Double distanceKm, double score) {}
+    private record RecommendedCandidate(
+            String code,
+            String companyName,
+            String primaryMaterialFit,
+            String industryGroup,
+            String partnerType,
+            List<String> factoryProduct,
+            String managerName,
+            String phone,
+            String address,
+            String description,
+            Double latitude,
+            Double longitude
+    ) {}
 }
