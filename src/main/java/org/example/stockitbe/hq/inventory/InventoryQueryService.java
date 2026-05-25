@@ -83,15 +83,20 @@ public class InventoryQueryService {
                     .fields("product_code", "product_name"))));
         }
 
+        boolean excludeByLocation = locationIds == null || locationIds.isEmpty();
         try {
-            SearchResponse<ProductInventoryDoc> response = esClient.search(s -> s
-                    .index(MASTER_INDEX)
-                    .from(from)
-                    .size(pageSize)
-                    .trackTotalHits(t -> t.enabled(true))
-                    .query(q -> q.bool(b -> b.filter(filters).must(musts)))
-                    .sort(so -> so.field(f -> f.field("product_code").order(SortOrder.Asc))),
-                    ProductInventoryDoc.class);
+            SearchResponse<ProductInventoryDoc> response = esClient.search(s -> {
+                s.index(MASTER_INDEX)
+                        .from(from)
+                        .size(pageSize)
+                        .trackTotalHits(t -> t.enabled(true))
+                        .query(q -> q.bool(b -> b.filter(filters).must(musts)))
+                        .sort(so -> so.field(f -> f.field("product_code").order(SortOrder.Asc)));
+                if (excludeByLocation) {
+                    s.source(src -> src.filter(f -> f.excludes("by_location")));
+                }
+                return s;
+            }, ProductInventoryDoc.class);
 
             long total = response.hits().total() == null ? 0L : response.hits().total().value();
             final List<Long> safeLocationIds = locationIds;
@@ -149,15 +154,20 @@ public class InventoryQueryService {
                     .fields("sku_code", "product_code", "product_name"))));
         }
 
+        boolean excludeByLocation = locationIds == null || locationIds.isEmpty();
         try {
-            SearchResponse<SkuInventoryDoc> response = esClient.search(s -> s
-                    .index(SKU_INDEX)
-                    .from(from)
-                    .size(pageSize)
-                    .trackTotalHits(t -> t.enabled(true))
-                    .query(q -> q.bool(b -> b.filter(filters).must(musts)))
-                    .sort(so -> so.field(f -> f.field("sku_code").order(SortOrder.Asc))),
-                    SkuInventoryDoc.class);
+            SearchResponse<SkuInventoryDoc> response = esClient.search(s -> {
+                s.index(SKU_INDEX)
+                        .from(from)
+                        .size(pageSize)
+                        .trackTotalHits(t -> t.enabled(true))
+                        .query(q -> q.bool(b -> b.filter(filters).must(musts)))
+                        .sort(so -> so.field(f -> f.field("sku_code").order(SortOrder.Asc)));
+                if (excludeByLocation) {
+                    s.source(src -> src.filter(f -> f.excludes("by_location")));
+                }
+                return s;
+            }, SkuInventoryDoc.class);
 
             long total = response.hits().total() == null ? 0L : response.hits().total().value();
             final List<Long> safeLocationIds = locationIds;
@@ -212,14 +222,19 @@ public class InventoryQueryService {
                     .fields("sku_code", "color", "size"))));
         }
 
+        boolean excludeByLocation = locationIds == null || locationIds.isEmpty();
         try {
-            SearchResponse<SkuInventoryDoc> response = esClient.search(s -> s
-                    .index(SKU_INDEX)
-                    .size(1000)
-                    .trackTotalHits(t -> t.enabled(true))
-                    .query(q -> q.bool(b -> b.filter(filters).must(musts)))
-                    .sort(so -> so.field(f -> f.field("sku_code").order(SortOrder.Asc))),
-                    SkuInventoryDoc.class);
+            SearchResponse<SkuInventoryDoc> response = esClient.search(s -> {
+                s.index(SKU_INDEX)
+                        .size(1000)
+                        .trackTotalHits(t -> t.enabled(true))
+                        .query(q -> q.bool(b -> b.filter(filters).must(musts)))
+                        .sort(so -> so.field(f -> f.field("sku_code").order(SortOrder.Asc)));
+                if (excludeByLocation) {
+                    s.source(src -> src.filter(f -> f.excludes("by_location")));
+                }
+                return s;
+            }, SkuInventoryDoc.class);
 
             final LocationType lt = locationType;
             final List<Long> safeLocationIds = locationIds;
