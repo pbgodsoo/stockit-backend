@@ -10,6 +10,7 @@ import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.core.step.tasklet.Tasklet;
+import org.springframework.batch.item.ExecutionContext;
 import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -43,13 +44,34 @@ public class BatchConfig {
     }
 
     // Step이 실행할 실제 코드 조각
-    // RepeatStatus.FINISHED 반환 시 Step 완료로 처리됨
+    // triggerType 파라미터로 수동(MANUAL) / 자동(AUTO) 실행 경로를 분기
     @Bean
     public Tasklet storeOrderBatchApproveTasklet() {
         return (contribution, chunkContext) -> {
-            StoreOrderBatchDto.RunRes result = batchApproveService.runAutoDaily();
-            log.info("[STORE-ORDER-BATCH] job done runId={} requested={} success={} fail={}",
-                    result.getRunId(), result.getRequestedCount(), result.getSuccessCount(), result.getFailCount());
+            String triggerType = chunkContext.getStepContext()
+                    .getStepExecution().getJobParameters()
+                    .getString("triggerType", "AUTO");
+
+            StoreOrderBatchDto.RunRes result;
+            if ("MANUAL".equals(triggerType)) {
+                // 수동 실행: 날짜 필터 없이 전체 REQUESTED 처리
+                result = batchApproveService.runManual(null, null);
+            } else {
+                // 자동 실행(스케줄러): 전일 날짜 범위의 REQUESTED만 처리
+                result = batchApproveService.runAutoDaily();
+            }
+
+            // Controller가 HTTP 응답으로 반환할 수 있도록 ExecutionContext에 결과 저장
+            ExecutionContext ec = chunkContext.getStepContext()
+                    .getStepExecution().getExecutionContext();
+            ec.putString("runId", result.getRunId());
+            ec.putInt("requestedCount", result.getRequestedCount());
+            ec.putInt("successCount", result.getSuccessCount());
+            ec.putInt("failCount", result.getFailCount());
+
+            log.info("[STORE-ORDER-BATCH] job done trigger={} runId={} requested={} success={} fail={}",
+                    triggerType, result.getRunId(), result.getRequestedCount(),
+                    result.getSuccessCount(), result.getFailCount());
             return RepeatStatus.FINISHED;
         };
     }
