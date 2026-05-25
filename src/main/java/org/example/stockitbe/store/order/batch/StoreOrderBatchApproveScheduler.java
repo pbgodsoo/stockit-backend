@@ -3,7 +3,10 @@ package org.example.stockitbe.store.order.batch;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.example.stockitbe.store.order.batch.model.dto.StoreOrderBatchDto;
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.JobParameters;
+import org.springframework.batch.core.JobParametersBuilder;
+import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -12,7 +15,8 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class StoreOrderBatchApproveScheduler {
 
-    private final StoreOrderBatchApproveService batchApproveService;
+    private final JobLauncher jobLauncher;
+    private final Job storeOrderBatchApproveJob;
 
     // 매장 발주 자동 승인 배치 (매일 00:00 실행)
     // @SchedulerLock: 다중 Pod 중 하나만 실행되도록 분산 락 적용
@@ -24,8 +28,16 @@ public class StoreOrderBatchApproveScheduler {
     )
     @SchedulerLock(name = "storeOrderBatchApproveJob", lockAtMostFor = "PT30M")
     public void runAutoBatch() {
-        StoreOrderBatchDto.RunRes result = batchApproveService.runAutoDaily();
-        log.info("[STORE-ORDER-BATCH] scheduler done runId={} requested={} success={} fail={}",
-                result.getRunId(), result.getRequestedCount(), result.getSuccessCount(), result.getFailCount());
+        try {
+            // Spring Batch는 동일한 파라미터로 성공한 Job의 재실행을 거부함
+            // 타임스탬프를 파라미터로 부여해 매 실행을 고유하게 구분
+            JobParameters params = new JobParametersBuilder()
+                    .addLong("runAt", System.currentTimeMillis())
+                    .toJobParameters();
+            jobLauncher.run(storeOrderBatchApproveJob, params);
+        } catch (Exception e) {
+            log.error("[STORE-ORDER-BATCH] job launch failed", e);
+            throw new RuntimeException(e);
+        }
     }
 }
