@@ -203,11 +203,10 @@ public class CircularBuyerService {
     }
 
     /**
-     * embedding == null 인 거래처 일괄 임베딩. 시드 30건 backfill 용.
+     * embedding == null 인 거래처를 limit 건씩 나눠 remaining == 0 이 될 때까지 임베딩한다.
      */
-    @Transactional
-    public int backfillEmbeddings() {
-        return embeddingService.backfillNullEmbeddings();
+    public CircularBuyerEmbeddingService.BackfillRunResult backfillEmbeddings(int limit, int maxBatches) {
+        return embeddingService.backfillNullEmbeddingsUntilDone(limit, maxBatches);
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────────

@@ -5,8 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.stockitbe.hq.circularbuyer.model.CircularBuyer;
 import org.example.stockitbe.hq.circularbuyer.repository.CircularBuyerRepository;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -49,30 +49,90 @@ public class CircularBuyerEmbeddingService {
      * 영속 상태 entity 가정 — dirty checking 으로 update.
      * 호출 실패 시 로그만 남기고 예외 throw 하지 않음 (거래처 등록/수정 1차 책임 보호 — backfill 로 사후 재시도 가능).
      */
-    public void embedAndApply(CircularBuyer v) {
+    public boolean embedAndApply(CircularBuyer v) {
         try {
             String text = buildEmbeddingText(v);
             float[] embedding = embeddingModel.embed(text);
             v.updateEmbedding(toDoubleList(embedding));
+            return true;
         } catch (Exception e) {
             log.warn("임베딩 생성 실패 — code={}, reason={}. backfill 엔드포인트로 사후 재시도 가능",
                     v.getCode(), e.getMessage());
+            return false;
         }
     }
 
     /**
-     * 시드 backfill — embedding == null 인 거래처 일괄 처리. 처리 시도한 건수 반환.
-     * 30건 정도라 단일 트랜잭션 OK. 개별 임베딩 실패는 스킵 (다음 거래처 계속).
+     * embedding == null 인 거래처를 작은 배치로 처리한다.
+     * 외부 API 호출을 DB 트랜잭션 밖에서 수행하고, 각 행은 save() 의 짧은 트랜잭션으로 즉시 적재한다.
+     * 대량 데이터를 한 트랜잭션에 올리면 커넥션 장기 점유와 JSON flush OOM 이 발생할 수 있다.
      */
-    @Transactional
-    public int backfillNullEmbeddings() {
-        List<CircularBuyer> targets = circularBuyerRepository.findAll().stream()
-                .filter(v -> v.getEmbedding() == null)
-                .toList();
+    public BackfillResult backfillNullEmbeddings(int limit) {
+        int safeLimit = Math.min(Math.max(limit, 1), 200);
+        List<CircularBuyer> targets = circularBuyerRepository.findNullEmbeddingBatch(PageRequest.of(0, safeLimit));
+        int succeeded = 0;
+        int failed = 0;
         for (CircularBuyer v : targets) {
-            embedAndApply(v);
+            if (!embedAndApply(v)) {
+                failed++;
+                continue;
+            }
+            try {
+                circularBuyerRepository.save(v);
+                succeeded++;
+            } catch (Exception e) {
+                log.warn("임베딩 저장 실패 — code={}, reason={}", v.getCode(), e.getMessage());
+                failed++;
+            }
         }
-        return targets.size();
+        long remaining = circularBuyerRepository.countNullEmbeddings();
+        return new BackfillResult(targets.size(), succeeded, failed, remaining);
+    }
+
+    /**
+     * limit 크기의 배치를 remaining == 0 이 될 때까지 반복한다.
+     * 단, 외부 API 장애 등으로 한 배치도 성공하지 못하면 무한 재시도를 피하기 위해 중단한다.
+     */
+    public BackfillRunResult backfillNullEmbeddingsUntilDone(int limit, int maxBatches) {
+        int safeMaxBatches = Math.min(Math.max(maxBatches, 1), 10_000);
+        int batches = 0;
+        int processed = 0;
+        int succeeded = 0;
+        int failed = 0;
+        long remaining = circularBuyerRepository.countNullEmbeddings();
+        String stopReason = remaining == 0 ? "completed" : "not_started";
+
+        while (remaining > 0 && batches < safeMaxBatches) {
+            BackfillResult batch = backfillNullEmbeddings(limit);
+            batches++;
+            processed += batch.processed();
+            succeeded += batch.succeeded();
+            failed += batch.failed();
+            remaining = batch.remaining();
+
+            if (remaining == 0) {
+                stopReason = "completed";
+                break;
+            }
+            if (batch.processed() == 0) {
+                stopReason = "no_targets";
+                break;
+            }
+            if (batch.succeeded() == 0) {
+                stopReason = "no_progress";
+                break;
+            }
+            stopReason = "max_batches";
+        }
+
+        return new BackfillRunResult(batches, processed, succeeded, failed, remaining, stopReason);
+    }
+
+    public record BackfillResult(int processed, int succeeded, int failed, long remaining) {
+    }
+
+    public record BackfillRunResult(int batches, int processed, int succeeded, int failed,
+                                    long remaining, String stopReason) {
     }
 
     private static String safe(String s) {
