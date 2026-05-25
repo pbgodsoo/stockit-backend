@@ -1,5 +1,6 @@
 package org.example.stockitbe.notification;
 
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.model.BaseResponse;
 import org.example.stockitbe.notification.model.dto.NotificationDto;
@@ -18,7 +19,13 @@ public class NotificationController {
 
     // SSE 구독
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter subscribe(@AuthenticationPrincipal AuthUserDetails me) {
+    public SseEmitter subscribe(@AuthenticationPrincipal AuthUserDetails me,
+                                 HttpServletResponse response) {
+        // SSE 실시간 전송 보장 — nginx/istio 등 프록시의 응답 버퍼링 비활성화.
+        // X-Accel-Buffering: no → ingress-nginx 가 chunked response 를 즉시 클라이언트로 흘려보냄.
+        // 없으면 nginx 가 데이터를 모아두려고 해서 heartbeat (:ping) 도달 지연 → 클라이언트 끊김 인식.
+        response.setHeader("X-Accel-Buffering", "no");
+        response.setHeader("Cache-Control", "no-cache");
         // 1. 요청 받기 2. 서비스 호출 3. text/event-stream 반환
         return service.subscribe(me);
     }
