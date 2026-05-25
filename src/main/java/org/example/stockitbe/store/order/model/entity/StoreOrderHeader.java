@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.model.BaseEntity;
 import org.example.stockitbe.common.model.BaseResponseStatus;
-import org.example.stockitbe.store.order.model.StoreOrderStatus;
+import org.example.stockitbe.store.order.model.enums.StoreOrderStatus;
 
 import java.util.Date;
 

@@ -1,6 +1,7 @@
-package org.example.stockitbe.store.order;
+package org.example.stockitbe.store.order.batch;
 
 import lombok.RequiredArgsConstructor;
+import org.example.stockitbe.store.order.StoreOrderService;
 import org.example.stockitbe.store.order.model.dto.StoreOrderDto;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -20,4 +21,3 @@ public class StoreOrderBatchApproveItemService {
         return storeOrderService.approveByBatch(orderNo, actorId, actorName, reason);
     }
 }
-

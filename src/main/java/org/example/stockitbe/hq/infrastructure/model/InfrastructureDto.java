@@ -53,9 +53,12 @@ public class InfrastructureDto {
         private String address;
         private InfraStatus status;
         private Long mappedStoreCount;
+        private String primaryWarehouseCode;
+        private String primaryWarehouseName;
         private Date updatedAt;
 
-        public static Res from(Infrastructure infra, Long mappedStoreCount) {
+        public static Res from(Infrastructure infra, Long mappedStoreCount, StoreWarehouseMap primaryWarehouseMap) {
+            Infrastructure primaryWarehouse = primaryWarehouseMap == null ? null : primaryWarehouseMap.getWarehouse();
             return Res.builder()
                     .id(infra.getId())
                     .code(infra.getCode())
@@ -67,6 +70,8 @@ public class InfrastructureDto {
                     .address(infra.getAddress())
                     .status(infra.getStatus())
                     .mappedStoreCount(mappedStoreCount)
+                    .primaryWarehouseCode(primaryWarehouse == null ? null : primaryWarehouse.getCode())
+                    .primaryWarehouseName(primaryWarehouse == null ? null : primaryWarehouse.getName())
                     .updatedAt(infra.getUpdatedAt())
                     .build();
         }

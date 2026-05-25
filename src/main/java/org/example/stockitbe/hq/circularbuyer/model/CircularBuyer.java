@@ -41,6 +41,9 @@ public class CircularBuyer extends BaseEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "embedding_description", columnDefinition = "TEXT")
+    private String embeddingDescription;
+
     // 1층 SQL 룰 필터의 유일한 근거 (ADR-021). natural-single / synthetic / blended.
     @Column(name = "primary_material_fit", nullable = false, length = 32)
     private String primaryMaterialFit;
@@ -72,7 +75,7 @@ public class CircularBuyer extends BaseEntity {
 
     @Builder
     private CircularBuyer(String code, String companyName, String industryGroup,
-                           List<String> factoryProduct, String description,
+                           List<String> factoryProduct, String description, String embeddingDescription,
                            String primaryMaterialFit, String managerName, String phone,
                            String address, Double latitude, Double longitude,
                            String partnerType, List<Double> embedding) {
@@ -81,6 +84,7 @@ public class CircularBuyer extends BaseEntity {
         this.industryGroup = industryGroup;
         this.factoryProduct = factoryProduct;
         this.description = description;
+        this.embeddingDescription = embeddingDescription;
         this.primaryMaterialFit = primaryMaterialFit;
         this.managerName = managerName;
         this.phone = phone;
@@ -93,7 +97,8 @@ public class CircularBuyer extends BaseEntity {
 
     /**
      * 거래처 정보 수정. embedding 은 별도 메소드.
-     * 의미 필드(companyName/industryGroup/factoryProduct/description/primaryMaterialFit/address) 변경 시 임베딩 재생성 룰은 Service 책임.
+     * 의미 필드(companyName/industryGroup/factoryProduct/embeddingDescription/primaryMaterialFit/address) 변경 시 임베딩 재생성 룰은 Service 책임.
+     * description 은 화면 표시용 설명이므로 임베딩 재생성 트리거가 아니다.
      * partnerType 은 의미 필드가 아님 — 임베딩 재생성 트리거 X.
      */
     public void updateProfile(String companyName, String industryGroup, List<String> factoryProduct,

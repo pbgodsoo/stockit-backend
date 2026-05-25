@@ -492,7 +492,7 @@ public class InventoryService {
         Map<String, ProductMaster> productMasterByCode = productMasterRepository.findAllByCodeIn(productCodes).stream()
                 .collect(Collectors.toMap(ProductMaster::getCode, Function.identity()));
 
-        Map<String, GroupAvailabilityAggregate> groupAvailability = buildGroupAvailability(normalInventories, skuById);
+        Map<Long, Integer> biasCandidateQuantityByInventoryId = calculateBiasCandidateQuantities(normalInventories, skuById);
 
         Date now = new Date();
         int convertedCount = 0;
@@ -502,11 +502,18 @@ public class InventoryService {
             ProductSku sku = skuById.get(snapshot.getSkuId());
             if (sku == null) continue;
             ProductMaster productMaster = productMasterByCode.get(sku.getProductCode());
-            List<Integer> matchedCodes = evaluateCandidateConditions(snapshot, sku, productMaster, groupAvailability);
-            if (matchedCodes.isEmpty()) continue;
+            CandidateEvaluation evaluation = evaluateCandidateConditions(
+                    snapshot,
+                    sku,
+                    productMaster,
+                    biasCandidateQuantityByInventoryId.getOrDefault(snapshot.getId(), 0)
+            );
+            if (evaluation.candidateQuantity() <= 0) continue;
 
             Inventory source = inventoryRepository.findWithLockById(snapshot.getId()).orElse(null);
             if (source == null || source.getInventoryStatus() != InventoryStatus.NORMAL) continue;
+            int quantityToMove = Math.min(evaluation.candidateQuantity(), Math.max(0, n(source.getAvailableQuantity())));
+            if (quantityToMove <= 0) continue;
 
             Inventory target = inventoryRepository
                     .findWithLockBySkuIdAndLocationIdAndInventoryStatus(
@@ -518,20 +525,36 @@ public class InventoryService {
 
             Long finalInventoryId;
             if (target != null) {
-                target.absorbAsCircularCandidate(source, now);
-                inventoryRepository.save(target);
-                inventoryCandidateConditionRepository.deleteByInventoryIdIn(List.of(source.getId()));
-                inventoryRepository.delete(source);
-                finalInventoryId = target.getId();
+                target.markCircularCandidate(now);
             } else {
-                source.markCircularCandidate(now);
-                inventoryRepository.save(source);
-                finalInventoryId = source.getId();
+                target = Inventory.builder()
+                        .skuId(source.getSkuId())
+                        .locationId(source.getLocationId())
+                        .inventoryStatus(InventoryStatus.CIRCULAR_CANDIDATE)
+                        .quantity(0)
+                        .availableQuantity(0)
+                        .reservedQuantity(0)
+                        .inTransitQuantity(0)
+                        .statusChangedAt(now)
+                        .lastMovementAt(source.getLastMovementAt())
+                        .build();
+                target.markCircularCandidate(now);
             }
+
+            source.decreaseForConversion(quantityToMove);
+            target.increaseForConversion(quantityToMove);
+
+            if (source.isEmptyStock()) {
+                inventoryRepository.delete(source);
+            } else {
+                inventoryRepository.save(source);
+            }
+            target = inventoryRepository.save(target);
+            finalInventoryId = target.getId();
 
             matchedByFinalInventoryId
                     .computeIfAbsent(finalInventoryId, ignored -> new HashSet<>())
-                    .addAll(matchedCodes);
+                    .addAll(evaluation.conditionCodes());
             convertedCount += 1;
         }
 
@@ -543,12 +566,21 @@ public class InventoryService {
         }
 
         List<Long> convertedIds = new ArrayList<>(matchedByFinalInventoryId.keySet());
+        Map<Long, Set<Integer>> existingConditionCodesByInventoryId = inventoryCandidateConditionRepository
+                .findAllByInventoryIdIn(convertedIds)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        InventoryCandidateCondition::getInventoryId,
+                        Collectors.mapping(InventoryCandidateCondition::getConditionCode, Collectors.toSet())
+                ));
         inventoryCandidateConditionRepository.deleteByInventoryIdIn(convertedIds);
 
         List<InventoryCandidateCondition> conditions = new ArrayList<>();
         for (Map.Entry<Long, Set<Integer>> entry : matchedByFinalInventoryId.entrySet()) {
             Long inventoryId = entry.getKey();
-            for (Integer code : entry.getValue()) {
+            Set<Integer> mergedCodes = new HashSet<>(existingConditionCodesByInventoryId.getOrDefault(inventoryId, Set.of()));
+            mergedCodes.addAll(entry.getValue());
+            for (Integer code : mergedCodes) {
                 conditions.add(InventoryCandidateCondition.builder()
                         .inventoryId(inventoryId)
                         .conditionCode(code)
@@ -1204,30 +1236,62 @@ public class InventoryService {
     // -------- 후보 판정/소재 계산 보조 메서드 --------
 
     // 후보 판정 조건 코드를 계산한다.
-    private List<Integer> evaluateCandidateConditions(Inventory inventory, ProductSku sku,
-                                                      ProductMaster master,
-                                                      Map<String, GroupAvailabilityAggregate> groupAvailability) {
-        List<Integer> matchedCodes = new ArrayList<>();
+    private CandidateEvaluation evaluateCandidateConditions(Inventory inventory,
+                                                            ProductSku sku,
+                                                            ProductMaster master,
+                                                            int biasCandidateQuantity) {
+        int available = Math.max(0, n(inventory.getAvailableQuantity()));
+        if (available <= 0) {
+            return new CandidateEvaluation(0, Set.of());
+        }
+
+        Map<Integer, Integer> quantityByCondition = new HashMap<>();
 
         long daysSinceMovement = daysSince(inventory.getLastMovementAt());
         int hashSeed = Math.abs(Objects.hash(sku.getSkuCode(), inventory.getId()));
         if (daysSinceMovement >= 730 || hashSeed % 13 == 0) {
-            matchedCodes.add(CONDITION_LONG_NO_MOVEMENT);
+            quantityByCondition.put(CONDITION_LONG_NO_MOVEMENT, available);
         }
 
-        int available = Math.max(0, n(inventory.getAvailableQuantity()));
         int warehouseSafetyStock = master == null ? 0 : Math.max(0, n(master.getWarehouseSafetyStock()));
-        if (warehouseSafetyStock > 0 && available > (warehouseSafetyStock * SAFETY_STOCK_MULTIPLIER)) {
-            matchedCodes.add(CONDITION_LOW_PERFORMANCE);
+        int safetyThreshold = (int) Math.floor(warehouseSafetyStock * SAFETY_STOCK_MULTIPLIER);
+        int lowPerformanceQuantity = warehouseSafetyStock > 0 && available > safetyThreshold
+                ? available - safetyThreshold
+                : 0;
+        if (lowPerformanceQuantity > 0) {
+            quantityByCondition.put(CONDITION_LOW_PERFORMANCE, lowPerformanceQuantity);
         }
 
-        double sizeShare = calculateSizeShare(inventory, sku, groupAvailability);
-        double colorShare = calculateColorShare(inventory, sku, groupAvailability);
-        if (sizeShare >= SIZE_COLOR_BIAS_THRESHOLD || colorShare >= SIZE_COLOR_BIAS_THRESHOLD) {
-            matchedCodes.add(CONDITION_SIZE_COLOR_BIAS);
+        int safeBiasQuantity = Math.min(available, Math.max(0, biasCandidateQuantity));
+        if (safeBiasQuantity > 0) {
+            quantityByCondition.put(CONDITION_SIZE_COLOR_BIAS, safeBiasQuantity);
         }
 
-        return matchedCodes;
+        int candidateQuantity = quantityByCondition.values().stream()
+                .mapToInt(Integer::intValue)
+                .max()
+                .orElse(0);
+        return new CandidateEvaluation(
+                Math.min(available, candidateQuantity),
+                quantityByCondition.entrySet().stream()
+                        .filter(entry -> entry.getValue() > 0)
+                        .map(Map.Entry::getKey)
+                        .collect(Collectors.toSet())
+        );
+    }
+
+    // 상품+위치 단위 사이즈/컬러 편중 초과분을 SKU별 후보 수량으로 배분한다.
+    private Map<Long, Integer> calculateBiasCandidateQuantities(List<Inventory> inventories,
+                                                                Map<Long, ProductSku> skuById) {
+        Map<String, GroupAvailabilityAggregate> grouped = buildGroupAvailability(inventories, skuById);
+        Map<Long, Integer> candidateQuantityByInventoryId = new HashMap<>();
+
+        for (GroupAvailabilityAggregate aggregate : grouped.values()) {
+            allocateBiasCandidates(aggregate.entriesBySize, aggregate.totalAvailable, candidateQuantityByInventoryId);
+            allocateBiasCandidates(aggregate.entriesByColor, aggregate.totalAvailable, candidateQuantityByInventoryId);
+        }
+
+        return candidateQuantityByInventoryId;
     }
 
     // 상품+위치 단위 가용재고 집계를 생성한다.
@@ -1243,33 +1307,41 @@ public class InventoryService {
             int available = Math.max(0, n(inventory.getAvailableQuantity()));
 
             aggregate.totalAvailable += available;
-            aggregate.availableBySize.merge(normalizeToken(sku.getSize()), available, Integer::sum);
-            aggregate.availableByColor.merge(normalizeToken(sku.getColor()), available, Integer::sum);
+            BiasCandidateEntry entry = new BiasCandidateEntry(inventory.getId(), sku.getSkuCode(), available);
+            aggregate.entriesBySize.computeIfAbsent(normalizeToken(sku.getSize()), ignored -> new ArrayList<>()).add(entry);
+            aggregate.entriesByColor.computeIfAbsent(normalizeToken(sku.getColor()), ignored -> new ArrayList<>()).add(entry);
         }
 
         return grouped;
     }
 
-    // 동일 상품/위치 내 사이즈 점유율을 계산한다.
-    private double calculateSizeShare(Inventory inventory, ProductSku sku,
-                                      Map<String, GroupAvailabilityAggregate> groupAvailability) {
-        String groupKey = buildGroupKey(sku.getProductCode(), inventory.getLocationId());
-        GroupAvailabilityAggregate aggregate = groupAvailability.get(groupKey);
-        if (aggregate == null || aggregate.totalAvailable <= 0) return 0d;
+    // 60% 편중을 해소하는 데 필요한 초과분을 bucket 내 SKU에 안정적으로 배분한다.
+    private void allocateBiasCandidates(Map<String, List<BiasCandidateEntry>> entriesByBucket,
+                                        int totalAvailable,
+                                        Map<Long, Integer> candidateQuantityByInventoryId) {
+        if (totalAvailable <= 0) return;
+        for (List<BiasCandidateEntry> bucketEntries : entriesByBucket.values()) {
+            int bucketAvailable = bucketEntries.stream().mapToInt(BiasCandidateEntry::available).sum();
+            if ((double) bucketAvailable / totalAvailable <= SIZE_COLOR_BIAS_THRESHOLD) continue;
 
-        int matched = aggregate.availableBySize.getOrDefault(normalizeToken(sku.getSize()), 0);
-        return (double) matched / aggregate.totalAvailable;
-    }
-
-    // 동일 상품/위치 내 컬러 점유율을 계산한다.
-    private double calculateColorShare(Inventory inventory, ProductSku sku,
-                                       Map<String, GroupAvailabilityAggregate> groupAvailability) {
-        String groupKey = buildGroupKey(sku.getProductCode(), inventory.getLocationId());
-        GroupAvailabilityAggregate aggregate = groupAvailability.get(groupKey);
-        if (aggregate == null || aggregate.totalAvailable <= 0) return 0d;
-
-        int matched = aggregate.availableByColor.getOrDefault(normalizeToken(sku.getColor()), 0);
-        return (double) matched / aggregate.totalAvailable;
+            int excessQuantity = (int) Math.ceil(
+                    (bucketAvailable - (SIZE_COLOR_BIAS_THRESHOLD * totalAvailable))
+                            / (1d - SIZE_COLOR_BIAS_THRESHOLD)
+            );
+            int remaining = Math.max(0, excessQuantity);
+            List<BiasCandidateEntry> sorted = bucketEntries.stream()
+                    .sorted(Comparator
+                            .comparingInt(BiasCandidateEntry::available).reversed()
+                            .thenComparing(BiasCandidateEntry::skuCode, Comparator.nullsLast(String::compareTo)))
+                    .toList();
+            for (BiasCandidateEntry entry : sorted) {
+                if (remaining <= 0) break;
+                int allocated = Math.min(entry.available(), remaining);
+                if (allocated <= 0) continue;
+                candidateQuantityByInventoryId.merge(entry.inventoryId(), allocated, Math::max);
+                remaining -= allocated;
+            }
+        }
     }
 
     // null-safe 토큰 정규화
@@ -1391,9 +1463,13 @@ public class InventoryService {
         return Math.round(value * 1000d) / 1000d;
     }
 
+    private record CandidateEvaluation(int candidateQuantity, Set<Integer> conditionCodes) {}
+
+    private record BiasCandidateEntry(Long inventoryId, String skuCode, int available) {}
+
     private static class GroupAvailabilityAggregate {
         private int totalAvailable = 0;
-        private final Map<String, Integer> availableBySize = new HashMap<>();
-        private final Map<String, Integer> availableByColor = new HashMap<>();
+        private final Map<String, List<BiasCandidateEntry>> entriesBySize = new HashMap<>();
+        private final Map<String, List<BiasCandidateEntry>> entriesByColor = new HashMap<>();
     }
 }

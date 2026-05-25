@@ -267,6 +267,75 @@ def build_query_candidates(address: str) -> list[str]:
     return candidates
 
 
+def apply_legacy_admin_aliases(address: str) -> list[str]:
+    """
+    과거 행정구역 표기를 현재 행정구역 후보로 보정한다.
+    정확한 주소 후보에는 섞지 않고, 행정구역 중심 fallback 에서만 사용한다.
+    """
+    aliases = [address]
+    replacements = [
+        ("충청남도 연기군", "세종특별자치시"),
+        ("충남 연기군", "세종특별자치시"),
+        ("충청북도 청원군 옥산면", "충청북도 청주시 흥덕구 옥산면"),
+        ("충북 청원군 옥산면", "충청북도 청주시 흥덕구 옥산면"),
+    ]
+    for old, new in replacements:
+        if old in address:
+            aliases.append(address.replace(old, new))
+    return aliases
+
+
+def build_admin_centroid_candidates(address: str) -> list[str]:
+    """
+    정확 주소 지오코딩이 실패했을 때 사용할 행정구역 중심 후보를 만든다.
+    우선순위: 읍/면/동/리 레벨 → 시/군/구 레벨.
+    """
+    base = clean_basic(address)
+    if not base:
+        return []
+    base = normalize_admin_spacing(base)
+    base = normalize_je_dong_notation(base)
+    base = strip_invalid_zero_lot(base)
+
+    variants: list[str] = []
+    for source in apply_legacy_admin_aliases(base):
+        tokens = source.split()
+        if not tokens:
+            continue
+
+        # 동/읍/면/리 중심 좌표 후보
+        last_local_idx = -1
+        for idx, token in enumerate(tokens):
+            if token.endswith(("읍", "면", "동", "리")):
+                last_local_idx = idx
+        if last_local_idx >= 0:
+            variants.append(" ".join(tokens[: last_local_idx + 1]))
+
+        # 동 정보가 없거나 카카오가 못 찾을 때 사용할 시/군/구 중심 좌표 후보
+        last_region_idx = -1
+        for idx, token in enumerate(tokens):
+            is_region_like = token.endswith(
+                ("특별자치시", "특별자치도", "특별시", "광역시", "시", "도", "군", "구")
+            ) or token in _REGION_BARE_TOKENS
+            if is_region_like:
+                last_region_idx = idx
+                continue
+            if last_region_idx >= 0:
+                break
+        if last_region_idx >= 0:
+            variants.append(" ".join(tokens[: last_region_idx + 1]))
+
+    candidates: list[str] = []
+    seen: set[str] = set()
+    for v in variants:
+        v = re.sub(r"\s+", " ", (v or "").strip())
+        if not v or v in seen:
+            continue
+        seen.add(v)
+        candidates.append(v)
+    return candidates
+
+
 def extract_region_tokens(address: str) -> list[str]:
     source = clean_basic(address)
     source = normalize_admin_spacing(source)
@@ -335,6 +404,14 @@ def is_region_match(raw_address: str, result_address: str) -> bool:
     expected = extract_region_tokens(raw_address)
     if not expected:
         return True
+
+    # 행정구역 개편으로 원 주소와 카카오 결과의 광역/기초명이 달라진 경우.
+    # 정확 주소가 아니라 fallback 중심 좌표로 채우는 상황에서는 현재 행정구역 결과를 허용한다.
+    if "연기군" in raw_address and "세종" in result_address:
+        return True
+    if "청원군" in raw_address and "청주" in result_address:
+        return True
+
     normalized_result = normalize_region_token(result_address)
     normalized_result = normalize_admin_spacing(normalized_result)
 
@@ -424,6 +501,35 @@ def escape_sql(value: str) -> str:
     return value.replace("'", "''")
 
 
+def try_admin_centroid_fallback(
+    conn: pymysql.Connection,
+    rest_api_key: str,
+    table: str,
+    miss_table: str,
+    pk_col: str,
+    row_id: int,
+    raw_address: str,
+) -> tuple[bool, str]:
+    for query in build_admin_centroid_candidates(raw_address):
+        lat, lng, result_address = geocode_kakao(rest_api_key, query)
+        if lat is None or lng is None:
+            continue
+        if not is_region_match(raw_address, result_address):
+            continue
+        execute_with_retry(
+            conn,
+            f"UPDATE {table} SET latitude=%s, longitude=%s WHERE {pk_col}=%s",
+            (lat, lng, row_id),
+        )
+        execute_with_retry(conn, f"DELETE FROM {miss_table} WHERE id=%s", (row_id,))
+        print(
+            f"[FALLBACK_ADMIN] {table}:{row_id} -> query='{query}', "
+            f"result='{result_address}'"
+        )
+        return True, query
+    return False, ""
+
+
 def process_table(
     conn: pymysql.Connection,
     rest_api_key: str,
@@ -433,6 +539,7 @@ def process_table(
     sleep_sec: float,
     limit: int,
     only_miss: bool,
+    admin_centroid_fallback: bool,
     max_consecutive_api_errors: int,
 ) -> tuple[int, int, int, int]:
     miss_table = f"{table}_geocode_miss"
@@ -480,6 +587,19 @@ def process_table(
         raw_address = str(row["address"])
         candidates = build_query_candidates(raw_address)
         if not candidates:
+            if admin_centroid_fallback:
+                try:
+                    fallback_ok, _ = try_admin_centroid_fallback(
+                        conn, rest_api_key, table, miss_table, pk_col, row_id, raw_address
+                    )
+                    if fallback_ok:
+                        success += 1
+                        time.sleep(sleep_sec)
+                        continue
+                except Exception as exc:  # noqa: BLE001
+                    fail += 1
+                    print(f"[FAIL] {table}:{row_id} -> admin centroid fallback ({exc})")
+                    continue
             miss += 1
             with conn.cursor() as cur:
                 cur.execute(
@@ -541,6 +661,30 @@ def process_table(
         if resolved:
             continue
 
+        if admin_centroid_fallback:
+            try:
+                fallback_ok, fallback_query = try_admin_centroid_fallback(
+                    conn, rest_api_key, table, miss_table, pk_col, row_id, raw_address
+                )
+                if fallback_ok:
+                    success += 1
+                    time.sleep(sleep_sec)
+                    continue
+                if fallback_query:
+                    last_query = fallback_query
+            except Exception as exc:  # noqa: BLE001
+                fail += 1
+                print(f"[FAIL] {table}:{row_id} -> admin centroid fallback ({exc})")
+                execute_with_retry(
+                    conn,
+                    f"""
+                    REPLACE INTO {miss_table}(id, original_address, last_query, candidate_count, miss_reason)
+                    VALUES(%s, %s, %s, %s, %s)
+                    """,
+                    (row_id, raw_address, last_query, len(candidates), "ADMIN_FALLBACK_FAIL"),
+                )
+                continue
+
         if saw_mismatch:
             mismatch += 1
             print(
@@ -584,6 +728,11 @@ def parse_args() -> argparse.Namespace:
         "--only-miss",
         action="store_true",
         help="process only rows that are recorded in <table>_geocode_miss",
+    )
+    parser.add_argument(
+        "--admin-centroid-fallback",
+        action="store_true",
+        help="when exact geocoding fails, fill with eup/myeon/dong or si/gun/gu centroid",
     )
     parser.add_argument(
         "--max-consecutive-api-errors",
@@ -639,6 +788,7 @@ def main() -> int:
                 sleep_sec=args.sleep,
                 limit=args.limit,
                 only_miss=args.only_miss,
+                admin_centroid_fallback=args.admin_centroid_fallback,
                 max_consecutive_api_errors=args.max_consecutive_api_errors,
             )
             total[target]["success"] = ok
