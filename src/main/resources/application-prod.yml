@@ -14,6 +14,7 @@ spring:
       leak-detection-threshold: ${DB_LEAK_DETECTION_THRESHOLD_MS:20000}
 
   jpa:
+    defer-datasource-initialization: true
     database-platform: org.hibernate.dialect.MariaDBDialect
     open-in-view: false
     hibernate:
@@ -26,7 +27,12 @@ spring:
     job:
       enabled: false        # 서버 시작 시 Job 자동 실행 방지 (운영 데이터 보호)
     jdbc:
-      initialize-schema: always        # BATCH_ 메타 테이블 6개 자동 생성
+      initialize-schema: always        # BATCH_ 메타 테이블 6개 자동 생성 / # TODO: 최초 prod 배포 후 never로 변경
+
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/shedlock.sql     # 배치 관련 테이블 자동 생성
 
   # ADR-021 AI 거래처 추천 — 임베딩(text-embedding-3-small) + 추천 사유(gpt-4o-mini)
   ai:
