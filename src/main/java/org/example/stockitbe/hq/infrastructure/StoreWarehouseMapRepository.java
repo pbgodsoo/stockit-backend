@@ -18,6 +18,15 @@ public interface StoreWarehouseMapRepository extends JpaRepository<StoreWarehous
     long countByWarehouse(Infrastructure warehouse);
 
     @Query("""
+            select m
+            from StoreWarehouseMap m
+            join fetch m.warehouse
+            where m.store.id in :storeIds
+              and m.role = :role
+            """)
+    List<StoreWarehouseMap> findByStoreIdsAndRoleWithWarehouse(Collection<Long> storeIds, StoreWarehouseRole role);
+
+    @Query("""
             select m.warehouse.id as warehouseId, count(m.id) as storeCount
             from StoreWarehouseMap m
             where m.warehouse.id in :warehouseIds
