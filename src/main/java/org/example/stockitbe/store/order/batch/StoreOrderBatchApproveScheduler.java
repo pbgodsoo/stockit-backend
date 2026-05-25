@@ -2,6 +2,7 @@ package org.example.stockitbe.store.order.batch;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.example.stockitbe.store.order.batch.model.dto.StoreOrderBatchDto;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -18,6 +19,7 @@ public class StoreOrderBatchApproveScheduler {
             cron = "${store-order.batch.cron:0 0 0 * * *}",
             zone = "${store-order.batch.zone:Asia/Seoul}"
     )
+    @SchedulerLock(name = "storeOrderBatchApproveJob", lockAtMostFor = "PT30M")
     public void runAutoBatch() {
         StoreOrderBatchDto.RunRes result = batchApproveService.runAutoDaily();
         log.info("[STORE-ORDER-BATCH] scheduler done runId={} requested={} success={} fail={}",
