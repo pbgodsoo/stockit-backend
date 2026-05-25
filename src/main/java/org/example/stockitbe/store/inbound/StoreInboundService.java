@@ -15,8 +15,8 @@ import org.example.stockitbe.store.inbound.model.entity.StoreInboundStatusHistor
 import org.example.stockitbe.store.inbound.repository.StoreInboundHeaderRepository;
 import org.example.stockitbe.store.inbound.repository.StoreInboundItemRepository;
 import org.example.stockitbe.store.inbound.repository.StoreInboundStatusHistoryRepository;
-import org.example.stockitbe.store.order.model.StoreOrderHistoryType;
-import org.example.stockitbe.store.order.model.StoreOrderStatus;
+import org.example.stockitbe.store.order.model.enums.StoreOrderHistoryType;
+import org.example.stockitbe.store.order.model.enums.StoreOrderStatus;
 import org.example.stockitbe.store.order.model.entity.StoreOrderHeader;
 import org.example.stockitbe.store.order.model.entity.StoreOrderStatusHistory;
 import org.example.stockitbe.store.order.repository.StoreOrderHeaderRepository;

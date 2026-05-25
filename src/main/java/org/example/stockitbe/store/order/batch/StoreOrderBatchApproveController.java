@@ -1,9 +1,9 @@
-package org.example.stockitbe.store.order;
+package org.example.stockitbe.store.order.batch;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.model.BaseResponse;
-import org.example.stockitbe.store.order.model.dto.StoreOrderBatchDto;
+import org.example.stockitbe.store.order.batch.model.dto.StoreOrderBatchDto;
 import org.example.stockitbe.user.model.entity.AuthUserDetails;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;

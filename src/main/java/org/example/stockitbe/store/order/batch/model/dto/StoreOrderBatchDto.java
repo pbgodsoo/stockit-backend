@@ -1,12 +1,12 @@
-package org.example.stockitbe.store.order.model.dto;
+package org.example.stockitbe.store.order.batch.model.dto;
 
 import jakarta.validation.constraints.AssertTrue;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.example.stockitbe.store.order.model.StoreOrderBatchScope;
-import org.example.stockitbe.store.order.model.StoreOrderBatchTriggerType;
+import org.example.stockitbe.store.order.batch.model.enums.StoreOrderBatchScope;
+import org.example.stockitbe.store.order.batch.model.enums.StoreOrderBatchTriggerType;
 
 import java.util.List;
 

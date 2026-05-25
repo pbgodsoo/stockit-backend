@@ -6,7 +6,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.example.stockitbe.common.model.BaseEntity;
-import org.example.stockitbe.store.order.model.StoreOrderHistoryType;
+import org.example.stockitbe.store.order.model.enums.StoreOrderHistoryType;
 
 import java.util.Date;
 
