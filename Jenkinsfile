@@ -121,7 +121,8 @@ spec:
 
                         wait_for_service_endpoints() {
                           local color="\$1"
-                          local timeout="\$2"
+                          local expected="\$2"
+                          local timeout="\$3"
                           local deadline=\$((SECONDS + timeout))
                           local endpoint_pods=""
                           local ready_count=0
@@ -132,8 +133,8 @@ spec:
                               -o jsonpath='{range .subsets[*].addresses[*]}{.targetRef.name}{"\\n"}{end}' 2>/dev/null || true)
                             ready_count=\$(printf '%s\\n' "\${endpoint_pods}" | grep -c "stockit-be-\${color}" || true)
 
-                            if [ "\${ready_count}" -ge "\${TARGET_REPLICAS}" ]; then
-                              log "[BlueGreen] service endpoints now point to \${color} (\${ready_count}/\${TARGET_REPLICAS})"
+                            if [ "\${ready_count}" -ge "\${expected}" ]; then
+                              log "[BlueGreen] service endpoints include \${color} (\${ready_count}/\${expected})"
                               return 0
                             fi
 
@@ -180,18 +181,27 @@ spec:
                         log "[BlueGreen] target pods are Ready"
                         ./kubectl get pods -l app=stockit-be,color=\${TARGET_COLOR} --namespace=${K8S_NAMESPACE} -o wide
 
-                        log "[BlueGreen] patching service selector to \${TARGET_COLOR} after target is fully ready"
+                        log "[BlueGreen] widening service selector to both blue and green before traffic switch"
+                        ./kubectl patch svc stockit-be \
+                          --namespace=${K8S_NAMESPACE} \
+                          -p "{\\\"spec\\\":{\\\"selector\\\":{\\\"app\\\":\\\"stockit-be\\\"}}}"
+
+                        wait_for_service_endpoints "\${TARGET_COLOR}" "\${TARGET_REPLICAS}" "\${ENDPOINT_WAIT_TIMEOUT}"
+
+                        log "[BlueGreen] scale down old color after target endpoints joined service: \${ACTIVE_COLOR} -> \${SOURCE_REPLICAS}"
+                        ./kubectl scale deployment/stockit-be-\${ACTIVE_COLOR} \
+                          --replicas=\${SOURCE_REPLICAS} \
+                          --namespace=${K8S_NAMESPACE}
+
+                        wait_for_service_endpoints "\${TARGET_COLOR}" "\${TARGET_REPLICAS}" "\${ENDPOINT_WAIT_TIMEOUT}"
+                        log "[BlueGreen] old color scale-down complete"
+
+                        log "[BlueGreen] narrowing service selector to \${TARGET_COLOR}"
                         ./kubectl patch svc stockit-be \
                           --namespace=${K8S_NAMESPACE} \
                           -p "{\\\"spec\\\":{\\\"selector\\\":{\\\"app\\\":\\\"stockit-be\\\",\\\"color\\\":\\\"\${TARGET_COLOR}\\\"}}}"
 
-                        wait_for_service_endpoints "\${TARGET_COLOR}" "\${ENDPOINT_WAIT_TIMEOUT}"
-
-                        log "[BlueGreen] scale down old color after traffic switch: \${ACTIVE_COLOR} -> \${SOURCE_REPLICAS}"
-                        ./kubectl scale deployment/stockit-be-\${ACTIVE_COLOR} \
-                          --replicas=\${SOURCE_REPLICAS} \
-                          --namespace=${K8S_NAMESPACE}
-                        log "[BlueGreen] old color scale-down complete"
+                        wait_for_service_endpoints "\${TARGET_COLOR}" "\${TARGET_REPLICAS}" "\${ENDPOINT_WAIT_TIMEOUT}"
 
                         ./kubectl get deploy stockit-be-blue stockit-be-green \
                           --namespace=${K8S_NAMESPACE} \
