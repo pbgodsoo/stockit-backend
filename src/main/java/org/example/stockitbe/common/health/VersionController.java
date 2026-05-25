@@ -10,6 +10,6 @@ public class VersionController {
 
     @GetMapping(value = "/version", produces = "text/plain;charset=UTF-8")
     public String version() {
-        return "v1";
+        return "v3";
     }
 }
