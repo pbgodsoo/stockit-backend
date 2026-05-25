@@ -153,13 +153,14 @@ spec:
                         ./kubectl get pods -l app=stockit-be,color=\${TARGET_COLOR} --namespace=${K8S_NAMESPACE} -o wide
 
                         # Step 2: 셀렉터를 wide로 변경 (양쪽 색상 모두 트래픽 수신)
-                        # Istio 환경에서는 endpoint IP 기반 체크가 작동하지 않으므로
-                        # rollout status + wait pod --for=condition=Ready 로 준비 확인 후
-                        # sleep으로 Istio/kube-proxy 전파 대기
-                        log "[BlueGreen] widening service selector to both colors"
+                        # JSON merge patch에서 기존 필드를 제거하려면 null을 명시해야 함.
+                        # --type=merge 없이 color 필드를 생략하면 기존 color: green이 그대로 남아
+                        # selector가 변경되지 않는다 (= "no change" 원인).
+                        log "[BlueGreen] widening service selector to both colors (removing color filter)"
                         ./kubectl patch svc stockit-be \
                           --namespace=${K8S_NAMESPACE} \
-                          -p "{\\\"spec\\\":{\\\"selector\\\":{\\\"app\\\":\\\"stockit-be\\\"}}}"
+                          --type=merge \
+                          -p "{\\\"spec\\\":{\\\"selector\\\":{\\\"app\\\":\\\"stockit-be\\\",\\\"color\\\":null}}}"
 
                         log "[BlueGreen] waiting \${PROPAGATION_WAIT}s for Istio/kube-proxy to propagate"
                         sleep \${PROPAGATION_WAIT}
