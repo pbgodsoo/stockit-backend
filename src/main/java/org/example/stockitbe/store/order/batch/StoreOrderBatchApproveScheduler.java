@@ -1,8 +1,8 @@
-package org.example.stockitbe.store.order;
+package org.example.stockitbe.store.order.batch;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.example.stockitbe.store.order.model.dto.StoreOrderBatchDto;
+import org.example.stockitbe.store.order.batch.model.dto.StoreOrderBatchDto;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -13,7 +13,7 @@ public class StoreOrderBatchApproveScheduler {
 
     private final StoreOrderBatchApproveService batchApproveService;
 
-    // 발주 자동 배치 스케줄러 추가 (매일 18:00, 00:00에 실행)
+    // 발주 자동 배치 스케줄러 (매일 00:00 실행)
     @Scheduled(
             cron = "${store-order.batch.cron:0 0 0 * * *}",
             zone = "${store-order.batch.zone:Asia/Seoul}"
@@ -24,4 +24,3 @@ public class StoreOrderBatchApproveScheduler {
                 result.getRunId(), result.getRequestedCount(), result.getSuccessCount(), result.getFailCount());
     }
 }
-

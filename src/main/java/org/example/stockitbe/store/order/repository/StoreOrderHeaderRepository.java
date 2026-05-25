@@ -1,6 +1,6 @@
 package org.example.stockitbe.store.order.repository;
 
-import org.example.stockitbe.store.order.model.StoreOrderStatus;
+import org.example.stockitbe.store.order.model.enums.StoreOrderStatus;
 import org.example.stockitbe.store.order.model.entity.StoreOrderHeader;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;

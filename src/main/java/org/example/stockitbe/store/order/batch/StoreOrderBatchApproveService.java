@@ -1,4 +1,4 @@
-package org.example.stockitbe.store.order;
+package org.example.stockitbe.store.order.batch;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -7,10 +7,10 @@ import org.example.stockitbe.common.model.BaseResponseStatus;
 import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
-import org.example.stockitbe.store.order.model.StoreOrderBatchScope;
-import org.example.stockitbe.store.order.model.StoreOrderBatchTriggerType;
-import org.example.stockitbe.store.order.model.StoreOrderStatus;
-import org.example.stockitbe.store.order.model.dto.StoreOrderBatchDto;
+import org.example.stockitbe.store.order.batch.model.enums.StoreOrderBatchScope;
+import org.example.stockitbe.store.order.batch.model.enums.StoreOrderBatchTriggerType;
+import org.example.stockitbe.store.order.batch.model.dto.StoreOrderBatchDto;
+import org.example.stockitbe.store.order.model.enums.StoreOrderStatus;
 import org.example.stockitbe.store.order.model.entity.StoreOrderHeader;
 import org.example.stockitbe.store.order.repository.StoreOrderHeaderRepository;
 import org.example.stockitbe.user.model.entity.AuthUserDetails;

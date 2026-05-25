@@ -59,6 +59,11 @@ dependencies {
     implementation 'co.elastic.clients:elasticsearch-java:8.13.4'
     implementation 'jakarta.json:jakarta.json-api:2.1.3'
 
+    // --- Spring Batch + ShedLock ---
+    implementation 'org.springframework.boot:spring-boot-starter-batch'
+    implementation 'net.javacrumbs.shedlock:shedlock-spring:6.+'
+    implementation 'net.javacrumbs.shedlock:shedlock-provider-jdbc-template:6.+'
+
     // --- 테스트 관련 ---
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
