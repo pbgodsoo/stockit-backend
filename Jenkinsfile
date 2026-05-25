@@ -114,11 +114,15 @@ spec:
                         TARGET_REPLICAS=2
                         SOURCE_REPLICAS=0
                         ENDPOINT_WAIT_TIMEOUT=300
+                        KUBE_PROXY_WAIT_SECONDS=10
 
                         log() {
                           echo "[\$(date '+%Y-%m-%d %H:%M:%S %z')] \$*"
                         }
 
+                        # kube-proxy가 iptables를 실제로 업데이트할 때까지 대기하는 함수.
+                        # kubectl get endpoints는 API 레벨만 반영하므로 이 함수 호출 후
+                        # KUBE_PROXY_WAIT_SECONDS 추가 대기가 필요하다.
                         wait_for_pod_ips_in_service() {
                           local color="\$1"
                           local expected="\$2"
@@ -155,10 +159,8 @@ spec:
                           done
 
                           log "[BlueGreen][ERROR] service endpoints did not include enough \${color} pod IPs"
-                          ./kubectl get svc stockit-be --namespace=${K8S_NAMESPACE} -o wide || true
                           ./kubectl get endpoints stockit-be --namespace=${K8S_NAMESPACE} -o wide || true
                           ./kubectl get pods -l app=stockit-be --namespace=${K8S_NAMESPACE} -o wide || true
-                          ./kubectl get pods -l app=stockit-be,color=\${color} --namespace=${K8S_NAMESPACE} -o wide || true
                           return 1
                         }
 
@@ -170,7 +172,7 @@ spec:
                           stockit-be=${IMAGE_NAME}:${IMAGE_TAG} \
                           --namespace=${K8S_NAMESPACE}
 
-                        log "[BlueGreen] scale up stockit-be-\${TARGET_COLOR} to final replicas=\${TARGET_REPLICAS}"
+                        log "[BlueGreen] scale up stockit-be-\${TARGET_COLOR} to \${TARGET_REPLICAS}"
                         ./kubectl scale deployment/stockit-be-\${TARGET_COLOR} \
                           --replicas=\${TARGET_REPLICAS} \
                           --namespace=${K8S_NAMESPACE}
@@ -195,20 +197,28 @@ spec:
                         log "[BlueGreen] target pods are Ready"
                         ./kubectl get pods -l app=stockit-be,color=\${TARGET_COLOR} --namespace=${K8S_NAMESPACE} -o wide
 
-                        log "[BlueGreen] widening service selector to both blue and green before traffic switch"
+                        # 셀렉터를 직접 blue->green으로 전환하면 kube-proxy 업데이트 공백(1~5s)이 발생한다.
+                        # widen(양쪽 열기) -> 전파 대기 -> old 내리기 -> narrow(좁히기) 순서로 무중단 보장.
+                        log "[BlueGreen] widening service selector to both colors (removing color filter)"
                         ./kubectl patch svc stockit-be \
                           --namespace=${K8S_NAMESPACE} \
                           -p "{\\\"spec\\\":{\\\"selector\\\":{\\\"app\\\":\\\"stockit-be\\\"}}}"
 
                         wait_for_pod_ips_in_service "\${TARGET_COLOR}" "\${TARGET_REPLICAS}" "\${ENDPOINT_WAIT_TIMEOUT}"
 
-                        log "[BlueGreen] scale down old color after target endpoints joined service: \${ACTIVE_COLOR} -> \${SOURCE_REPLICAS}"
+                        log "[BlueGreen] waiting \${KUBE_PROXY_WAIT_SECONDS}s for kube-proxy iptables propagation before scale-down"
+                        sleep \${KUBE_PROXY_WAIT_SECONDS}
+
+                        log "[BlueGreen] scale down old color: \${ACTIVE_COLOR} -> \${SOURCE_REPLICAS}"
                         ./kubectl scale deployment/stockit-be-\${ACTIVE_COLOR} \
                           --replicas=\${SOURCE_REPLICAS} \
                           --namespace=${K8S_NAMESPACE}
 
                         wait_for_pod_ips_in_service "\${TARGET_COLOR}" "\${TARGET_REPLICAS}" "\${ENDPOINT_WAIT_TIMEOUT}"
                         log "[BlueGreen] old color scale-down complete"
+
+                        log "[BlueGreen] waiting \${KUBE_PROXY_WAIT_SECONDS}s for kube-proxy iptables propagation before selector narrowing"
+                        sleep \${KUBE_PROXY_WAIT_SECONDS}
 
                         log "[BlueGreen] narrowing service selector to \${TARGET_COLOR}"
                         ./kubectl patch svc stockit-be \
@@ -243,32 +253,19 @@ spec:
                           TARGET_COLOR=""
                         fi
 
-                        echo "[BlueGreen][Rollback] scaling active color back up before selector rollback: \${ACTIVE_COLOR}"
                         ./kubectl scale deployment/stockit-be-\${ACTIVE_COLOR} \
                           --replicas=2 \
                           --namespace=${K8S_NAMESPACE}
 
-                        ./kubectl rollout status deployment/stockit-be-\${ACTIVE_COLOR} \
-                          --namespace=${K8S_NAMESPACE} \
-                          --timeout=900s || true
-
-                        ./kubectl wait pod \
-                          -l app=stockit-be,color=\${ACTIVE_COLOR} \
-                          --namespace=${K8S_NAMESPACE} \
-                          --for=condition=Ready \
-                          --timeout=300s || true
-
-                        echo "[BlueGreen][Rollback] patching service selector back to \${ACTIVE_COLOR}"
-                        ./kubectl patch svc stockit-be \
-                          --namespace=${K8S_NAMESPACE} \
-                          -p "{\\\"spec\\\":{\\\"selector\\\":{\\\"app\\\":\\\"stockit-be\\\",\\\"color\\\":\\\"\${ACTIVE_COLOR}\\\"}}}"
-
                         if [ -n "\${TARGET_COLOR}" ]; then
-                          echo "[BlueGreen][Rollback] scaling failed target color down: \${TARGET_COLOR}"
                           ./kubectl scale deployment/stockit-be-\${TARGET_COLOR} \
                             --replicas=0 \
                             --namespace=${K8S_NAMESPACE}
                         fi
+
+                        ./kubectl patch svc stockit-be \
+                          --namespace=${K8S_NAMESPACE} \
+                          -p "{\\\"spec\\\":{\\\"selector\\\":{\\\"app\\\":\\\"stockit-be\\\",\\\"color\\\":\\\"\${ACTIVE_COLOR}\\\"}}}"
 
                         ./kubectl get deploy stockit-be-blue stockit-be-green \
                           --namespace=${K8S_NAMESPACE} \
