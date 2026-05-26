@@ -58,23 +58,26 @@ public class SalesAnalyticsService {
         Date prevFromDate = toDate(prevFrom.atStartOfDay());
         Date prevToDateExcl = toDate(from.atStartOfDay());
 
-        // 3) KPI
-        SalesAnalyticsDto.KpiSummary kpi = buildKpi(
-                fromDate, toDateExcl, prevFromDate, prevToDateExcl, storeId, mainCat);
+        // 3) 카테고리 집계 — buildKpi와 buildCategorySummary 양쪽에서 쓰므로 한 번만 조회
+        List<Object[]> catAgg = itemRepo.aggregateByMainCategory(COMPLETED, fromDate, toDateExcl, storeId);
 
-        // 4) Trend
+        // 4) KPI
+        SalesAnalyticsDto.KpiSummary kpi = buildKpi(
+                fromDate, toDateExcl, prevFromDate, prevToDateExcl, storeId, mainCat, catAgg);
+
+        // 5) Trend
         SalesAnalyticsDto.TrendData trend = buildTrend(
                 period, from, to, prevFrom, prevTo, storeId);
 
-        // 5) Category summary
+        // 6) Category summary
         List<SalesAnalyticsDto.CategorySummary> categorySummary =
-                buildCategorySummary(fromDate, toDateExcl, storeId);
+                buildCategorySummary(catAgg);
 
-        // 6) Sub-category stats
+        // 7) Sub-category stats
         List<SalesAnalyticsDto.SubCategoryStats> subCategoryStats =
                 buildSubCategoryStats(fromDate, toDateExcl, storeId, mainCat);
 
-        // 7) Product details (sub_category → list)
+        // 8) Product details (sub_category → list)
         Map<String, List<SalesAnalyticsDto.ProductStats>> productDetails =
                 buildProductDetails(fromDate, toDateExcl, storeId, mainCat);
 
@@ -93,7 +96,7 @@ public class SalesAnalyticsService {
     // ── KPI ──
     private SalesAnalyticsDto.KpiSummary buildKpi(
             Date from, Date to, Date prevFrom, Date prevTo,
-            Long storeId, String mainCat) {
+            Long storeId, String mainCat, List<Object[]> catAgg) {
 
         long totalRev = headerRepo.sumTotalAmount(COMPLETED, from, to, storeId);
         long totalQty = headerRepo.sumTotalQuantity(COMPLETED, from, to, storeId);
@@ -105,8 +108,7 @@ public class SalesAnalyticsService {
         long totalStores = infraRepo.countByLocationTypeAndStatus(
                 LocationType.STORE, InfraStatus.ACTIVE);
 
-        // best category
-        List<Object[]> catAgg = itemRepo.aggregateByMainCategory(COMPLETED, from, to, storeId);
+        // best category — catAgg는 호출부에서 이미 조회된 결과를 재사용
         long grandTotal = catAgg.stream()
                 .mapToLong(r -> ((Number) r[2]).longValue()).sum();
         String bestName = "";
@@ -179,9 +181,7 @@ public class SalesAnalyticsService {
 
 
     // ── Category Summary ──
-    private List<SalesAnalyticsDto.CategorySummary> buildCategorySummary(
-            Date from, Date to, Long storeId) {
-        List<Object[]> rows = itemRepo.aggregateByMainCategory(COMPLETED, from, to, storeId);
+    private List<SalesAnalyticsDto.CategorySummary> buildCategorySummary(List<Object[]> rows) {
         long grand = rows.stream().mapToLong(r -> ((Number) r[2]).longValue()).sum();
 
         return rows.stream().map(r -> {
