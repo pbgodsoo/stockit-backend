@@ -79,6 +79,8 @@ public class BatchConfig {
             @Value("#{jobParameters['toDateTime']}")   LocalDateTime toDateTime,
             @Value("#{jobParameters['storeId'] ?: 0L}") Long storeId) {
 
+        // storeId > 0이면 STORE 모드(매장별 필터), 0이면 ALL 모드(전체 매장).
+        // PreparedStatement 파라미터 인덱스가 SQL 절 수에 따라 달라지므로 SQL과 setter를 함께 구성한다.
         String sql =
                 "SELECT id, order_no, store_id, warehouse_id, requested_at " +
                 "FROM store_order_header " +
@@ -93,6 +95,7 @@ public class BatchConfig {
                 .preparedStatementSetter(ps -> {
                     ps.setTimestamp(1, Timestamp.valueOf(fromDateTime));
                     ps.setTimestamp(2, Timestamp.valueOf(toDateTime));
+                    // storeId 조건이 SQL에 포함된 경우에만 3번 인덱스를 바인딩한다.
                     if (storeId > 0) {
                         ps.setLong(3, storeId);
                     }

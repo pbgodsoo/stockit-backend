@@ -23,12 +23,16 @@ public class StoreOrderBatchDto {
         private StoreOrderBatchScope mode;
         private String storeCode;
 
+        // Reader SQL의 BETWEEN 절에 직접 전달되는 처리 대상 기간.
+        // 호출자(Controller/Scheduler)가 범위를 결정해 전달하므로 BatchConfig 내부에서 날짜를 계산하지 않는다.
         @NotNull
         private LocalDateTime fromDateTime;
 
         @NotNull
         private LocalDateTime toDateTime;
 
+        // Bean Validation으로는 두 필드 조합 검증이 불가능하므로 @AssertTrue로 보완.
+        // isXxx() 네이밍 규칙을 따라야 Bean Validation이 getter로 인식한다.
         @AssertTrue(message = "mode=STORE requires storeCode")
         public boolean isStoreCodeValidForMode() {
             if (mode != StoreOrderBatchScope.STORE) return true;

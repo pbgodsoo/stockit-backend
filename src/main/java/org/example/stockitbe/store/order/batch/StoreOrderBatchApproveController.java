@@ -37,6 +37,8 @@ public class StoreOrderBatchApproveController {
     private final StoreOrderBatchApproveService batchApproveService;
     private final JobLauncher jobLauncher;
     private final Job storeOrderBatchApproveJob;
+    // storeCode → storeId 변환에 사용. BATCH-6에서 Service의 runManual()이 제거되면서
+    // 동일 변환 로직을 Controller가 Repository를 직접 참조해 수행한다.
     private final InfrastructureRepository infrastructureRepository;
 
     // 발주 승인 배치 수동 실행 (Spring Batch Job → BATCH_JOB_EXECUTION 이력 자동 기록)
