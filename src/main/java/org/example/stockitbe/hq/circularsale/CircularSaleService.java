@@ -205,7 +205,7 @@ public class CircularSaleService {
                     .headline(buildHeadline(items))
                     .build());
         }
-        // 5) 페이지 메타 포함 응답으로 반환
+        // 5) 페이지 메타 포함 응답으로 반환함
         return CircularSaleDto.ListPageRes.from(new PageImpl<>(rows, pageable, headers.getTotalElements()));
     }
 
