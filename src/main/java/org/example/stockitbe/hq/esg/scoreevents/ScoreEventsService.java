@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -109,27 +110,37 @@ public class ScoreEventsService {
                     .atStartOfDay(ZoneId.systemDefault()).toInstant());
         }
 
-        // ② material 마스터 1회 로딩 → factor 맵 + group 맵 (Phase 3 B: 카본 분포 계산용 group 추가)
+        // ② material 마스터 1회 로딩 → factor / group / 한글명 맵
+        //   (Phase 3 B: 카본 분포 group 추가, Phase 4 그룹화: nameMap 추가)
         List<Material> materials = materialRepository.findAllByActiveTrueOrderByCodeAsc();
         Map<String, BigDecimal> factorMap = materials.stream()
                 .collect(Collectors.toMap(Material::getCode, Material::getCarbonFactor));
         // code → normalized group ("NATURAL_SINGLE" / "SYNTHETIC" / "BLEND")
         Map<String, String> groupMap = materials.stream()
                 .collect(Collectors.toMap(Material::getCode, m -> normalizeGroup(m.getMaterialGroup())));
+        // code → 한글명 (활동 이력 카드의 "폴리에스터, 레이온, 나일론" 표시용)
+        Map<String, String> nameMap = materials.stream()
+                .collect(Collectors.toMap(Material::getCode, Material::getNameKo));
 
         // ③ row: r[0] id, r[1] transacted_at, r[2] company_name, r[3] material_code,
         //         r[4] weight_kg, r[5] first_tx_at,
         //         r[6] partner_type, r[7] main_material_code, r[8] main_material_ratio
         List<Object[]> rows = txRepo.findEventsForYear(from, to);
 
-        // ④ row → EventDto 변환 (전체 산출. 필터는 다음 단계에서.)
-        List<ScoreEventsDto.EventDto> allEvents = new ArrayList<>(rows.size());
+        // ④-A SKU별 EventDto — CarbonReduction(소재별/그룹별/월별 분포) 정밀 계산용 (그룹화 안 함)
+        List<ScoreEventsDto.EventDto> skuEvents = new ArrayList<>(rows.size());
         for (Object[] r : rows) {
-            allEvents.add(buildEventDto(r, factorMap));
+            skuEvents.add(buildEventDto(r, factorMap));
         }
 
-        // ⑤ 카테고리 필터 — 해당 카테고리 점수 > 0 인 이벤트만 통과
-        List<ScoreEventsDto.EventDto> filtered = applyCategoryFilter(allEvents, safeCategory);
+        // ④-B 판매 단위(거래처+시점) 그룹화된 EventDto — 활동 이력 / 점수 / KPI 표시용
+        //   - 판매 1건 (sale_header) = 같은 buyer + 같은 transacted_at(밀리초) → 1 그룹
+        //   - 소재는 그룹 내 unique 한글명 콤마 구분 ("폴리에스터, 레이온, 나일론")
+        //   - 점수는 총 무게 기준 재계산 → 10kg 미만 SKU 들도 합쳐서 점수 부여
+        List<ScoreEventsDto.EventDto> groupedEvents = buildGroupedEvents(rows, factorMap, nameMap);
+
+        // ⑤ 카테고리 필터 — 그룹 단위 점수 > 0 인 이벤트만 통과
+        List<ScoreEventsDto.EventDto> filtered = applyCategoryFilter(groupedEvents, safeCategory);
 
         // ⑥ 통계 집계 (필터 적용 후 전체 기준 — KPI / 도넛 / 월별 막대 차트 데이터)
         ScoreEventsDto.Summary summary             = buildSummary(filtered);
@@ -137,8 +148,8 @@ public class ScoreEventsService {
         List<ScoreEventsDto.MonthlyBucket> monthly = buildMonthlyBreakdown(filtered);
 
         // ⑥-B (Phase 3 B): ESG 대시보드용 카본 절감량 분포 — 필터/페이지 무관, 연도 전체 기준.
-        //   FE 의 computeCarbonReductionByMaterial/Group/Monthly + totalCarbonReductionKg 를 BE 로 이관.
-        ScoreEventsDto.CarbonReduction carbonReduction = buildCarbonReduction(allEvents, factorMap, groupMap);
+        //   ⚠ 분포 차트의 정밀도 유지를 위해 SKU별 skuEvents 사용 (그룹화 안 함)
+        ScoreEventsDto.CarbonReduction carbonReduction = buildCarbonReduction(skuEvents, factorMap, groupMap);
 
         // ⑦ 페이지 슬라이스 — Repository 정렬(id DESC) 그대로 사용
         long totalElements = filtered.size();
@@ -164,6 +175,113 @@ public class ScoreEventsService {
     }
 
     // ─────────────────────────────── 내부 헬퍼 ───────────────────────────────
+
+    /**
+     * SKU별 row 를 (buyer, transactedAt) 기준으로 그룹화 후 활동 이벤트 1건씩 생성.
+     *  - 판매 1건 (sale_header) = 같은 buyer + 같은 millisecond → 1 그룹 가정
+     *    (CircularSaleService 가 같은 sold_at(=now) 으로 transaction INSERT 하므로 안전)
+     *  - 그룹별 점수는 총 무게 기준 재계산 (10kg 미만 SKU 들도 합쳐서 점수 부여)
+     *  - 소재는 그룹 내 unique 한글명을 콤마 구분 (예: "폴리에스터, 레이온, 나일론")
+     *  - newBuyer / localPartner 는 그룹 내 anyMatch 로 판정
+     */
+    private List<ScoreEventsDto.EventDto> buildGroupedEvents(
+            List<Object[]> rows,
+            Map<String, BigDecimal> factorMap,
+            Map<String, String> nameMap) {
+
+        // LinkedHashMap 으로 원본 row 정렬(id DESC) 보존 → 페이지/표시 순서 일관
+        LinkedHashMap<String, List<Object[]>> grouped = new LinkedHashMap<>();
+        for (Object[] r : rows) {
+            String buyer = (String) r[2];
+            Timestamp txAt = (Timestamp) r[1];
+            // 그룹키: buyer + transactedAt (밀리초 정밀)
+            String key = buyer + "|" + txAt.getTime();
+            grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
+        }
+
+        List<ScoreEventsDto.EventDto> result = new ArrayList<>(grouped.size());
+        for (List<Object[]> groupRows : grouped.values()) {
+            result.add(buildGroupEventDto(groupRows, factorMap, nameMap));
+        }
+        return result;
+    }
+
+    /** 그룹화된 row 묶음 → EventDto 1건 (총 무게 기준 점수 재계산). */
+    private ScoreEventsDto.EventDto buildGroupEventDto(
+            List<Object[]> groupRows,
+            Map<String, BigDecimal> factorMap,
+            Map<String, String> nameMap) {
+
+        Object[] first = groupRows.get(0);
+        Long groupId = ((Number) first[0]).longValue();      // 대표 id (그룹 첫 SKU)
+        Timestamp txAt = (Timestamp) first[1];
+        String buyer = (String) first[2];
+
+        int totalWeight = 0;
+        BigDecimal totalCarbonAmount = BigDecimal.ZERO;       // sum(weight × effectiveFactor)
+        boolean isNewBuyer = false;
+        boolean isLocalPartner = false;
+        LinkedHashSet<String> materialSet = new LinkedHashSet<>();   // 콤마 구분 한글명 모음
+
+        for (Object[] r : groupRows) {
+            int w = ((Number) r[4]).intValue();
+            totalWeight += w;
+
+            String materialCode = (String) r[3];
+            String mainCode = (String) r[7];
+            BigDecimal mainRatio = (BigDecimal) r[8];
+
+            // 가중 carbon 누적 (buildEventDto 와 동일 산식 재사용)
+            BigDecimal factor = resolveFactor(materialCode, mainCode, mainRatio, factorMap);
+            totalCarbonAmount = totalCarbonAmount.add(BigDecimal.valueOf(w).multiply(factor));
+
+            // newBuyer 판정 — 그룹 내 어느 SKU 라도 첫 거래 시점이면 true
+            Timestamp firstAt = (Timestamp) r[5];
+            if (txAt.equals(firstAt)) isNewBuyer = true;
+
+            // localPartner — partner_type 기준 anyMatch
+            String partnerType = (String) r[6];
+            if ("local_small".equals(partnerType) || "social_enterprise".equals(partnerType)) {
+                isLocalPartner = true;
+            }
+
+            // 소재 한글명 집계 — BLEND 면 main 소재 사용 (없으면 코드 그대로)
+            String displayCode = "BLEND".equals(materialCode) && mainCode != null ? mainCode : materialCode;
+            materialSet.add(nameMap.getOrDefault(displayCode, displayCode));
+        }
+
+        // 점수 4종 재계산 — 그룹 총 무게 기준
+        boolean scoreValid = totalWeight >= MIN_WEIGHT_KG;
+        int saleExecution = scoreValid ? SALE_BASE : 0;
+        int carbon = scoreValid
+                ? totalCarbonAmount.multiply(CARBON_SCALE).intValue()
+                : 0;
+        int newBuyerScore = (scoreValid && isNewBuyer) ? NEW_BUYER_BONUS : 0;
+        int localPartnerScore = (scoreValid && isLocalPartner) ? LOCAL_PARTNER_BONUS : 0;
+        int total = saleExecution + carbon + newBuyerScore + localPartnerScore;
+
+        String materialNames = String.join(", ", materialSet);
+        String date = txAt.toLocalDateTime().toLocalDate().format(DATE_FMT);
+
+        return ScoreEventsDto.EventDto.builder()
+                .id(groupId)
+                .date(date)
+                .type("sale")
+                .buyer(buyer)
+                .material(materialNames)              // 콤마 구분 한글명
+                .weightKg(totalWeight)                // 그룹 총 무게
+                .isNewBuyer(isNewBuyer)
+                .isLocalPartner(isLocalPartner)
+                .mainMaterialCode(null)               // 그룹화 후엔 의미 없음
+                .mainMaterialRatio(null)
+                .saleExecution(saleExecution)
+                .carbon(carbon)
+                .newBuyer(newBuyerScore)
+                .localPartner(localPartnerScore)
+                .total(total)
+                .scoreValid(scoreValid)
+                .build();
+    }
 
     /** native row 1개를 EventDto 로 변환 + 점수 4종 계산. */
     private ScoreEventsDto.EventDto buildEventDto(Object[] r, Map<String, BigDecimal> factorMap) {
