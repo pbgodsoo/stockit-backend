@@ -29,10 +29,12 @@ public class StoreOrderBatchApproveScheduler {
     @SchedulerLock(name = "storeOrderBatchApproveJob", lockAtMostFor = "PT30M")
     public void runAutoBatch() {
         try {
-            // Spring Batch는 동일한 파라미터로 성공한 Job의 재실행을 거부함
-            // 타임스탬프를 파라미터로 부여해 매 실행을 고유하게 구분
+            // Spring Batch는 동일한 파라미터로 성공한 Job의 재실행을 거부함.
+            // runAt 타임스탬프로 매 실행을 고유하게 구분.
+            // triggerType: Reader SQL 분기 기준 (AUTO → 전일 날짜 범위 필터 적용).
             JobParameters params = new JobParametersBuilder()
                     .addLong("runAt", System.currentTimeMillis())
+                    .addString("triggerType", "AUTO")
                     .toJobParameters();
             jobLauncher.run(storeOrderBatchApproveJob, params);
         } catch (Exception e) {
