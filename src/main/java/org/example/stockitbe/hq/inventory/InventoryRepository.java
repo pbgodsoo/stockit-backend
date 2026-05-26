@@ -67,36 +67,42 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
      * @param locationCode null 이면 scope 그룹 적용, 값 있으면 그 위치만
      */
     @Query(value = """
-    SELECT inf.code AS code,
-           inf.name AS name,
+    WITH store_total AS (
+        SELECT ssh.store_id,
+               SUM(ssi.quantity) AS qty
+        FROM store_sale_header ssh
+        JOIN store_sale_item ssi ON ssi.sale_header_id = ssh.id
+        WHERE ssh.sold_at >= :fromDt AND ssh.sold_at < :toDt
+          AND ssh.status = 'COMPLETED'
+        GROUP BY ssh.store_id
+    ),
+    warehouse_total AS (
+        SELECT swm.warehouse_id,
+               SUM(ssi.quantity) AS qty
+        FROM store_warehouse_map swm
+        JOIN store_sale_header ssh ON ssh.store_id = swm.store_id
+        JOIN store_sale_item ssi  ON ssi.sale_header_id = ssh.id
+        WHERE ssh.sold_at >= :fromDt AND ssh.sold_at < :toDt
+          AND ssh.status = 'COMPLETED'
+        GROUP BY swm.warehouse_id
+    )
+    SELECT inf.code          AS code,
+           inf.name          AS name,
            inf.location_type AS location_type,
            IFNULL(SUM(i.quantity), 0) AS avg_inventory,
            IFNULL(
-             CASE
-               WHEN inf.location_type = 'STORE' THEN (
-                 SELECT IFNULL(SUM(ssi.quantity), 0)
-                 FROM store_sale_header ssh
-                 JOIN store_sale_item ssi ON ssi.sale_header_id = ssh.id
-                 WHERE ssh.store_id = inf.id
-                   AND ssh.sold_at >= :fromDt AND ssh.sold_at < :toDt
-                   AND ssh.status = 'COMPLETED'
-               )
-               WHEN inf.location_type = 'WAREHOUSE' THEN (
-                 SELECT IFNULL(SUM(ssi.quantity), 0)
-                 FROM store_warehouse_map swm
-                 JOIN store_sale_header ssh ON ssh.store_id = swm.store_id
-                 JOIN store_sale_item ssi ON ssi.sale_header_id = ssh.id
-                 WHERE swm.warehouse_id = inf.id
-                   AND ssh.sold_at >= :fromDt AND ssh.sold_at < :toDt
-                   AND ssh.status = 'COMPLETED'
-               )
-             END
+               CASE inf.location_type
+                   WHEN 'STORE'     THEN MAX(st.qty)
+                   WHEN 'WAREHOUSE' THEN MAX(wt.qty)
+               END
            , 0) AS sales_qty
     FROM infrastructure inf
-    LEFT JOIN inventory i ON i.location_id = inf.id
+    LEFT JOIN inventory i         ON i.location_id = inf.id
+    LEFT JOIN store_total st      ON st.store_id    = inf.id
+    LEFT JOIN warehouse_total wt  ON wt.warehouse_id = inf.id
     WHERE inf.status = 'ACTIVE'
       AND ( :scope = 'ALL'
-         OR (:scope = 'STORE' AND inf.location_type = 'STORE')
+         OR (:scope = 'STORE'     AND inf.location_type = 'STORE')
          OR (:scope = 'WAREHOUSE' AND inf.location_type = 'WAREHOUSE') )
       AND (:locationCode IS NULL OR inf.code = :locationCode)
     GROUP BY inf.id, inf.code, inf.name, inf.location_type
@@ -108,36 +114,52 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
                                              @Param("locationCode") String locationCode);
 
     @Query(value = """
-    SELECT ps.sku_code AS sku_code,
-           pm.name AS product_name,
-           pm.category_code AS category_code,
-           inf.code AS location_code,
-           inf.name AS location_name,
+    WITH store_sale_agg AS (
+        SELECT ssi.sku_id,
+               ssh.store_id,
+               SUM(ssi.quantity) AS qty
+        FROM store_sale_item ssi
+        JOIN store_sale_header ssh ON ssh.id = ssi.sale_header_id
+        WHERE ssh.sold_at >= :fromDt AND ssh.sold_at < :toDt
+          AND ssh.status = 'COMPLETED'
+        GROUP BY ssi.sku_id, ssh.store_id
+    ),
+    warehouse_sale_agg AS (
+        SELECT ssi.sku_id,
+               swm.warehouse_id,
+               SUM(ssi.quantity) AS qty
+        FROM store_sale_item ssi
+        JOIN store_sale_header ssh ON ssh.id = ssi.sale_header_id
+        JOIN store_warehouse_map swm ON swm.store_id = ssh.store_id
+        WHERE ssh.sold_at >= :fromDt AND ssh.sold_at < :toDt
+          AND ssh.status = 'COMPLETED'
+        GROUP BY ssi.sku_id, swm.warehouse_id
+    )
+    SELECT ps.sku_code       AS sku_code,
+           pm.name           AS product_name,
+           pm.category_code  AS category_code,
+           inf.code          AS location_code,
+           inf.name          AS location_name,
            inf.location_type AS location_type,
-           i.quantity AS units,
-           ps.unit_price AS unit_price,
-           IFNULL((
-             SELECT IFNULL(SUM(ssi.quantity), 0)
-             FROM store_sale_item ssi
-             JOIN store_sale_header ssh ON ssh.id = ssi.sale_header_id
-             WHERE ssi.sku_id = i.sku_id
-               AND ssh.sold_at >= :fromDt AND ssh.sold_at < :toDt
-               AND ssh.status = 'COMPLETED'
-               AND (
-                 (inf.location_type = 'STORE' AND ssh.store_id = inf.id)
-                 OR (inf.location_type = 'WAREHOUSE' AND ssh.store_id IN (
-                   SELECT swm.store_id FROM store_warehouse_map swm
-                   WHERE swm.warehouse_id = inf.id
-                 ))
-               )
-           ), 0) AS sales_qty
+           i.quantity        AS units,
+           ps.unit_price     AS unit_price,
+           IFNULL(
+               CASE inf.location_type
+                   WHEN 'STORE'     THEN ssa.qty
+                   WHEN 'WAREHOUSE' THEN wsa.qty
+               END
+           , 0) AS sales_qty
     FROM inventory i
-    JOIN product_sku ps ON ps.id = i.sku_id
-    JOIN product_master pm ON pm.code = ps.product_code
-    JOIN infrastructure inf ON inf.id = i.location_id
+    JOIN product_sku ps      ON ps.id = i.sku_id
+    JOIN product_master pm   ON pm.code = ps.product_code
+    JOIN infrastructure inf  ON inf.id = i.location_id
+    LEFT JOIN store_sale_agg ssa
+        ON ssa.sku_id = i.sku_id AND ssa.store_id = inf.id
+    LEFT JOIN warehouse_sale_agg wsa
+        ON wsa.sku_id = i.sku_id AND wsa.warehouse_id = inf.id
     WHERE inf.status = 'ACTIVE'
       AND ( :scope = 'ALL'
-         OR (:scope = 'STORE' AND inf.location_type = 'STORE')
+         OR (:scope = 'STORE'     AND inf.location_type = 'STORE')
          OR (:scope = 'WAREHOUSE' AND inf.location_type = 'WAREHOUSE') )
       AND (:locationCode IS NULL OR inf.code = :locationCode)
     """, nativeQuery = true)
