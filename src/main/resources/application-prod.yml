@@ -111,4 +111,4 @@ stockit:
 # TODO: 테스트 인프라 정상화 후 반드시 제거.
 app:
   dashboard:
-    e2e-fast: ${APP_DASHBOARD_E2E_FAST:true}
+    e2e-fast: ${APP_DASHBOARD_E2E_FAST:false}
