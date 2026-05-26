@@ -161,6 +161,9 @@ public class CircularBuyerDto {
         private String phone;
         private String address;
         private Double distanceKm;
+        private String companyRationale;
+        private String materialRationale;
+        private String distanceRationale;
         private String rationale;
     }
 

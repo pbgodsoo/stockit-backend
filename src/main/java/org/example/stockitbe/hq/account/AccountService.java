@@ -113,6 +113,16 @@ public class AccountService {
                 .findByRoleCodeForUpdate(prefix)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.EMPLOYEE_CODE_SEQUENCE_NOT_FOUND));
         int nextNumber = seq.incrementAndGet();
+
+        // 안전망: 트랜잭션 롤백 누적·시드 불일치·DB 마이그레이션 등으로 sequence 가
+        //         user 테이블 max 보다 뒤처졌을 때 자동 보정 → Duplicate entry 사고 차단.
+        //         비관적 락 안이므로 다른 트랜잭션과 충돌 없음.
+        int userMax = userRepository.findMaxEmployeeCodeNumber(prefix);
+        if (nextNumber <= userMax) {
+            nextNumber = userMax + 1;
+            seq.setLastNumber(nextNumber);
+        }
+
         return String.format("%s%04d", prefix, nextNumber);
     }
 
