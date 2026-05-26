@@ -23,6 +23,15 @@ public class EmployeeCodeSequence {
         return ++this.lastNumber;
     }
 
+    /**
+     * 시퀀스 값을 명시적으로 설정 — 안전망 보정 전용.
+     * (AccountService.generateEmployeeCode 에서 user 테이블 max 와 동기화 시 사용)
+     * 비관적 락 + @Transactional 안에서만 호출되어야 함.
+     */
+    public void setLastNumber(int lastNumber) {
+        this.lastNumber = lastNumber;
+    }
+
     public static EmployeeCodeSequence of(String roleCode, int initialNumber) {
         EmployeeCodeSequence seq = new EmployeeCodeSequence();
         seq.roleCode = roleCode;
