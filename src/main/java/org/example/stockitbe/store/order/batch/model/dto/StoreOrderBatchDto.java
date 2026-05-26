@@ -1,6 +1,7 @@
 package org.example.stockitbe.store.order.batch.model.dto;
 
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -8,6 +9,7 @@ import lombok.NoArgsConstructor;
 import org.example.stockitbe.store.order.batch.model.enums.StoreOrderBatchScope;
 import org.example.stockitbe.store.order.batch.model.enums.StoreOrderBatchTriggerType;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public class StoreOrderBatchDto {
@@ -20,6 +22,12 @@ public class StoreOrderBatchDto {
     public static class RunReq {
         private StoreOrderBatchScope mode;
         private String storeCode;
+
+        @NotNull
+        private LocalDateTime fromDateTime;
+
+        @NotNull
+        private LocalDateTime toDateTime;
 
         @AssertTrue(message = "mode=STORE requires storeCode")
         public boolean isStoreCodeValidForMode() {

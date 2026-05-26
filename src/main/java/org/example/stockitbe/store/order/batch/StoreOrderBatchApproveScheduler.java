@@ -10,6 +10,10 @@ import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -29,12 +33,18 @@ public class StoreOrderBatchApproveScheduler {
     @SchedulerLock(name = "storeOrderBatchApproveJob", lockAtMostFor = "PT30M")
     public void runAutoBatch() {
         try {
-            // Spring Batch는 동일한 파라미터로 성공한 Job의 재실행을 거부함.
-            // runAt 타임스탬프로 매 실행을 고유하게 구분.
-            // triggerType: Reader SQL 분기 기준 (AUTO → 전일 날짜 범위 필터 적용).
+            // KST 기준 전일 범위를 계산해 Reader에 전달한다.
+            // fromDateTime/toDateTime이 JobParameter에 포함되어 날짜가 달라지면
+            // 실행 인스턴스가 자동으로 구분되므로 runAt 타임스탬프가 불필요하다.
+            ZoneId kst = ZoneId.of("Asia/Seoul");
+            LocalDate prevDay = LocalDate.now(kst).minusDays(1);
+            LocalDateTime from = prevDay.atStartOfDay();
+            LocalDateTime to   = prevDay.plusDays(1).atStartOfDay().minusNanos(1);
+
             JobParameters params = new JobParametersBuilder()
-                    .addLong("runAt", System.currentTimeMillis())
-                    .addString("triggerType", "AUTO")
+                    .addString("runType", "MIDNIGHT")
+                    .addLocalDateTime("fromDateTime", from)
+                    .addLocalDateTime("toDateTime", to)
                     .toJobParameters();
             jobLauncher.run(storeOrderBatchApproveJob, params);
         } catch (Exception e) {

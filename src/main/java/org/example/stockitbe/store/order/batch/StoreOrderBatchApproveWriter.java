@@ -21,9 +21,9 @@ public class StoreOrderBatchApproveWriter implements ItemWriter<StoreOrderBatchI
     private final StoreOrderBatchApproveItemService itemService;
 
     // jobParameters는 Step 실행 시점에 확정되므로 생성자가 아닌 @Value SpEL로 주입.
-    // 기본값 'AUTO'는 스케줄러 파라미터 누락 시의 안전망.
-    @Value("#{jobParameters['triggerType'] ?: 'AUTO'}")
-    private String triggerType;
+    // 기본값 'MIDNIGHT'은 runType 파라미터 누락 시의 안전망.
+    @Value("#{jobParameters['runType'] ?: 'MIDNIGHT'}")
+    private String runType;
 
     // @BeforeStep: Step 실행 직전에 Spring Batch가 호출해 live StepExecution을 주입.
     // write() 내에서 카운트를 누적하고 EC에 저장하기 위해 참조를 보관.
@@ -45,20 +45,20 @@ public class StoreOrderBatchApproveWriter implements ItemWriter<StoreOrderBatchI
 
     @Override
     public void write(Chunk<? extends StoreOrderBatchItem> chunk) throws Exception {
-        // triggerType별 감사 주체 분기.
+        // runType별 감사 주체 분기.
         // MANUAL: 관리자가 HTTP로 직접 실행 → actorId는 비워두고 이름만 SYSTEM으로 기록.
-        // AUTO: 스케줄러 자동 실행 → actorId와 actorName 모두 SYSTEM_BATCH로 통일.
+        // MIDNIGHT: 스케줄러 자동 실행 → actorId와 actorName 모두 SYSTEM_BATCH로 통일.
         String actorId;
         String actorName;
         String reason;
-        if ("MANUAL".equals(triggerType)) {
+        if ("MANUAL".equals(runType)) {
             actorId = "";
             actorName = "SYSTEM";
             reason = "본사 수동 배치 처리";
         } else {
             actorId = "SYSTEM_BATCH";
             actorName = "SYSTEM_BATCH";
-            reason = "AUTO_BATCH_APPROVE";
+            reason = "MIDNIGHT_BATCH_APPROVE";
         }
 
         // per-item try-catch: 한 건 실패가 chunk 전체를 롤백시키지 않도록 예외를 삼킨다.
@@ -69,7 +69,7 @@ public class StoreOrderBatchApproveWriter implements ItemWriter<StoreOrderBatchI
                 successCount++;
             } catch (Exception e) {
                 failCount++;
-                log.warn("[STORE-ORDER-BATCH] fail orderNo={} trigger={}", item.getOrderNo(), triggerType, e);
+                log.warn("[STORE-ORDER-BATCH] fail orderNo={} runType={}", item.getOrderNo(), runType, e);
             }
         }
 
