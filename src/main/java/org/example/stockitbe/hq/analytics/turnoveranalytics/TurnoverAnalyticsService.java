@@ -6,7 +6,6 @@ import org.example.stockitbe.hq.analytics.turnoveranalytics.model.TurnoverPeriod
 import org.example.stockitbe.hq.analytics.turnoveranalytics.model.TurnoverScope;
 import org.example.stockitbe.hq.inventory.InventoryRepository;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -17,9 +16,11 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
+// @Transactional 제거: 클래스 레벨 트랜잭션이 aggregateLocationTurnover + skuTurnoverList 두 쿼리를
+// 하나의 커넥션에 묶어 29초 이상 점유 → Hikari leak 경고 원인.
+// Repository 메서드가 각자 @Transactional을 가지므로 각 호출이 독립 커넥션으로 짧게 처리된다.
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class TurnoverAnalyticsService {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
