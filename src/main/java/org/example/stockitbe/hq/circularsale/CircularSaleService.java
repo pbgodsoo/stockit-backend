@@ -20,6 +20,8 @@ import org.example.stockitbe.hq.circularsale.repository.CircularSaleHeaderReposi
 import org.example.stockitbe.hq.circularsale.repository.CircularSaleItemMaterialRepository;
 import org.example.stockitbe.hq.circularsale.repository.CircularSaleItemRepository;
 import org.example.stockitbe.hq.circularsale.repository.CircularSaleStatusHistoryRepository;
+import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
+import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.inventory.InventoryRepository;
 import org.example.stockitbe.hq.inventory.InventoryService;
 import org.example.stockitbe.hq.inventory.model.Inventory;
@@ -79,6 +81,7 @@ public class CircularSaleService {
     private final CircularSaleItemRepository saleItemRepository;
     private final CircularSaleItemMaterialRepository saleItemMaterialRepository;
     private final CircularSaleStatusHistoryRepository saleStatusHistoryRepository;
+    private final InfrastructureRepository infrastructureRepository;
     private final CircularBuyerRepository circularBuyerRepository;
     // Phase 3: 실제 판매 시 ESG 점수 가산용 거래 row 를 함께 INSERT 하기 위한 Repository
     private final CircularBuyerTransactionRepository transactionRepository;
@@ -103,6 +106,12 @@ public class CircularSaleService {
         // 3) 라인별 SKU/재고/소재 스냅샷 컨텍스트 구성 + 단일 창고 검증
         List<LineContext> contexts = buildLineContexts(request.getItems(), request.getMaterialType(), categoryLookup);
         Long warehouseId = resolveSingleWarehouse(contexts);
+        for (LineContext context : contexts) {
+            context.availableQuantitySnapshot = Math.max(
+                    0,
+                    context.inventory.getAvailableQuantity() == null ? 0 : context.inventory.getAvailableQuantity()
+            );
+        }
 
         // 4) 재고를 즉시 차감하지 않고 예약 수량으로 선반영
         applyInventoryReservations(contexts);
@@ -157,6 +166,12 @@ public class CircularSaleService {
                         .filter(Objects::nonNull)
                         .collect(Collectors.toSet())
         ).stream().collect(Collectors.toMap(WhOutboundHeader::getId, Function.identity()));
+        Map<Long, Infrastructure> warehouseById = infrastructureRepository.findAllById(
+                outboundById.values().stream()
+                        .map(WhOutboundHeader::getWarehouseId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet())
+        ).stream().collect(Collectors.toMap(Infrastructure::getId, Function.identity()));
 
         Map<Long, List<CircularSaleItem>> itemsByHeader = saleItemRepository.findAllBySaleHeaderIdIn(
                 headers.getContent().stream().map(CircularSaleHeader::getId).toList()
@@ -167,12 +182,15 @@ public class CircularSaleService {
         for (CircularSaleHeader header : headers.getContent()) {
             CircularBuyer buyer = buyerById.get(header.getBuyerId());
             WhOutboundHeader outbound = outboundById.get(header.getOutboundHeaderId());
+            Infrastructure outboundWarehouse = outbound == null ? null : warehouseById.get(outbound.getWarehouseId());
             List<CircularSaleItem> items = itemsByHeader.getOrDefault(header.getId(), List.of());
             rows.add(CircularSaleDto.ListRowRes.builder()
                     .saleId(header.getId())
                     .saleNo(header.getSaleNo())
                     .status(header.getStatus())
                     .outboundNo(outbound == null ? null : outbound.getOutboundNo())
+                    .outboundWarehouseCode(outboundWarehouse == null ? null : outboundWarehouse.getCode())
+                    .outboundWarehouseName(outboundWarehouse == null ? null : outboundWarehouse.getName())
                     .outboundStatus(outbound == null ? null : outbound.getStatus())
                     .soldAt(header.getSoldAt())
                     .completedAt(header.getCompletedAt())
@@ -211,8 +229,37 @@ public class CircularSaleService {
                         CircularSaleItemMaterial::getSaleItemId,
                         Collectors.mapping(CircularSaleDto.MaterialRes::from, Collectors.toList())
                 ));
+        Infrastructure outboundWarehouse = header.getWarehouseId() == null ? null
+                : infrastructureRepository.findById(header.getWarehouseId()).orElse(null);
+
         List<CircularSaleDto.LineRes> lines = items.stream()
-                .map(item -> CircularSaleDto.LineRes.from(item, materialsByItem.getOrDefault(item.getId(), List.of())))
+                .map(item -> {
+                    CircularSaleDto.LineRes base = CircularSaleDto.LineRes.from(item, materialsByItem.getOrDefault(item.getId(), List.of()));
+                    return CircularSaleDto.LineRes.builder()
+                            .itemId(base.getItemId())
+                            .inventoryId(base.getInventoryId())
+                            .skuCode(base.getSkuCode())
+                            .productCode(base.getProductCode())
+                            .productName(base.getProductName())
+                            .mainCategory(base.getMainCategory())
+                            .subCategory(base.getSubCategory())
+                            .color(base.getColor())
+                            .size(base.getSize())
+                            .materialType(base.getMaterialType())
+                            .requestedWeightKg(base.getRequestedWeightKg())
+                            .actualWeightKg(base.getActualWeightKg())
+                            .estimatedQuantity(base.getEstimatedQuantity())
+                            .soldQuantity(base.getSoldQuantity())
+                            .availableQuantity(base.getAvailableQuantity())
+                            .availableWeightKg(base.getAvailableWeightKg())
+                            .warehouseCode(outboundWarehouse == null ? null : outboundWarehouse.getCode())
+                            .warehouseName(outboundWarehouse == null ? null : outboundWarehouse.getName())
+                            .unitPrice(base.getUnitPrice())
+                            .lineAmount(base.getLineAmount())
+                            .memo(base.getMemo())
+                            .materials(base.getMaterials())
+                            .build();
+                })
                 .toList();
 
         // 3) 상태 이력 조회
@@ -233,6 +280,8 @@ public class CircularSaleService {
                 .soldByMemberId(header.getSoldByMemberId())
                 .soldByName(header.getSoldByName())
                 .outboundHeaderId(header.getOutboundHeaderId())
+                .outboundWarehouseCode(outboundWarehouse == null ? null : outboundWarehouse.getCode())
+                .outboundWarehouseName(outboundWarehouse == null ? null : outboundWarehouse.getName())
                 .buyerCode(buyer.getCode())
                 .buyerName(buyer.getCompanyName())
                 .buyerIndustryGroup(buyer.getIndustryGroup())
@@ -501,6 +550,8 @@ public class CircularSaleService {
         List<CircularSaleItem> items = new ArrayList<>();
         for (LineContext context : contexts) {
             CircularSaleDto.CreateLineReq reqLine = context.request;
+            int stockQuantitySnapshot = Math.max(0, context.availableQuantitySnapshot == null ? 0 : context.availableQuantitySnapshot);
+            BigDecimal stockWeightKgSnapshot = estimateSnapshotWeightKg(reqLine, stockQuantitySnapshot);
             items.add(CircularSaleItem.builder()
                     .saleHeaderId(header.getId())
                     .inventoryId(reqLine.getInventoryId())
@@ -517,6 +568,8 @@ public class CircularSaleService {
                     .actualWeightKg(scale3(reqLine.getActualWeightKg() == null ? reqLine.getRequestedWeightKg() : reqLine.getActualWeightKg()))
                     .estimatedQuantity(scale3(reqLine.getEstimatedQuantity() == null ? BigDecimal.valueOf(reqLine.getSoldQuantity()) : reqLine.getEstimatedQuantity()))
                     .soldQuantity(reqLine.getSoldQuantity())
+                    .stockQuantitySnapshot(stockQuantitySnapshot)
+                    .stockWeightKgSnapshot(stockWeightKgSnapshot)
                     .unitPrice(reqLine.getUnitPrice())
                     .lineAmount(reqLine.getLineAmount())
                     .memo(reqLine.getMemo())
@@ -811,6 +864,17 @@ public class CircularSaleService {
         return value.setScale(DECIMAL_SCALE_3, RoundingMode.HALF_UP);
     }
 
+    private BigDecimal estimateSnapshotWeightKg(CircularSaleDto.CreateLineReq reqLine, int stockQuantitySnapshot) {
+        if (stockQuantitySnapshot <= 0) return BigDecimal.ZERO.setScale(DECIMAL_SCALE_3, RoundingMode.HALF_UP);
+        BigDecimal soldQty = BigDecimal.valueOf(Math.max(1, reqLine.getSoldQuantity() == null ? 0 : reqLine.getSoldQuantity()));
+        BigDecimal baseWeight = reqLine.getActualWeightKg() == null ? reqLine.getRequestedWeightKg() : reqLine.getActualWeightKg();
+        if (baseWeight == null || baseWeight.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(DECIMAL_SCALE_3, RoundingMode.HALF_UP);
+        }
+        BigDecimal unitWeight = baseWeight.divide(soldQty, DECIMAL_SCALE_3, RoundingMode.HALF_UP);
+        return unitWeight.multiply(BigDecimal.valueOf(stockQuantitySnapshot)).setScale(DECIMAL_SCALE_3, RoundingMode.HALF_UP);
+    }
+
     private Integer sumInt(Collection<LineContext> contexts, Function<LineContext, Integer> extractor) {
         int sum = 0;
         for (LineContext context : contexts) {
@@ -841,6 +905,7 @@ public class CircularSaleService {
         private ProductSku sku;
         private ProductMaster master;
         private Inventory inventory;
+        private Integer availableQuantitySnapshot;
         private String mainCategory;
         private String subCategory;
         private String materialType;
