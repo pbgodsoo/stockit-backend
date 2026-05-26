@@ -182,6 +182,8 @@ public class CircularSaleService {
                     .saleNo(header.getSaleNo())
                     .status(header.getStatus())
                     .outboundNo(outbound == null ? null : outbound.getOutboundNo())
+                    .outboundWarehouseCode(outbound == null ? null : outbound.getWarehouseCode())
+                    .outboundWarehouseName(outbound == null ? null : outbound.getWarehouseName())
                     .outboundStatus(outbound == null ? null : outbound.getStatus())
                     .soldAt(header.getSoldAt())
                     .completedAt(header.getCompletedAt())

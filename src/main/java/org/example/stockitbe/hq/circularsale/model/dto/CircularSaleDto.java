@@ -234,6 +234,8 @@ public class CircularSaleDto {
         private String saleNo;
         private CircularSaleStatus status;
         private String outboundNo;
+        private String outboundWarehouseCode;
+        private String outboundWarehouseName;
         private OutboundStatus outboundStatus;
         private Date soldAt;
         private Date completedAt;
