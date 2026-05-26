@@ -18,10 +18,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.sql.DataSource;
-import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.util.Date;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 
 @Configuration
 @RequiredArgsConstructor
@@ -71,54 +69,44 @@ public class BatchConfig {
     // - PagingItemReader 제외: 처리 중 status가 REQUESTED → APPROVED로 바뀌면
     //   다음 페이지 OFFSET이 밀려 처리 누락 발생.
     // - JpaCursorItemReader 제외: approveOne()의 REQUIRES_NEW가 JPA EntityManager와 충돌.
+    //
+    // 날짜 범위와 storeId는 모두 호출자(Controller/Scheduler)가 JobParameter로 전달.
+    // storeId=0은 "전체 매장" 의미의 sentinel. STORE 모드일 때만 실제 storeId가 전달됨.
     @Bean
     @StepScope
     public JdbcCursorItemReader<StoreOrderBatchItem> storeOrderBatchApproveReader(
-            @Value("#{jobParameters['triggerType'] ?: 'AUTO'}") String triggerType) {
+            @Value("#{jobParameters['fromDateTime']}") LocalDateTime fromDateTime,
+            @Value("#{jobParameters['toDateTime']}")   LocalDateTime toDateTime,
+            @Value("#{jobParameters['storeId'] ?: 0L}") Long storeId) {
 
-        JdbcCursorItemReaderBuilder<StoreOrderBatchItem> builder = new JdbcCursorItemReaderBuilder<StoreOrderBatchItem>()
+        // storeId > 0이면 STORE 모드(매장별 필터), 0이면 ALL 모드(전체 매장).
+        // PreparedStatement 파라미터 인덱스가 SQL 절 수에 따라 달라지므로 SQL과 setter를 함께 구성한다.
+        String sql =
+                "SELECT id, order_no, store_id, warehouse_id, requested_at " +
+                "FROM store_order_header " +
+                "WHERE status = 'REQUESTED' AND requested_at BETWEEN ? AND ?" +
+                (storeId > 0 ? " AND store_id = ?" : "") +
+                " ORDER BY requested_at ASC, id ASC";
+
+        return new JdbcCursorItemReaderBuilder<StoreOrderBatchItem>()
                 .name("storeOrderBatchApproveReader")
                 .dataSource(dataSource)
+                .sql(sql)
+                .preparedStatementSetter(ps -> {
+                    ps.setTimestamp(1, Timestamp.valueOf(fromDateTime));
+                    ps.setTimestamp(2, Timestamp.valueOf(toDateTime));
+                    // storeId 조건이 SQL에 포함된 경우에만 3번 인덱스를 바인딩한다.
+                    if (storeId > 0) {
+                        ps.setLong(3, storeId);
+                    }
+                })
                 .rowMapper((rs, rowNum) -> new StoreOrderBatchItem(
                         rs.getLong("id"),
                         rs.getString("order_no"),
                         rs.getLong("store_id"),
                         rs.getLong("warehouse_id"),
                         rs.getTimestamp("requested_at")
-                ));
-
-        if ("MANUAL".equals(triggerType)) {
-            // 수동: 날짜 필터 없이 전체 REQUESTED 처리. 오래된 건 먼저 승인.
-            builder.sql(
-                    "SELECT id, order_no, store_id, warehouse_id, requested_at " +
-                    "FROM store_order_header " +
-                    "WHERE status = 'REQUESTED' " +
-                    "ORDER BY requested_at ASC, id ASC"
-            );
-        } else {
-            // 자동: 전일 00:00:00 ~ 23:59:59 범위만 처리. 최신 건 먼저 승인.
-            Date[] range = previousDayRange();
-            builder.sql(
-                    "SELECT id, order_no, store_id, warehouse_id, requested_at " +
-                    "FROM store_order_header " +
-                    "WHERE status = 'REQUESTED' AND requested_at BETWEEN ? AND ? " +
-                    "ORDER BY requested_at DESC, id DESC"
-            ).preparedStatementSetter(ps -> {
-                ps.setTimestamp(1, new java.sql.Timestamp(range[0].getTime()));
-                ps.setTimestamp(2, new java.sql.Timestamp(range[1].getTime()));
-            });
-        }
-
-        return builder.build();
-    }
-
-    // LocalDate.now()가 아닌 KST 기준으로 전일을 계산해야 서버 타임존 설정과 무관하게 동일한 범위가 나온다.
-    // minusNanos(1): 자정 00:00:00 정각은 다음 날로 간주되므로 전일 마지막 순간으로 보정.
-    private static Date[] previousDayRange() {
-        ZoneId kst = ZoneId.of("Asia/Seoul");
-        LocalDate prev = LocalDate.now(kst).minusDays(1);
-        ZonedDateTime start = prev.atStartOfDay(kst);
-        ZonedDateTime end = prev.plusDays(1).atStartOfDay(kst).minusNanos(1);
-        return new Date[]{Date.from(start.toInstant()), Date.from(end.toInstant())};
+                ))
+                .build();
     }
 }
