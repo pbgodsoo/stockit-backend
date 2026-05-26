@@ -10,7 +10,8 @@ import java.util.concurrent.ThreadPoolExecutor;
  * 비동기 처리 전용 스레드 풀 설정.
  *
  * 현재 등록 풀:
- *   - notificationExecutor : SSE push fan-out 전용 (1500+ HQ admin 대응)
+ *   - notificationExecutor  : SSE push fan-out 전용 (1500+ HQ admin 대응)
+ *   - dashboardExecutor     : /api/hq/analytics/dashboard 4개 서브쿼리 병렬 실행 전용
  *
  * 정책:
  *   - CallerRunsPolicy — 큐 가득 차면 호출자(도메인 스레드)가 실행.
@@ -33,6 +34,26 @@ public class AsyncConfig {
         // 큐 가득 시 호출자(도메인 스레드)가 직접 실행 — 알림 손실 방지 + 자연스러운 백프레셔
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         // 부팅 시 풀 미리 초기화
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(10);
+        executor.initialize();
+        return executor;
+    }
+
+    // 대시보드 집계 병렬 실행 전용 풀.
+    // /api/hq/analytics/dashboard 호출 1건 당 sales/turnover/vendor/orderStats 4개를 동시 실행.
+    // corePoolSize=4: 요청 1건 기준 4개 태스크가 즉시 병렬화되도록 보장.
+    // maxPoolSize=16: 동시 요청 4건까지 풀 스레드로 처리 (4req × 4task).
+    // queueCapacity=8: 폭주 시 최대 2건 추가 대기 후 CallerRunsPolicy 발동.
+    @Bean(name = "dashboardExecutor")
+    public ThreadPoolTaskExecutor dashboardExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(16);
+        executor.setQueueCapacity(8);
+        executor.setKeepAliveSeconds(60);
+        executor.setThreadNamePrefix("dashboard-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(10);
         executor.initialize();
