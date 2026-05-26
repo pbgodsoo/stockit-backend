@@ -20,7 +20,6 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -90,7 +89,6 @@ public class CircularBuyerRecommendService {
     @Value("${stockit.circular-buyer.ai.rationale-timeout-ms:60000}")
     private long rationaleTimeoutMs;
 
-    @Transactional(readOnly = true)
     public CircularBuyerDto.RecommendRes recommend(CircularBuyerDto.RecommendReq req) {
         validateMaterialFit(req.getMaterialFit());
 
@@ -106,7 +104,7 @@ public class CircularBuyerRecommendService {
         List<RecommendedCandidate> top = rankedTop.stream().map(RankedBuyer::buyer).toList();
 
         // 3층 — LLM 사유 생성 (실패 시 fallback)
-        Map<String, String> rationales = rankingResult.rationaleGenerationAllowed()
+        Map<String, RationaleSections> rationales = rankingResult.rationaleGenerationAllowed()
                 ? generateRationales(top, req)
                 : Map.of();
         Map<String, RankedBuyer> rankedByCode = rankedTop.stream()
@@ -121,6 +119,9 @@ public class CircularBuyerRecommendService {
                 .map(b -> {
                     RankedBuyer rankedBuyer = rankedByCode.get(b.code());
                     Double distanceKm = rankedBuyer == null ? null : rankedBuyer.distanceKm();
+                    RationaleSections rationale = rationales
+                            .getOrDefault(b.code(), fallbackRationaleSections(distanceKm))
+                            .withFallbacks(distanceKm);
                     return CircularBuyerDto.RecommendItem.builder()
                         .code(b.code())
                         .companyName(b.companyName())
@@ -132,7 +133,10 @@ public class CircularBuyerRecommendService {
                         .phone(b.phone())
                         .address(b.address())
                         .distanceKm(distanceKm)
-                        .rationale(rationales.getOrDefault(b.code(), fallbackRationale()))
+                        .companyRationale(rationale.companyRationale())
+                        .materialRationale(rationale.materialRationale())
+                        .distanceRationale(rationale.distanceRationale())
+                        .rationale(rationale.joined())
                         .build();
                 })
                 .toList();
@@ -307,10 +311,10 @@ public class CircularBuyerRecommendService {
     // ─── 3층 ─────────────────────────────────────────────────────────────────
 
     /**
-     * 단일 ChatModel 호출로 5개 사유 한꺼번에 받기. 실패 시 빈 Map 반환 → 호출자가 fallback 텍스트 박음.
-     * 응답 형식 강제 — JSON 배열 [{"code":..., "rationale":...}, ...] 만 허용.
+     * 단일 ChatModel 호출로 5개 사유 한꺼번에 받기. 실패 시 빈 Map 반환 → 호출자가 섹션별 fallback 텍스트 박음.
+     * 응답 형식 강제 — JSON 배열 [{"code":..., "companyRationale":..., ...}, ...] 만 허용.
      */
-    private Map<String, String> generateRationales(List<RecommendedCandidate> top, CircularBuyerDto.RecommendReq req) {
+    private Map<String, RationaleSections> generateRationales(List<RecommendedCandidate> top, CircularBuyerDto.RecommendReq req) {
         if (top.isEmpty()) return Map.of();
         try {
             String prompt = buildPrompt(top, req);
@@ -327,11 +331,15 @@ public class CircularBuyerRecommendService {
             List<Map<String, String>> parsed = objectMapper.readValue(
                     json, new TypeReference<List<Map<String, String>>>() {}
             );
-            Map<String, String> result = new HashMap<>();
+            Map<String, RationaleSections> result = new HashMap<>();
             for (Map<String, String> entry : parsed) {
                 String code = entry.get("code");
-                String rationale = entry.get("rationale");
-                if (code != null && rationale != null) {
+                RationaleSections rationale = new RationaleSections(
+                        entry.get("companyRationale"),
+                        entry.get("materialRationale"),
+                        entry.get("distanceRationale")
+                );
+                if (code != null) {
                     result.put(code, rationale);
                 }
             }
@@ -350,13 +358,13 @@ public class CircularBuyerRecommendService {
         sb.append("각 거래처가 왜 이 재고에 적합한지 짧고 신뢰감 있는 사유를 작성해.\n\n");
 
         sb.append("[사유 작성 가이드]\n");
-        sb.append("- 각 거래처당 4~5문장, 약 240~300자 분량으로 간결하게.\n");
-        sb.append("- 반드시 아래 순서대로 4~5문장을 작성하고, 세 관점 중 하나라도 빠뜨리지 마:\n");
-        sb.append("  1) 거래처 설명: 회사가 만드는 생산품·처리 영역·강점 소재 후보군을 구체적으로 설명\n");
-        sb.append("  2) 소재 적합도: 요청 재고의 소재가 이 거래처와 맞는 이유와 회사가 해당 소재를 어떻게 활용하는지 설명\n");
-        sb.append("  3) 거리 적합도: 거리(km)가 제공된 경우 수치를 직접 쓰고 물류 효율·운송 부담 관점의 장점을 설명\n");
-        sb.append("  4) 순환 가치: 처리 후 재활용 경로와 ESG·탄소 감축·자원 순환 효과를 짧게 설명\n");
-        sb.append("- 거리 정보가 '거리 정보 없음'이면 거리 적합도 문장은 쓰지 말고, 나머지 관점만 3문장으로 작성.\n");
+        sb.append("- 각 거래처마다 companyRationale, materialRationale, distanceRationale 3개 필드를 모두 작성.\n");
+        sb.append("- 각 필드는 약 220~260자, 2~4문장으로 작성하고 서로 내용을 중복하지 마.\n");
+        sb.append("- companyRationale: 회사의 생산품·처리 영역·취급 소재 후보군·강점을 구체적으로 설명.\n");
+        sb.append("- materialRationale: 요청 재고의 소재가 이 거래처와 맞는 이유와 회사가 해당 소재를 어떻게 활용하는지 설명.\n");
+        sb.append("- distanceRationale: 거리(km)가 제공된 경우 수치를 직접 쓰고 물류 효율·운송 부담·처리 속도 관점의 장점을 설명.\n");
+        sb.append("- 요청 재고에 여러 품목이 있으면 한 품목만 언급하지 말고, 선택된 품목명과 소재들을 함께 묶어 설명.\n");
+        sb.append("- 거리 정보가 '거리 정보 없음'이면 distanceRationale에는 '창고 또는 거래처 좌표 정보가 부족해 거리 적합도는 판단할 수 없습니다.' 취지로 작성.\n");
         sb.append("- 거래처 description·주소·취급 품목에 등장하는 구체 어휘를 적극 활용해 사실 기반으로 작성.\n");
         sb.append("- '기회를 제공할 것입니다', '적합한 거래처입니다' 같은 추상적 칭찬·불필요한 인사말·서론 금지 — 바로 본론.\n");
         sb.append("- 근거가 없는 생산품·활용처를 새로 만들지 말고, 제공된 취급 품목·description 안에서만 표현.\n");
@@ -408,7 +416,9 @@ public class CircularBuyerRecommendService {
         sb.append("[\n");
         for (int i = 0; i < top.size(); i++) {
             sb.append("  {\"code\": \"").append(top.get(i).code())
-                    .append("\", \"rationale\": \"<거래처 설명 → 소재 적합도 → 거리 적합도(거리 있을 때) → 순환 가치 순서의 3~4문장 한 문단>\"}");
+                    .append("\", \"companyRationale\": \"<거래처 특장점 약 220~260자>\", ")
+                    .append("\"materialRationale\": \"<소재 활용 적합성 약 220~260자>\", ")
+                    .append("\"distanceRationale\": \"<물류 접근성 약 220~260자>\"}");
             if (i < top.size() - 1) sb.append(",");
             sb.append("\n");
         }
@@ -422,8 +432,31 @@ public class CircularBuyerRecommendService {
         return m.find() ? m.group() : null;
     }
 
-    private static String fallbackRationale() {
-        return "AI 사유 생성을 일시적으로 사용할 수 없습니다.";
+    private static RationaleSections fallbackRationaleSections(Double distanceKm) {
+        return new RationaleSections(
+                fallbackCompanyRationale(),
+                fallbackMaterialRationale(),
+                fallbackDistanceRationale(distanceKm)
+        );
+    }
+
+    private static String fallbackCompanyRationale() {
+        return "AI 거래처 설명 생성을 일시적으로 사용할 수 없습니다.";
+    }
+
+    private static String fallbackMaterialRationale() {
+        return "AI 소재 적합도 분석을 일시적으로 사용할 수 없습니다.";
+    }
+
+    private static String fallbackDistanceRationale(Double distanceKm) {
+        if (distanceKm == null) {
+            return "창고 또는 거래처 좌표 정보가 부족해 거리 적합도는 판단할 수 없습니다.";
+        }
+        return "AI 거리 적합도 분석을 일시적으로 사용할 수 없습니다.";
+    }
+
+    private static String firstNonBlank(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 
     private <T> T callAiWithTimeout(Supplier<T> supplier, long timeoutMs, String label) throws Exception {
@@ -554,6 +587,23 @@ public class CircularBuyerRecommendService {
     ) {}
     private record RankingResult(List<RankedBuyer> rankedTop, boolean rationaleGenerationAllowed) {}
     private record RankedBuyer(RecommendedCandidate buyer, Double distanceKm, double score) {}
+    private record RationaleSections(
+            String companyRationale,
+            String materialRationale,
+            String distanceRationale
+    ) {
+        private RationaleSections withFallbacks(Double distanceKm) {
+            return new RationaleSections(
+                    firstNonBlank(companyRationale, fallbackCompanyRationale()),
+                    firstNonBlank(materialRationale, fallbackMaterialRationale()),
+                    firstNonBlank(distanceRationale, fallbackDistanceRationale(distanceKm))
+            );
+        }
+
+        private String joined() {
+            return String.join(" ", companyRationale, materialRationale, distanceRationale);
+        }
+    }
     private record RecommendedCandidate(
             String code,
             String companyName,
