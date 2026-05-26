@@ -83,7 +83,6 @@ public class DashboardAnalyticsService {
                     .topVendorName("-")
                     .topVendorAmount(BigDecimal.ZERO)
                     .topMaterialName("-")
-                    .topMaterialAmount(BigDecimal.ZERO)
                     .topMaterialWeight(0L)
                     .topMaterialType("-")
                     .build();
@@ -186,9 +185,8 @@ public class DashboardAnalyticsService {
                 // 카드 4 (Vendor)
                 .topVendorName(vendor.getKpi().getTopVendorName())
                 .topVendorAmount(vendor.getKpi().getTopVendorAmount())
-                // 카드 5 (Vendor 소재)
+                // 카드 5 (Vendor 소재) — 매출(원) 기준 → 판매량(kg) 기준 전환
                 .topMaterialName(vendor.getKpi().getTopMaterialName())
-                .topMaterialAmount(vendor.getKpi().getTopMaterialAmount())
                 .topMaterialWeight(topMat == null ? 0L : topMat.getUnits())
                 .topMaterialType(topMat == null ? "" : topMat.getMaterialType())
                 .build();
