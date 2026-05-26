@@ -18,18 +18,21 @@ import org.example.stockitbe.hq.analytics.vendoranalytics.model.VendorAnalyticsD
 import org.example.stockitbe.hq.analytics.vendoranalytics.model.VendorPeriod;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 
+// @Transactional 제거: 각 서브서비스가 독립 트랜잭션으로 실행되도록 해
+// 단일 커넥션을 수십 초 점유하는 Hikari leak 경고를 해소한다.
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class DashboardAnalyticsService {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -38,6 +41,8 @@ public class DashboardAnalyticsService {
     private final TurnoverAnalyticsService turnoverService;
     private final VendorAnalyticsService vendorService;
     private final OrderStatsAnalyticsService orderStatsService;
+    // 4개 서브서비스 병렬 실행 전용 풀 — AsyncConfig.dashboardExecutor 빈과 이름 매칭.
+    private final Executor dashboardExecutor;
     // TEMP(E2E): 대시보드 타임아웃/DB 과부하 완화용 빠른 응답 분기.
     // TODO: 테스트 안정화 이슈 종료 후 반드시 제거.
     @Value("${app.dashboard.e2e-fast:false}")
@@ -92,15 +97,33 @@ public class DashboardAnalyticsService {
                     .build();
         }
 
-        // 4개 통계 service 호출
-        SalesAnalyticsDto.Res sales = salesService.getSalesAnalytics(
-                mapSalesPeriod(period), from, to, null, null);
-        TurnoverAnalyticsDto.Res turnover = turnoverService.getTurnoverAnalytics(
-                mapTurnoverPeriod(period), from, to, TurnoverScope.ALL, null);
-        VendorAnalyticsDto.Res vendor = vendorService.getVendorAnalytics(
-                mapVendorPeriod(period), from, to);
-        OrderStatsAnalyticsDto.Res orders = orderStatsService.getOrderStats(
-                mapOrderStatsPeriod(period), from, to, null);
+        // 4개 통계 service 병렬 호출 — 각자 독립 트랜잭션으로 실행되어
+        // 커넥션 점유 시간이 분산되고 총 응답시간은 max(A,B,C,D)로 단축된다.
+        CompletableFuture<SalesAnalyticsDto.Res> salesF = CompletableFuture.supplyAsync(
+                () -> salesService.getSalesAnalytics(mapSalesPeriod(period), from, to, null, null),
+                dashboardExecutor);
+        CompletableFuture<TurnoverAnalyticsDto.Res> turnoverF = CompletableFuture.supplyAsync(
+                () -> turnoverService.getTurnoverAnalytics(mapTurnoverPeriod(period), from, to, TurnoverScope.ALL, null),
+                dashboardExecutor);
+        CompletableFuture<VendorAnalyticsDto.Res> vendorF = CompletableFuture.supplyAsync(
+                () -> vendorService.getVendorAnalytics(mapVendorPeriod(period), from, to),
+                dashboardExecutor);
+        CompletableFuture<OrderStatsAnalyticsDto.Res> ordersF = CompletableFuture.supplyAsync(
+                () -> orderStatsService.getOrderStats(mapOrderStatsPeriod(period), from, to, null),
+                dashboardExecutor);
+
+        try {
+            CompletableFuture.allOf(salesF, turnoverF, vendorF, ordersF).join();
+        } catch (CompletionException ex) {
+            Throwable cause = ex.getCause();
+            if (cause instanceof RuntimeException re) throw re;
+            throw new RuntimeException("대시보드 집계 중 오류 발생", cause);
+        }
+
+        SalesAnalyticsDto.Res sales    = salesF.join();
+        TurnoverAnalyticsDto.Res turnover = turnoverF.join();
+        VendorAnalyticsDto.Res vendor   = vendorF.join();
+        OrderStatsAnalyticsDto.Res orders = ordersF.join();
 
         // ── 매출 1위 품목 (Sales.productDetailsBySubCategory 평탄화 후 max) ──
         SalesAnalyticsDto.ProductStats topProduct = null;
