@@ -136,6 +136,10 @@ public class CircularSaleDto {
         private BigDecimal actualWeightKg;
         private BigDecimal estimatedQuantity;
         private Integer soldQuantity;
+        private Integer availableQuantity;
+        private BigDecimal availableWeightKg;
+        private String warehouseCode;
+        private String warehouseName;
         private Long unitPrice;
         private Long lineAmount;
         private String memo;
@@ -157,6 +161,10 @@ public class CircularSaleDto {
                     .actualWeightKg(item.getActualWeightKg())
                     .estimatedQuantity(item.getEstimatedQuantity())
                     .soldQuantity(item.getSoldQuantity())
+                    .availableQuantity(item.getStockQuantitySnapshot())
+                    .availableWeightKg(item.getStockWeightKgSnapshot())
+                    .warehouseCode(null)
+                    .warehouseName(null)
                     .unitPrice(item.getUnitPrice())
                     .lineAmount(item.getLineAmount())
                     .memo(item.getMemo())
@@ -226,6 +234,8 @@ public class CircularSaleDto {
         private String saleNo;
         private CircularSaleStatus status;
         private String outboundNo;
+        private String outboundWarehouseCode;
+        private String outboundWarehouseName;
         private OutboundStatus outboundStatus;
         private Date soldAt;
         private Date completedAt;
@@ -257,6 +267,8 @@ public class CircularSaleDto {
         private String soldByMemberId;
         private String soldByName;
         private Long outboundHeaderId;
+        private String outboundWarehouseCode;
+        private String outboundWarehouseName;
         private String buyerCode;
         private String buyerName;
         private String buyerIndustryGroup;

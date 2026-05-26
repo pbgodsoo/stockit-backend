@@ -36,14 +36,14 @@ public interface CircularBuyerTransactionRepository extends JpaRepository<Circul
         """, nativeQuery = true)
     List<Object[]> topVendor(@Param("from") Date from, @Param("to") Date to);
 
-    /** TOP 소재 (매출 1위, 한글명). */
+    /** TOP 소재 (판매량 1kg 1위, 한글명). 정렬 기준을 매출 → 판매 무게 로 변경. */
     @Query(value = """
-        SELECT p.material_name_ko AS name, SUM(t.total_amount) AS amount
+        SELECT p.material_name_ko AS name, SUM(t.weight_kg) AS weight
         FROM circular_buyer_transaction t
         JOIN circular_material_price_policy p ON p.material_code = t.material_code
         WHERE t.transacted_at >= :from AND t.transacted_at < :to
         GROUP BY p.material_name_ko
-        ORDER BY amount DESC
+        ORDER BY weight DESC
         LIMIT 1
         """, nativeQuery = true)
     List<Object[]> topMaterial(@Param("from") Date from, @Param("to") Date to);
@@ -85,6 +85,7 @@ public interface CircularBuyerTransactionRepository extends JpaRepository<Circul
     /**
      * 소재별 집계 (순환재고 상세).
      * 결과: material_code, material_name_ko, material_group, total_weight, total_amount
+     * 정렬 기준을 매출 → 판매 무게(kg) 로 변경 — 소재 매출 순위가 kg 기준으로 노출.
      */
     @Query(value = """
         SELECT
@@ -97,7 +98,7 @@ public interface CircularBuyerTransactionRepository extends JpaRepository<Circul
         JOIN circular_material_price_policy p ON p.material_code = t.material_code
         WHERE t.transacted_at >= :from AND t.transacted_at < :to
         GROUP BY p.material_code, p.material_name_ko, p.material_group
-        ORDER BY total_amount DESC
+        ORDER BY total_weight DESC
         """, nativeQuery = true)
     List<Object[]> aggregateByMaterial(@Param("from") Date from, @Param("to") Date to);
 

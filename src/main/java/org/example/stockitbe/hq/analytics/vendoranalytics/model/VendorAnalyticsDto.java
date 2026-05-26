@@ -34,8 +34,8 @@ public class VendorAnalyticsDto {
         private Integer activeMaterialCount;     // 거래된 소재 종류 수
         private String  topVendorName;           // 제일 많이 거래한 거래처
         private BigDecimal topVendorAmount;      // 그 거래처 매출 (원)
-        private String  topMaterialName;         // 제일 많이 팔린 소재 (한글명)
-        private BigDecimal topMaterialAmount;    // 그 소재 매출 (원)
+        private String  topMaterialName;         // 제일 많이 팔린 소재 (한글명, 판매량 1위)
+        private Long    topMaterialWeight;       // 그 소재 판매량 (kg) — 매출 기준에서 판매량 기준으로 전환
         private BigDecimal totalSalesAmount;     // 총 판매 금액 (원)
     }
 

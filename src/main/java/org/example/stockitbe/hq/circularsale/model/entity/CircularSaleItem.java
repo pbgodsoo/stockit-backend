@@ -72,6 +72,12 @@ public class CircularSaleItem extends BaseEntity {
     @Column(name = "sold_quantity", nullable = false)
     private Integer soldQuantity;
 
+    @Column(name = "stock_quantity_snapshot", nullable = false)
+    private Integer stockQuantitySnapshot;
+
+    @Column(name = "stock_weight_kg_snapshot", nullable = false, precision = 14, scale = 3, columnDefinition = "DECIMAL(14,3)")
+    private BigDecimal stockWeightKgSnapshot;
+
     @Column(name = "unit_price", nullable = false)
     private Long unitPrice;
 
@@ -85,7 +91,8 @@ public class CircularSaleItem extends BaseEntity {
     private CircularSaleItem(Long saleHeaderId, Long inventoryId, Long skuId, String skuCode, String productCode,
                              String productName, String mainCategory, String subCategory, String color, String size,
                              String materialType, BigDecimal requestedWeightKg, BigDecimal actualWeightKg,
-                             BigDecimal estimatedQuantity, Integer soldQuantity, Long unitPrice, Long lineAmount,
+                             BigDecimal estimatedQuantity, Integer soldQuantity, Integer stockQuantitySnapshot,
+                             BigDecimal stockWeightKgSnapshot, Long unitPrice, Long lineAmount,
                              String memo) {
         this.saleHeaderId = saleHeaderId;
         this.inventoryId = inventoryId;
@@ -102,6 +109,8 @@ public class CircularSaleItem extends BaseEntity {
         this.actualWeightKg = actualWeightKg == null ? BigDecimal.ZERO : actualWeightKg;
         this.estimatedQuantity = estimatedQuantity == null ? BigDecimal.ZERO : estimatedQuantity;
         this.soldQuantity = soldQuantity == null ? 0 : soldQuantity;
+        this.stockQuantitySnapshot = stockQuantitySnapshot == null ? 0 : stockQuantitySnapshot;
+        this.stockWeightKgSnapshot = stockWeightKgSnapshot == null ? BigDecimal.ZERO : stockWeightKgSnapshot;
         this.unitPrice = unitPrice == null ? 0L : unitPrice;
         this.lineAmount = lineAmount == null ? 0L : lineAmount;
         this.memo = memo;
