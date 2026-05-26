@@ -2,6 +2,8 @@ package org.example.stockitbe.hq.purchaseorder;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -18,6 +20,11 @@ public class PurchaseOrderAutoTransitionScheduler {
     private final PurchaseOrderBatchService batchService;
 
     @Scheduled(fixedDelayString = "${purchase-order.batch.delay-ms:300000}")
+    @SchedulerLock(
+            name = "purchaseOrderBatch",
+            lockAtMostFor = "10m",
+            lockAtLeastFor = "1m"
+    )
     public void run() {
         log.info("[SYS-001] 배치 시작");
         PurchaseOrderBatchService.BatchResult result = batchService.run(false);
