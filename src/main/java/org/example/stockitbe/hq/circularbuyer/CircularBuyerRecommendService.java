@@ -256,6 +256,7 @@ public class CircularBuyerRecommendService {
     ) {
         double simScore = candidate.score() == null ? 0.0 : candidate.score();
         boolean canUseDistance = warehousePoint != null
+                && isValidLatLng(warehousePoint.latitude(), warehousePoint.longitude())
                 && isValidLatLng(candidate.latitude(), candidate.longitude());
         RecommendedCandidate buyer = toCandidate(candidate);
         if (!canUseDistance) {
@@ -273,6 +274,7 @@ public class CircularBuyerRecommendService {
     private RankedBuyer toRankedBuyer(CircularBuyer buyer, List<Double> qVec, WarehousePoint warehousePoint) {
         double simScore = cosine(qVec, buyer.getEmbedding());
         boolean canUseDistance = warehousePoint != null
+                && isValidLatLng(warehousePoint.latitude(), warehousePoint.longitude())
                 && isValidLatLng(buyer.getLatitude(), buyer.getLongitude());
         if (!canUseDistance) {
             return new RankedBuyer(toCandidate(buyer), null, simScore);
@@ -348,14 +350,16 @@ public class CircularBuyerRecommendService {
         sb.append("각 거래처가 왜 이 재고에 적합한지 짧고 신뢰감 있는 사유를 작성해.\n\n");
 
         sb.append("[사유 작성 가이드]\n");
-        sb.append("- 각 거래처당 2~3문장, 약 120~180자 분량으로 간결하게.\n");
-        sb.append("- 다음 4가지 흐름을 자연스럽게 한 문단에 녹여서 작성:\n");
-        sb.append("  1) 거래처의 핵심 처리 영역과 전문성 (어떤 소재를 어떤 방식으로 처리하는 회사인지)\n");
-        sb.append("  2) 요청 재고와 매칭되는 구체적 이유 (소재 일치·처리 방식 적합성·산업군 부합)\n");
-        sb.append("  3) 처리 후 재활용 경로 (어떤 산업·제품으로 환생되는지 — 자동차 흡음재·건설 단열재·재생 원사·펄프·매트리스 충전 등)\n");
-        sb.append("  4) 친환경·순환경제 가치 (ESG 효과·탄소 감축·자원 순환)\n");
+        sb.append("- 각 거래처당 4~5문장, 약 240~300자 분량으로 간결하게.\n");
+        sb.append("- 반드시 아래 순서대로 4~5문장을 작성하고, 세 관점 중 하나라도 빠뜨리지 마:\n");
+        sb.append("  1) 거래처 설명: 회사가 만드는 생산품·처리 영역·강점 소재 후보군을 구체적으로 설명\n");
+        sb.append("  2) 소재 적합도: 요청 재고의 소재가 이 거래처와 맞는 이유와 회사가 해당 소재를 어떻게 활용하는지 설명\n");
+        sb.append("  3) 거리 적합도: 거리(km)가 제공된 경우 수치를 직접 쓰고 물류 효율·운송 부담 관점의 장점을 설명\n");
+        sb.append("  4) 순환 가치: 처리 후 재활용 경로와 ESG·탄소 감축·자원 순환 효과를 짧게 설명\n");
+        sb.append("- 거리 정보가 '거리 정보 없음'이면 거리 적합도 문장은 쓰지 말고, 나머지 관점만 3문장으로 작성.\n");
         sb.append("- 거래처 description·주소·취급 품목에 등장하는 구체 어휘를 적극 활용해 사실 기반으로 작성.\n");
-        sb.append("- '적합한 거래처입니다' 같은 추상적 칭찬·불필요한 인사말·서론 금지 — 바로 본론.\n");
+        sb.append("- '기회를 제공할 것입니다', '적합한 거래처입니다' 같은 추상적 칭찬·불필요한 인사말·서론 금지 — 바로 본론.\n");
+        sb.append("- 근거가 없는 생산품·활용처를 새로 만들지 말고, 제공된 취급 품목·description 안에서만 표현.\n");
         sb.append("- 한국어 자연어 매끄러운 문장, 각 문장은 마침표로 종료.\n");
         sb.append("- JSON 안에 줄바꿈(\\n) 넣지 말고 한 문단으로 이어 써 (UI 가 자연스럽게 줄바꿈 처리).\n\n");
 
@@ -364,6 +368,21 @@ public class CircularBuyerRecommendService {
         if (req.getProductName() != null) sb.append("- 품목: ").append(req.getProductName()).append("\n");
         if (req.getDescription() != null) sb.append("- 설명: ").append(req.getDescription()).append("\n");
         if (req.getQuantityHint() != null) sb.append("- 수량 힌트: ").append(req.getQuantityHint()).append("\n");
+        if (wp != null) {
+            sb.append("- 창고: code=").append(wp.code())
+                    .append(" / 이름=").append(safe(wp.name()))
+                    .append(" / 지역=").append(safe(wp.region()))
+                    .append(" / 주소=").append(safe(wp.address()));
+            if (isValidLatLng(wp.latitude(), wp.longitude())) {
+                sb.append(" / 위도=").append(wp.latitude())
+                        .append(" / 경도=").append(wp.longitude());
+            } else {
+                sb.append(" / 좌표 정보 없음");
+            }
+            sb.append("\n");
+        } else if (req.getWarehouseCode() != null && !req.getWarehouseCode().isBlank()) {
+            sb.append("- 창고: code=").append(req.getWarehouseCode()).append(" / 상세 위치 정보 없음\n");
+        }
 
         sb.append("\n[후보 거래처 ").append(top.size()).append("곳]\n");
         for (int i = 0; i < top.size(); i++) {
@@ -375,7 +394,7 @@ public class CircularBuyerRecommendService {
                 sb.append(" / 취급=").append(String.join(",", b.factoryProduct()));
             }
             if (b.address() != null) sb.append(" / 주소=").append(b.address());
-            if (isValidLatLng(b.latitude(), b.longitude()) && wp != null) {
+            if (wp != null && isValidLatLng(wp.latitude(), wp.longitude()) && isValidLatLng(b.latitude(), b.longitude())) {
                 double d = haversineKm(wp.latitude(), wp.longitude(), b.latitude(), b.longitude());
                 sb.append(" / 거리=").append(round2(d)).append("km");
             } else {
@@ -389,7 +408,7 @@ public class CircularBuyerRecommendService {
         sb.append("[\n");
         for (int i = 0; i < top.size(); i++) {
             sb.append("  {\"code\": \"").append(top.get(i).code())
-                    .append("\", \"rationale\": \"<2~3문장 120~180자 사유 한 문단>\"}");
+                    .append("\", \"rationale\": \"<거래처 설명 → 소재 적합도 → 거리 적합도(거리 있을 때) → 순환 가치 순서의 3~4문장 한 문단>\"}");
             if (i < top.size() - 1) sb.append(",");
             sb.append("\n");
         }
@@ -462,8 +481,14 @@ public class CircularBuyerRecommendService {
         Optional<Infrastructure> infraOpt = infrastructureRepository.findByCode(warehouseCode.trim());
         if (infraOpt.isEmpty()) return null;
         Infrastructure infra = infraOpt.get();
-        if (!isValidLatLng(infra.getLatitude(), infra.getLongitude())) return null;
-        return new WarehousePoint(infra.getLatitude(), infra.getLongitude());
+        return new WarehousePoint(
+                infra.getCode(),
+                infra.getName(),
+                infra.getRegion(),
+                infra.getAddress(),
+                infra.getLatitude(),
+                infra.getLongitude()
+        );
     }
 
     private static boolean isValidLatLng(Double lat, Double lng) {
@@ -519,7 +544,14 @@ public class CircularBuyerRecommendService {
         );
     }
 
-    private record WarehousePoint(double latitude, double longitude) {}
+    private record WarehousePoint(
+            String code,
+            String name,
+            String region,
+            String address,
+            Double latitude,
+            Double longitude
+    ) {}
     private record RankingResult(List<RankedBuyer> rankedTop, boolean rationaleGenerationAllowed) {}
     private record RankedBuyer(RecommendedCandidate buyer, Double distanceKm, double score) {}
     private record RecommendedCandidate(
