@@ -41,10 +41,11 @@ public class VendorAnalyticsService {
         String topVendorName = topV != null ? (String) topV[0] : "";
         long   topVendorAmt  = topV != null ? ((Number) topV[1]).longValue() : 0L;
 
+        // topMaterial: 매출 기준 → 판매량(kg) 기준으로 전환. r[1] 의미가 amount → weight.
         List<Object[]> topMList = txRepo.topMaterial(fromDate, toDateExcl);
         Object[] topM = topMList.isEmpty() ? null : topMList.get(0);
-        String topMaterialName = topM != null ? (String) topM[0] : "";
-        long   topMaterialAmt  = topM != null ? ((Number) topM[1]).longValue() : 0L;
+        String topMaterialName   = topM != null ? (String) topM[0] : "";
+        long   topMaterialWeight = topM != null ? ((Number) topM[1]).longValue() : 0L;
 
         VendorAnalyticsDto.KpiSummary kpi = VendorAnalyticsDto.KpiSummary.builder()
                 .activeVendorCount(activeVendors)
@@ -52,7 +53,7 @@ public class VendorAnalyticsService {
                 .topVendorName(topVendorName)
                 .topVendorAmount(BigDecimal.valueOf(topVendorAmt))
                 .topMaterialName(topMaterialName)
-                .topMaterialAmount(BigDecimal.valueOf(topMaterialAmt))
+                .topMaterialWeight(topMaterialWeight)
                 .totalSalesAmount(BigDecimal.valueOf(totalSales))
                 .build();
 

@@ -77,9 +77,9 @@ public class DashboardAnalyticsDto {
         private String topVendorName;
         private BigDecimal topVendorAmount;
 
-        // 카드 5 (Vendor 점프): TOP 소재
+        // 카드 5 (Vendor 점프): TOP 소재 — 매출(원) 기준 → 판매량(kg) 기준 전환으로
+        //                                topMaterialAmount(BigDecimal) 폐기, topMaterialWeight 만 유지.
         private String topMaterialName;
-        private BigDecimal topMaterialAmount;
         private Long topMaterialWeight;
         private String topMaterialType;
     }
