@@ -43,8 +43,9 @@ public class ScoreEventsService {
     private static final int NEW_BUYER_BONUS = 150;
     /** 지역 파트너 보너스 — partner_type=local_small / social_enterprise */
     private static final int LOCAL_PARTNER_BONUS = 150;
-    /** 탄소 점수 보정계수 — Higg MSI v3 표준 carbon_factor(kgCO₂e/kg) 적용에 따른 균형 조정 */
-    private static final BigDecimal CARBON_SCALE = new BigDecimal("0.1");
+    // 탄소 점수 보정계수(CARBON_SCALE) 제거 — material.carbon_factor 표준화 재조정에 따른 산식 단순화.
+    //   변경 전: carbon = weight × factor × 0.1
+    //   변경 후: carbon = weight × factor
 
     // ─────────── 카테고리 필터 상수 (FE filterCategory 와 동일 값) ───────────
     private static final String CAT_ALL            = "ALL";
@@ -250,11 +251,11 @@ public class ScoreEventsService {
             materialSet.add(nameMap.getOrDefault(displayCode, displayCode));
         }
 
-        // 점수 4종 재계산 — 그룹 총 무게 기준
+        // 점수 4종 재계산 — 그룹 총 무게 기준 (CARBON_SCALE 폐기 후 단순 곱)
         boolean scoreValid = totalWeight >= MIN_WEIGHT_KG;
         int saleExecution = scoreValid ? SALE_BASE : 0;
         int carbon = scoreValid
-                ? totalCarbonAmount.multiply(CARBON_SCALE).intValue()
+                ? totalCarbonAmount.intValue()
                 : 0;
         int newBuyerScore = (scoreValid && isNewBuyer) ? NEW_BUYER_BONUS : 0;
         int localPartnerScore = (scoreValid && isLocalPartner) ? LOCAL_PARTNER_BONUS : 0;
@@ -304,11 +305,11 @@ public class ScoreEventsService {
         // effective factor — 혼방이면 (70% 주 소재 factor × ratio), 단일이면 자기 factor
         BigDecimal factor = resolveFactor(material, mainMaterialCode, mainRatio, factorMap);
 
-        // 점수 4종 계산
+        // 점수 4종 계산 (CARBON_SCALE 폐기 후 단순 곱)
         boolean scoreValid = weightKg != null && weightKg >= MIN_WEIGHT_KG;
         int saleExecution = scoreValid ? SALE_BASE : 0;
         int carbon = scoreValid
-                ? BigDecimal.valueOf(weightKg).multiply(factor).multiply(CARBON_SCALE).intValue()
+                ? BigDecimal.valueOf(weightKg).multiply(factor).intValue()
                 : 0;
         int newBuyerScore     = (scoreValid && isNewBuyer)     ? NEW_BUYER_BONUS     : 0;
         int localPartnerScore = (scoreValid && isLocalPartner) ? LOCAL_PARTNER_BONUS : 0;
