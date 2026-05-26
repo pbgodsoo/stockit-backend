@@ -166,6 +166,12 @@ public class CircularSaleService {
                         .filter(Objects::nonNull)
                         .collect(Collectors.toSet())
         ).stream().collect(Collectors.toMap(WhOutboundHeader::getId, Function.identity()));
+        Map<Long, Infrastructure> warehouseById = infrastructureRepository.findAllById(
+                outboundById.values().stream()
+                        .map(WhOutboundHeader::getWarehouseId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet())
+        ).stream().collect(Collectors.toMap(Infrastructure::getId, Function.identity()));
 
         Map<Long, List<CircularSaleItem>> itemsByHeader = saleItemRepository.findAllBySaleHeaderIdIn(
                 headers.getContent().stream().map(CircularSaleHeader::getId).toList()
@@ -176,14 +182,15 @@ public class CircularSaleService {
         for (CircularSaleHeader header : headers.getContent()) {
             CircularBuyer buyer = buyerById.get(header.getBuyerId());
             WhOutboundHeader outbound = outboundById.get(header.getOutboundHeaderId());
+            Infrastructure outboundWarehouse = outbound == null ? null : warehouseById.get(outbound.getWarehouseId());
             List<CircularSaleItem> items = itemsByHeader.getOrDefault(header.getId(), List.of());
             rows.add(CircularSaleDto.ListRowRes.builder()
                     .saleId(header.getId())
                     .saleNo(header.getSaleNo())
                     .status(header.getStatus())
                     .outboundNo(outbound == null ? null : outbound.getOutboundNo())
-                    .outboundWarehouseCode(outbound == null ? null : outbound.getWarehouseCode())
-                    .outboundWarehouseName(outbound == null ? null : outbound.getWarehouseName())
+                    .outboundWarehouseCode(outboundWarehouse == null ? null : outboundWarehouse.getCode())
+                    .outboundWarehouseName(outboundWarehouse == null ? null : outboundWarehouse.getName())
                     .outboundStatus(outbound == null ? null : outbound.getStatus())
                     .soldAt(header.getSoldAt())
                     .completedAt(header.getCompletedAt())
