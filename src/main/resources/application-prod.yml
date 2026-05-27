@@ -45,6 +45,14 @@ spring:
         options:
           model: gpt-4o-mini
 
+# Swagger UI / OpenAPI 경로 — Istio VirtualService 가 /api/* 만 BE 로 라우팅하므로 /api 아래로 노출
+# 운영 접속: https://www.stockit.kro.kr/api/swagger-ui.html
+springdoc:
+  swagger-ui:
+    path: /api/swagger-ui.html
+  api-docs:
+    path: /api/v3/api-docs
+
 logging:
   level:
     org.hibernate.SQL: warn
