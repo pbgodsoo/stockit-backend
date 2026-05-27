@@ -1,5 +1,10 @@
 package org.example.stockitbe.warehouse.outbound;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.model.BaseResponse;
 import org.example.stockitbe.user.model.entity.AuthUserDetails;
@@ -17,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDate;
 import java.util.List;
 
+@Tag(name = "창고 출고", description = "창고 출고 내역 조회, 출고 확정, 도착 확정 API")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/warehouse/outbound")
@@ -24,43 +30,55 @@ public class WhOutboundController {
 
     private final WhOutboundService whOutboundService;
 
-    // 출고 내역 목록 조회
+    @Operation(summary = "출고 목록 조회", description = "로그인 창고의 출고 내역을 상태·기간·키워드로 필터링해 조회한다.")
+    @ApiResponse(responseCode = "200", description = "조회 성공")
     @GetMapping
     public BaseResponse<List<WhOutboundDto.ListRes>> list(
             @AuthenticationPrincipal AuthUserDetails me,
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(required = false) String keyword
+            @Parameter(description = "출고 상태 (PENDING / IN_TRANSIT / ARRIVED / CANCELLED)") @RequestParam(required = false) String status,
+            @Parameter(description = "조회 시작일 (yyyy-MM-dd)", example = "2024-01-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "조회 종료일 (yyyy-MM-dd)", example = "2024-12-31") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @Parameter(description = "출고번호·참조번호·목적지 검색 키워드") @RequestParam(required = false) String keyword
     ) {
         return BaseResponse.success(whOutboundService.list(me, status, from, to, keyword));
     }
 
-    // 출고 내역 상세 조회
+    @Operation(summary = "출고 상세 조회", description = "출고번호로 헤더·아이템·입고 연계 정보·상태이력을 포함한 상세를 조회한다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(responseCode = "404", description = "출고 없음")
+    })
     @GetMapping("/{outboundNo}")
     public BaseResponse<WhOutboundDto.DetailRes> detail(
             @AuthenticationPrincipal AuthUserDetails me,
-            @PathVariable String outboundNo
+            @Parameter(description = "출고번호", example = "OUT-20240101-001") @PathVariable String outboundNo
     ) {
         return BaseResponse.success(whOutboundService.detail(me, outboundNo));
     }
 
-    // 출고 확정 처리
-    // 배송 중 단계로 이동 (InTransit으로 재고가 반영됨)
+    @Operation(summary = "출고 확정", description = "출고를 확정하여 재고를 InTransit 상태로 전환한다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "확정 성공"),
+            @ApiResponse(responseCode = "400", description = "확정 불가 상태")
+    })
     @PostMapping("/{outboundNo}/confirm")
     public BaseResponse<WhOutboundDto.DetailRes> confirm(
             @AuthenticationPrincipal AuthUserDetails me,
-            @PathVariable String outboundNo,
+            @Parameter(description = "출고번호", example = "OUT-20240101-001") @PathVariable String outboundNo,
             @RequestBody(required = false) WhOutboundDto.ActionReq req
     ) {
         return BaseResponse.success(whOutboundService.confirm(me, outboundNo, req == null ? null : req.getReason()));
     }
 
-    // 도착 확정 (매장 배송 완료)
+    @Operation(summary = "도착 확정", description = "출고 도착을 확정하여 매장 배송 완료로 처리한다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "도착 확정 성공"),
+            @ApiResponse(responseCode = "400", description = "확정 불가 상태")
+    })
     @PostMapping("/{outboundNo}/arrive")
     public BaseResponse<WhOutboundDto.DetailRes> arrive(
             @AuthenticationPrincipal AuthUserDetails me,
-            @PathVariable String outboundNo,
+            @Parameter(description = "출고번호", example = "OUT-20240101-001") @PathVariable String outboundNo,
             @RequestBody(required = false) WhOutboundDto.ActionReq req
     ) {
         return BaseResponse.success(whOutboundService.arrive(me, outboundNo, req == null ? null : req.getReason()));

@@ -64,13 +64,14 @@ public class LoginSuccessHandler implements AuthenticationSuccessHandler {
         refreshCookie.setAttribute("SameSite", "Lax");
         response.addCookie(refreshCookie);
 
-        // 5. Body 응답 (사용자 정보)
+        // 5. Body 응답 (사용자 정보 + Swagger 테스트용 accessToken)
         UserDto.LoginRes loginRes = UserDto.LoginRes.builder()
                 .employeeCode(employeeCode)
                 .name(userDetails.getName())
                 .role(userDetails.getRole())
                 .locationCode(userDetails.getLocationCode())
                 .locationName(userDetails.getLocationName())
+                .accessToken(accessToken)
                 .build();
 
         response.setStatus(HttpServletResponse.SC_OK);

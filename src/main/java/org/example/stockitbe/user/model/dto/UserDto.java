@@ -89,6 +89,8 @@ public class UserDto {
         private UserRole role;
         private String locationCode;
         private String locationName;
+        /** Swagger UI 테스트용 — 이 값을 복사해 'Authorize' 버튼에 입력하세요. 브라우저는 쿠키를 사용합니다. */
+        private String accessToken;
     }
 
     //  마이페이지

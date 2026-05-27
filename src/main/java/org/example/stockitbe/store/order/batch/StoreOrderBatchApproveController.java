@@ -1,5 +1,9 @@
 package org.example.stockitbe.store.order.batch;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.exception.BaseException;
@@ -29,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
 
+@Tag(name = "발주 배치 승인", description = "매장 발주 일괄 승인 배치 수동 실행 및 대기 매장 조회 API (HQ 전용)")
 @RestController
 @RequestMapping("/api/hq/store-orders/batch-approve")
 @RequiredArgsConstructor
@@ -37,20 +42,19 @@ public class StoreOrderBatchApproveController {
     private final StoreOrderBatchApproveService batchApproveService;
     private final JobLauncher jobLauncher;
     private final Job storeOrderBatchApproveJob;
-    // storeCode → storeId 변환에 사용. BATCH-6에서 Service의 runManual()이 제거되면서
-    // 동일 변환 로직을 Controller가 Repository를 직접 참조해 수행한다.
     private final InfrastructureRepository infrastructureRepository;
 
-    // 발주 승인 배치 수동 실행 (Spring Batch Job → BATCH_JOB_EXECUTION 이력 자동 기록)
+    @Operation(summary = "발주 배치 승인 수동 실행", description = "지정 기간 내 REQUESTED 상태 발주를 일괄 승인하는 Spring Batch Job을 수동으로 실행한다. mode=STORE이면 storeCode 필수.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "배치 실행 완료"),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청 파라미터 (mode=STORE인데 storeCode 누락 등)")
+    })
     @PostMapping("/run")
     public BaseResponse<StoreOrderBatchDto.RunRes> run(
             @AuthenticationPrincipal AuthUserDetails me,
             @Valid @RequestBody StoreOrderBatchDto.RunReq req
     ) {
         try {
-            // runId: JobParameter에 포함해 동일 요청 재실행을 구분하는 고유 키.
-            // MIDNIGHT 스케줄러는 날짜가 고유 키 역할을 하므로 runId가 불필요하지만,
-            // 수동 실행은 같은 날 여러 번 호출될 수 있어 UUID로 고유화한다.
             String runId = UUID.randomUUID().toString();
 
             JobParametersBuilder builder = new JobParametersBuilder()
@@ -59,8 +63,6 @@ public class StoreOrderBatchApproveController {
                     .addLocalDateTime("fromDateTime", req.getFromDateTime())
                     .addLocalDateTime("toDateTime", req.getToDateTime());
 
-            // mode=STORE일 때만 storeCode → storeId 변환 후 파라미터에 추가.
-            // Reader는 storeId=0을 "전체 매장" sentinel로 해석하므로 미전달 시 전체 처리.
             if (req.getMode() == StoreOrderBatchScope.STORE) {
                 Long storeId = infrastructureRepository
                         .findByCodeAndLocationType(req.getStoreCode(), LocationType.STORE)
@@ -75,9 +77,6 @@ public class StoreOrderBatchApproveController {
             StepExecution stepExecution = jobExecution.getStepExecutions().iterator().next();
             ExecutionContext ec = stepExecution.getExecutionContext();
 
-            // runId: BATCH_JOB_EXECUTION.job_execution_id를 사용해 DB 이력과 직접 대응.
-            // requestedCount: Chunk 방식에서 Spring Batch가 read_count를 자동 집계.
-            // successCount/failCount: Writer가 per-item 처리 후 chunk마다 EC에 누적 저장.
             return BaseResponse.success(StoreOrderBatchDto.RunRes.builder()
                     .runId(String.valueOf(jobExecution.getId()))
                     .triggerType(StoreOrderBatchTriggerType.MANUAL)
@@ -93,7 +92,8 @@ public class StoreOrderBatchApproveController {
         }
     }
 
-    // 승인 대기 발주건이 있는 매장 조회
+    @Operation(summary = "승인 대기 매장 목록 조회", description = "REQUESTED 상태의 발주가 존재하는 매장 목록과 건수를 조회한다.")
+    @ApiResponse(responseCode = "200", description = "조회 성공")
     @GetMapping("/pending-stores")
     public BaseResponse<List<StoreOrderBatchDto.PendingStoreRes>> pendingStores(
             @AuthenticationPrincipal AuthUserDetails me
