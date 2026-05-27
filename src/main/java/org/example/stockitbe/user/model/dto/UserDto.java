@@ -112,10 +112,10 @@ public class UserDto {
     @NoArgsConstructor
     @Schema(description = "로그인 요청")
     public static class LoginReq {
-        @Schema(description = "사원코드", example = "hq0001", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "사원코드 (본사: hq0001 / 매장: st0001 / 창고: wh0001)", example = "hq0001", requiredMode = Schema.RequiredMode.REQUIRED)
         private String employeeCode;
 
-        @Schema(description = "비밀번호", example = "Test1234!", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "비밀번호", example = "Stockit!2026", requiredMode = Schema.RequiredMode.REQUIRED)
         private String password;
     }
 

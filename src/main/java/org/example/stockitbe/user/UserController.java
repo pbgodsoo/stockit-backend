@@ -46,6 +46,14 @@ public class UserController {
             description = """
                     사번(employeeCode)과 비밀번호로 로그인한다.
 
+                    **테스트 계정 (비밀번호 공통: `Stockit!2026`)**
+
+                    | 권한 | 사번 |
+                    |------|------|
+                    | 본사 (HQ) | `hq0001` |
+                    | 매장 (STORE) | `st0001` |
+                    | 창고 (WAREHOUSE) | `wh0001` |
+
                     **Swagger UI 테스트 방법:**
                     1. 아래 Request body에 employeeCode / password 입력 후 Execute
                     2. 응답 body의 `result.accessToken` 값을 복사
