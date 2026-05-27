@@ -18,7 +18,7 @@ import java.util.List;
  * Vendor read-only Controller — 등록/수정/삭제는 SQL 로 직접 처리.
  * 공급처 계약 표(E 안)는 vendorProductService.findContractRows 로 mainVendorCode 매칭 ProductMaster + VendorProduct join.
  */
-@Tag(name = "본사 - 공급처(Vendor)", description = "본사 공급처 조회 + 공급처 계약 표 조회 API. 등록/수정/삭제는 SQL 로 직접 처리")
+@Tag(name = "공급처(Vendor)", description = "본사 공급처 조회 + 공급처 계약 표 조회 API. 등록/수정/삭제는 SQL 로 직접 처리")
 @RestController
 @RequestMapping("/api/vendors")
 @RequiredArgsConstructor

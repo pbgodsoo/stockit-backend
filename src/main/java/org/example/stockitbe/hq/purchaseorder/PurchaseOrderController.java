@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 
-@Tag(name = "본사 - 공급처 발주", description = "본사 발주 헤더 CRUD · 상태 전환(완료/취소) API (CEN-035~040)")
+@Tag(name = "공급처 발주", description = "본사 발주 헤더 CRUD · 상태 전환(완료/취소) API (CEN-035~040)")
 @RestController
 @RequestMapping("/api/hq/purchase-orders")
 @RequiredArgsConstructor

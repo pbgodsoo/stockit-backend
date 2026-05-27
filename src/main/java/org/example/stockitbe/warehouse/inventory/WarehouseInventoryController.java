@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@Tag(name = "창고 - 재고 조회", description = "창고 관리자 본인 창고 기준 품목·SKU 재고 조회 API")
+@Tag(name = "창고 재고 조회", description = "창고 관리자 본인 창고 기준 품목·SKU 재고 조회 API")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/warehouse/inventories")

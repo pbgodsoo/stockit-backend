@@ -30,7 +30,7 @@ public class InventoryController {
 
     // 전사 재고(품목 단위) 목록 조회 API
     // category 단일 파라미터: 부모 또는 자식 한글 이름 (FE 한 줄 dropdown 호환). 기존 parent/child 와 공존.
-    @Tag(name = "본사 - 전사 재고 조회", description = "본사 관리자 전사 재고 조회 API (CEN-001) — Phase 2 ES + CQRS 적용")
+    @Tag(name = "전사 재고 조회", description = "본사 관리자 전사 재고 조회 API (CEN-001) — Phase 2 ES + CQRS 적용")
     @Operation(
             summary = "전사 재고 품목 단위 페이지 조회",
             description = "거점 타입·거점 ID 리스트·카테고리·재고 상태·검색 키워드로 필터링한 품목 단위 재고 목록을 페이지로 반환. ES `inventory-master` 인덱스 질의."
@@ -50,7 +50,7 @@ public class InventoryController {
     }
 
     // 전사 재고 SKU 상세 조회 API (마스터 itemCode 한정 — 옛 라우트 호환, FE 라우트 폐기 후 cleanup 예정)
-    @Tag(name = "본사 - 전사 재고 조회")
+    @Tag(name = "전사 재고 조회")
     @Operation(
             summary = "전사 재고 — 특정 품목 산하 SKU 상세 조회",
             description = "지정한 품목 코드 하위 SKU 들의 거점별 재고 상세 리스트. 옛 라우트 호환용 — FE 라우트 폐기 후 cleanup 예정."
@@ -72,7 +72,7 @@ public class InventoryController {
     // status: 한국어 라벨("정상"/"부족"/"품절") — service 측 페이지 후처리 필터.
     // category: 부모 또는 자식 한글 이름 단일 파라미터.
     // skuSize: SKU 사이즈 (M/L/XL 등) — Pageable 의 size 와 이름 충돌 방지 위해 query param 명 분리.
-    @Tag(name = "본사 - 전사 재고 조회")
+    @Tag(name = "전사 재고 조회")
     @Operation(
             summary = "전사 재고 SKU 단위 페이지 조회",
             description = "마스터 무관 모든 SKU 를 한 표로 페이지 조회. ES `inventory-sku` 인덱스 질의. 색상·사이즈 칩 필터 + 한국어 라벨 상태 필터(정상/부족/품절) 지원."
@@ -95,7 +95,7 @@ public class InventoryController {
     }
 
     // 전사 재고 SKU 칩 필터용 facets API — 거점/카테고리/검색 조건 안의 가능한 색상/사이즈 distinct.
-    @Tag(name = "본사 - 전사 재고 조회")
+    @Tag(name = "전사 재고 조회")
     @Operation(
             summary = "전사 재고 SKU facets 조회",
             description = "현재 거점·카테고리·키워드 조건 안에서 선택 가능한 색상/사이즈 distinct 값 반환. 칩 필터 UI 용."

@@ -27,7 +27,7 @@ import java.util.List;
  * status 파라미터는 String — inbound 자체 status enum 이 없고 PO/outbound 의 status 를
  * join 결과로 받기 때문 (READY_TO_SHIP/IN_TRANSIT/ARRIVED/COMPLETED 문자열).
  */
-@Tag(name = "창고 - 입고 관리", description = "창고 관리자 입고 관리 API (WHS-005/007/008) — ERP 표준 GRN 모델. 입고 상태는 PO/outbound join 으로 노출")
+@Tag(name = "창고 입고 관리", description = "창고 관리자 입고 관리 API (WHS-005/007/008) — ERP 표준 GRN 모델. 입고 상태는 PO/outbound join 으로 노출")
 @RestController
 @RequestMapping("/api/warehouse/inbound")
 @RequiredArgsConstructor

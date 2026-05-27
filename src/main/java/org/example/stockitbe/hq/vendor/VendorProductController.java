@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@Tag(name = "본사 - 공급처 제품(VendorProduct)", description = "공급처-제품 매핑 CRUD API. 공급처 계약 단위 등록·수정·상태 전환·삭제")
+@Tag(name = "공급처 제품(VendorProduct)", description = "공급처-제품 매핑 CRUD API. 공급처 계약 단위 등록·수정·상태 전환·삭제")
 @RestController
 @RequestMapping("/api/vendor-products")
 @RequiredArgsConstructor

@@ -15,7 +15,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "본사 - 계정 관리", description = "회원 목록 조회 · 가입 신청 승인/거절 · 회원 탈퇴 처리 API (USER-005~007, 009)")
+@Tag(name = "계정 관리", description = "회원 목록 조회 · 가입 신청 승인/거절 · 회원 탈퇴 처리 API (USER-005~007, 009)")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/hq/account")

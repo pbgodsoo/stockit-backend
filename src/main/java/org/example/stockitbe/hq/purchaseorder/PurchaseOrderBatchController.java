@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 발주를 즉시 다음 단계로 전환한다.
  * 운영 환경에서는 {@link PurchaseOrderAutoTransitionScheduler} 가 5분마다 자동 호출.
  */
-@Tag(name = "본사 - 공급처 발주 (SYS-001 배치)", description = "본사 발주 자동 전환 배치 강제 트리거 API — 시연·QA·장애 대응용")
+@Tag(name = "공급처 발주 (SYS-001 배치)", description = "본사 발주 자동 전환 배치 강제 트리거 API — 시연·QA·장애 대응용")
 @RestController
 @RequestMapping("/api/hq/purchase-orders/batch")
 @RequiredArgsConstructor

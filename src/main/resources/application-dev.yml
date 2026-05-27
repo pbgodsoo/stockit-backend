@@ -1,3 +1,8 @@
+springdoc:
+  swagger-ui:
+    operations-sorter: alpha   # 경로 알파벳순 정렬 — 로그인(/login)이 자동으로 최상단
+    tags-sorter: alpha         # 태그(섹션)도 알파벳순 — "1.사용자인증 > 2.매장 > 3.본사 > 4.창고" 순 유지
+
 spring:
   application:
     name: spring_fullstack

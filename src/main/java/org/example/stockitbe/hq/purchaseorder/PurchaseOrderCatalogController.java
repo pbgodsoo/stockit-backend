@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "본사 - 공급처 발주 카탈로그", description = "본사 발주 등록 화면용 SKU 카탈로그 조회 API (ADR-027 페이지네이션)")
+@Tag(name = "공급처 발주 카탈로그", description = "본사 발주 등록 화면용 SKU 카탈로그 조회 API (ADR-027 페이지네이션)")
 @RestController
 @RequestMapping("/api/hq/purchase-orders/catalog")
 @RequiredArgsConstructor

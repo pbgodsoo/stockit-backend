@@ -23,7 +23,7 @@ import java.time.LocalDate;
  * 자기 창고 데이터 격리 — 인증 사용자의 locationCode 만 신뢰. query param 으로 warehouseId
  * 받지 않음 (위변조 방지).
  */
-@Tag(name = "창고 - 대시보드", description = "창고 관리자 대시보드 API (WHS-001). 자기 창고 데이터 격리 — 인증 사용자의 locationCode 만 신뢰")
+@Tag(name = "창고 대시보드", description = "창고 관리자 대시보드 API (WHS-001). 자기 창고 데이터 격리 — 인증 사용자의 locationCode 만 신뢰")
 @RestController
 @RequestMapping("/api/warehouse/dashboard")
 @RequiredArgsConstructor
