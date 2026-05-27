@@ -12,12 +12,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 @Tag(name = "매장 재고", description = "로그인 매장 기준 품목·SKU 단위 재고 조회 API")
 @RestController
@@ -32,7 +29,7 @@ public class StoreInventoryController {
     @GetMapping
     public BaseResponse<StoreInventoryDto.ItemPageRes> getStoreInventories(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "카테고리 이름 (부모 또는 자식 한글명)", example = "상의") @RequestParam(required = false) String category,
+            @Parameter(description = "카테고리 이름 (메인 카테고리 또는 서브 카테고리 한글명)", example = "상의") @RequestParam(required = false) String category,
             @Parameter(description = "재고 상태 (정상 / 부족 / 품절)") @RequestParam(required = false) String status,
             @Parameter(description = "상품명·상품코드 검색 키워드") @RequestParam(required = false) String keyword,
             @PageableDefault(size = 20) Pageable pageable
@@ -72,13 +69,4 @@ public class StoreInventoryController {
         ));
     }
 
-    @Operation(summary = "품목별 SKU 재고 조회 (레거시)", description = "지정 품목(itemCode) 내 SKU 단위 재고를 반환한다. 레거시 라우트로 향후 제거 예정.")
-    @ApiResponse(responseCode = "200", description = "조회 성공")
-    @GetMapping("/{itemCode}/skus")
-    public BaseResponse<List<StoreInventoryDto.SkuRes>> getStoreInventorySkus(
-            @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "상품 코드", example = "ITEM-001") @PathVariable String itemCode
-    ) {
-        return BaseResponse.success(service.getItemSkus(me.getLocationCode(), itemCode));
-    }
 }

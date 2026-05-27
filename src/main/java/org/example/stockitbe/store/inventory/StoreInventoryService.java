@@ -3,18 +3,10 @@ package org.example.stockitbe.store.inventory;
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.exception.BaseException;
 import org.example.stockitbe.common.model.BaseResponseStatus;
-import org.example.stockitbe.hq.category.CategoryRepository;
-import org.example.stockitbe.hq.category.model.Category;
 import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
 import org.example.stockitbe.hq.inventory.InventoryRepository;
-import org.example.stockitbe.hq.inventory.model.Inventory;
-import org.example.stockitbe.hq.inventory.model.InventoryStatusPolicy;
-import org.example.stockitbe.hq.product.ProductMasterRepository;
-import org.example.stockitbe.hq.product.ProductSkuRepository;
-import org.example.stockitbe.hq.product.model.ProductMaster;
-import org.example.stockitbe.hq.product.model.ProductSku;
 import org.example.stockitbe.store.inventory.model.StoreInventoryDto;
 import org.example.stockitbe.store.inventory.model.StoreItemRow;
 import org.example.stockitbe.store.inventory.model.StoreSkuRow;
@@ -24,8 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -33,9 +24,6 @@ public class StoreInventoryService {
 
     private final InfrastructureRepository infrastructureRepository;
     private final InventoryRepository inventoryRepository;
-    private final ProductSkuRepository productSkuRepository;
-    private final ProductMasterRepository productMasterRepository;
-    private final CategoryRepository categoryRepository;
 
     // 매장 재고 품목 페이지 목록 조회
     // 품목 단위로 실재고/가용재고/안전재고를 native @Query GROUP BY 로 집계 + LIMIT/OFFSET.
@@ -132,105 +120,12 @@ public class StoreInventoryService {
         return new StoreInventoryDto.SkuFacetsRes(colors, sizes);
     }
 
-    // 매장 재고 SKU 목록 조회 (옛 /{itemCode}/skus 라우트 호환용 — FE 라우트 폐기 PR 머지 후 cleanup 예정)
-    // 선택 품목(itemCode) 내 SKU 단위 재고를 조회한다.
-    @Transactional(readOnly = true)
-    public List<StoreInventoryDto.SkuRes> getItemSkus(String locationCode, String itemCode) {
-        Infrastructure store = resolveStore(locationCode);
-        List<Inventory> inventories = inventoryRepository.findAllByLocationId(store.getId());
-        if (inventories.isEmpty()) {
-            return List.of();
-        }
-
-        Context context = buildContext(inventories);
-
-        Map<String, SkuAccumulator> grouped = new HashMap<>();
-        for (Inventory inventory : inventories) {
-            if (!InventoryStatusPolicy.QUERY_ALLOWED_STATUSES.contains(inventory.getInventoryStatus())) continue;
-            StoreInventoryDto.SkuRes row = toSkuRes(inventory, itemCode, context);
-            if (row == null) continue;
-            SkuAccumulator acc = grouped.computeIfAbsent(row.getSkuCode(), ignored -> new SkuAccumulator(row.getSkuCode(), row.getColor(), row.getSize(), row.getSafetyStock(), row.getUpdatedAt()));
-            acc.actualStock += row.getActualStock();
-            acc.availableStock += row.getAvailableStock();
-            if (acc.updatedAt == null || (row.getUpdatedAt() != null && row.getUpdatedAt().after(acc.updatedAt))) {
-                acc.updatedAt = row.getUpdatedAt();
-            }
-        }
-
-        return grouped.values().stream()
-                .map(acc -> StoreInventoryDto.SkuRes.from(
-                        acc.skuCode,
-                        acc.color,
-                        acc.size,
-                        acc.actualStock,
-                        acc.availableStock,
-                        acc.safetyStock,
-                        resolveStatus(acc.actualStock, acc.safetyStock),
-                        acc.updatedAt
-                ))
-                .sorted(Comparator
-                        .comparing(StoreInventoryDto.SkuRes::getColor, Comparator.nullsLast(String::compareTo))
-                        .thenComparing(StoreInventoryDto.SkuRes::getSize, Comparator.nullsLast(String::compareTo)))
-                .toList();
-    }
-
-    // 단일 재고 행을 SKU 응답 DTO로 변환한다.
-    // itemCode와 일치하지 않으면 null을 반환한다.
-    private StoreInventoryDto.SkuRes toSkuRes(Inventory inventory, String itemCode, Context context) {
-        ProductSku sku = context.skuById.get(inventory.getSkuId());
-        if (sku == null) return null;
-
-        ProductMaster master = context.masterByCode.get(sku.getProductCode());
-        if (master == null) return null;
-
-        if (!Objects.equals(master.getCode(), itemCode)) {
-            return null;
-        }
-
-        int actual = n(inventory.getQuantity());
-        int safety = n(master.getStoreSafetyStock());
-        return StoreInventoryDto.SkuRes.from(
-                sku.getSkuCode(),
-                sku.getColor(),
-                sku.getSize(),
-                actual,
-                n(inventory.getAvailableQuantity()),
-                safety,
-                resolveStatus(actual, safety),
-                inventory.getUpdatedAt()
-        );
-    }
-
     // -------- 내부 메서드 --------
-
-    // 조회에 필요한 SKU/상품/카테고리 참조 맵을 구성한다.
-    private Context buildContext(List<Inventory> inventories) {
-        Set<Long> skuIds = inventories.stream().map(Inventory::getSkuId).collect(Collectors.toSet());
-        Map<Long, ProductSku> skuById = productSkuRepository.findAllById(skuIds).stream()
-                .collect(Collectors.toMap(ProductSku::getId, sku -> sku));
-
-        Set<String> productCodes = skuById.values().stream().map(ProductSku::getProductCode).collect(Collectors.toSet());
-        Map<String, ProductMaster> masterByCode = productMasterRepository.findAllByCodeIn(productCodes).stream()
-                .collect(Collectors.toMap(ProductMaster::getCode, master -> master));
-
-        List<Category> categories = categoryRepository.findAllByOrderByIdAsc();
-        Map<Long, Category> categoryById = categories.stream().collect(Collectors.toMap(Category::getId, c -> c));
-        Map<String, Category> categoryByCode = categories.stream().collect(Collectors.toMap(Category::getCode, c -> c));
-
-        return new Context(skuById, masterByCode, categoryById, categoryByCode);
-    }
 
     // locationCode로 매장 인프라를 조회한다.
     private Infrastructure resolveStore(String locationCode) {
         return infrastructureRepository.findByCodeAndLocationType(locationCode, LocationType.STORE)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.STORE_SALE_STORE_NOT_FOUND));
-    }
-
-    // 실재고와 안전재고 기준으로 품절/부족/정상 상태를 계산한다.
-    private String resolveStatus(int actual, int safety) {
-        if (actual == 0) return "품절";
-        if (actual <= safety) return "부족";
-        return "정상";
     }
 
     private int n(Integer value) {
@@ -245,29 +140,4 @@ public class StoreInventoryService {
         return (value == null || value.isBlank()) ? null : value.trim();
     }
 
-    private record Context(
-            Map<Long, ProductSku> skuById,
-            Map<String, ProductMaster> masterByCode,
-            Map<Long, Category> categoryById,
-            Map<String, Category> categoryByCode
-    ) {
-    }
-
-    private static class SkuAccumulator {
-        private final String skuCode;
-        private final String color;
-        private final String size;
-        private final int safetyStock;
-        private int actualStock = 0;
-        private int availableStock = 0;
-        private Date updatedAt;
-
-        SkuAccumulator(String skuCode, String color, String size, int safetyStock, Date updatedAt) {
-            this.skuCode = skuCode;
-            this.color = color;
-            this.size = size;
-            this.safetyStock = safetyStock;
-            this.updatedAt = updatedAt;
-        }
-    }
 }

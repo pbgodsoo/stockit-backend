@@ -6,7 +6,6 @@ import lombok.Builder;
 import lombok.Getter;
 import org.springframework.data.domain.Page;
 
-import java.util.Date;
 import java.util.List;
 
 public class StoreInventoryDto {
@@ -82,48 +81,6 @@ public class StoreInventoryDto {
                     .availableStock(availableStock)
                     .safetyStock(safetyStock)
                     .status(status)
-                    .build();
-        }
-    }
-
-    @Schema(description = "매장 재고 SKU 응답 DTO (레거시 /{itemCode}/skus 라우트 호환용)")
-    @Getter
-    @Builder
-    public static class SkuRes {
-        @Schema(description = "SKU 코드", example = "SKU-RED-M")
-        private String skuCode;
-        @Schema(description = "색상", example = "레드")
-        private String color;
-        @Schema(description = "사이즈", example = "M")
-        private String size;
-        @Schema(description = "실재고 수량", example = "10")
-        private Integer actualStock;
-        @Schema(description = "가용 재고 수량", example = "8")
-        private Integer availableStock;
-        @Schema(description = "안전 재고 수량", example = "5")
-        private Integer safetyStock;
-        @Schema(description = "재고 상태 (정상 / 부족 / 품절)", example = "정상")
-        private String status;
-        @Schema(description = "최종 업데이트 일시")
-        private Date updatedAt;
-
-        public static SkuRes from(String skuCode,
-                                  String color,
-                                  String size,
-                                  int actualStock,
-                                  int availableStock,
-                                  int safetyStock,
-                                  String status,
-                                  Date updatedAt) {
-            return SkuRes.builder()
-                    .skuCode(skuCode)
-                    .color(color)
-                    .size(size)
-                    .actualStock(actualStock)
-                    .availableStock(availableStock)
-                    .safetyStock(safetyStock)
-                    .status(status)
-                    .updatedAt(updatedAt)
                     .build();
         }
     }
