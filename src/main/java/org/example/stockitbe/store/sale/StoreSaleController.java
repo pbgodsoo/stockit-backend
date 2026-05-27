@@ -1,5 +1,10 @@
 package org.example.stockitbe.store.sale;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.model.BaseResponse;
@@ -18,6 +23,7 @@ import org.example.stockitbe.user.model.entity.AuthUserDetails;
 import java.time.LocalDate;
 import java.util.List;
 
+@Tag(name = "매장 판매", description = "매장 판매 생성 및 판매 내역 조회 API")
 @RestController
 @RequestMapping("/api/store/sales")
 @RequiredArgsConstructor
@@ -25,38 +31,39 @@ public class StoreSaleController {
 
     private final StoreSaleService service;
 
-    // 판매
+    @Operation(summary = "판매 생성", description = "매장에서 SKU별 판매 처리를 수행하고 재고를 차감한다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "판매 생성 성공"),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청 데이터 또는 재고 부족")
+    })
     @PostMapping
     public BaseResponse<StoreSaleDto.SaleRes> create(@AuthenticationPrincipal AuthUserDetails me,
                                                      @Valid @RequestBody StoreSaleDto.SaleReq dto) {
-        // 판매 생성 요청 DTO를 검증하여 요청을 받음
         StoreSaleDto.SaleRes result = service.create(dto, me);
         return BaseResponse.success(result);
     }
 
-    // 판매 내역 목록 조회
+    @Operation(summary = "판매 목록 조회", description = "로그인 매장의 판매 내역을 기간·키워드로 필터링해 조회한다.")
+    @ApiResponse(responseCode = "200", description = "조회 성공")
     @GetMapping
     public BaseResponse<List<StoreSaleDto.SaleListRes>> list(
             @AuthenticationPrincipal AuthUserDetails me,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(required = false) String keyword) {
-        // 1. 요청 받기: 매장/기간/키워드 필터 파라미터를 받음
-        // 2. 서비스 호출: 조건에 맞는 판매 목록을 조회
+            @Parameter(description = "조회 시작일 (yyyy-MM-dd)", example = "2024-01-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "조회 종료일 (yyyy-MM-dd)", example = "2024-12-31") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @Parameter(description = "판매번호·상품명 검색 키워드") @RequestParam(required = false) String keyword) {
         List<StoreSaleDto.SaleListRes> result = service.findAll(me, from, to, keyword);
-        // 3. 응답 반환: 공통 응답 포맷으로 감싸 반환
         return BaseResponse.success(result);
     }
 
-    // 판매 내역 상세 조회
+    @Operation(summary = "판매 상세 조회", description = "판매번호로 헤더·SKU 라인 상세 정보를 조회한다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(responseCode = "404", description = "판매 없음")
+    })
     @GetMapping("/{saleNo}")
     public BaseResponse<StoreSaleDto.SaleDetailRes> detail(@AuthenticationPrincipal AuthUserDetails me,
-                                                           @PathVariable String saleNo) {
-        // 1. 요청 받기: 판매번호(saleNo)를 경로 변수로 받음
-        // 2. 서비스 호출: 판매 상세를 조회
+                                                           @Parameter(description = "판매번호", example = "SAL-20240101-001") @PathVariable String saleNo) {
         StoreSaleDto.SaleDetailRes result = service.findDetail(saleNo, me);
-        // 3. 응답 반환: 공통 응답 포맷으로 감싸 반환
         return BaseResponse.success(result);
     }
 }
-

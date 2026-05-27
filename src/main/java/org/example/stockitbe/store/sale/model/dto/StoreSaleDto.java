@@ -1,5 +1,6 @@
 package org.example.stockitbe.store.sale.model.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -18,8 +19,7 @@ import java.util.Objects;
 
 public class StoreSaleDto {
 
-    // 판매 요청 DTO
-    // 매장 코드와 판매 SKU 라인 목록을 전달
+    @Schema(description = "판매 생성 요청 DTO")
     @Getter
     @NoArgsConstructor
     @AllArgsConstructor
@@ -27,8 +27,8 @@ public class StoreSaleDto {
     public static class SaleReq {
         @Valid
         @NotEmpty
+        @Schema(description = "판매 SKU 라인 목록")
         private List<SaleLineReq> items;
-
 
         public StoreSaleHeader toEntity(SaleHeaderContext context) {
             return StoreSaleHeader.builder()
@@ -42,16 +42,22 @@ public class StoreSaleDto {
         }
     }
 
-    // 판매 응답 DTO
+    @Schema(description = "판매 생성 응답 DTO")
     @Getter
     @AllArgsConstructor
     @Builder
     public static class SaleRes {
+        @Schema(description = "판매번호", example = "SAL-20240101-001")
         private String saleNo;
+        @Schema(description = "매장 코드", example = "STORE-001")
         private String storeCode;
+        @Schema(description = "판매 일시")
         private Date soldAt;
+        @Schema(description = "총 판매 수량", example = "5")
         private Integer totalQuantity;
+        @Schema(description = "총 판매 금액 (원)", example = "75000")
         private Long totalAmount;
+        @Schema(description = "판매 SKU 라인 목록")
         private List<SaleLineRes> items;
 
         public static SaleRes from(StoreSaleHeader header, String storeCode, List<SaleLineRes> items) {
@@ -66,16 +72,22 @@ public class StoreSaleDto {
         }
     }
 
-    // 판매 목록 응답 DTO
+    @Schema(description = "판매 목록 조회 응답 DTO")
     @Getter
     @AllArgsConstructor
     @Builder
     public static class SaleListRes {
+        @Schema(description = "판매번호", example = "SAL-20240101-001")
         private String saleNo;
+        @Schema(description = "매장 코드", example = "STORE-001")
         private String storeCode;
+        @Schema(description = "판매 일시")
         private Date soldAt;
+        @Schema(description = "총 판매 수량", example = "5")
         private Integer totalQuantity;
+        @Schema(description = "총 판매 금액 (원)", example = "75000")
         private Long totalAmount;
+        @Schema(description = "판매 헤드라인 (첫 상품명 외 n건)", example = "반팔 티셔츠 외 2건")
         private String headline;
 
         public static SaleListRes from(StoreSaleHeader header, String storeCode, String headline) {
@@ -90,17 +102,24 @@ public class StoreSaleDto {
         }
     }
 
-    // 판매 상세 응답 DTO
+    @Schema(description = "판매 상세 조회 응답 DTO")
     @Getter
     @AllArgsConstructor
     @Builder
     public static class SaleDetailRes {
+        @Schema(description = "판매번호", example = "SAL-20240101-001")
         private String saleNo;
+        @Schema(description = "매장 코드", example = "STORE-001")
         private String storeCode;
+        @Schema(description = "판매 일시")
         private Date soldAt;
+        @Schema(description = "총 판매 수량", example = "5")
         private Integer totalQuantity;
+        @Schema(description = "총 판매 금액 (원)", example = "75000")
         private Long totalAmount;
+        @Schema(description = "판매 상태")
         private StoreSaleStatus status;
+        @Schema(description = "판매 SKU 라인 목록")
         private List<SaleLineRes> items;
 
         public static SaleDetailRes from(StoreSaleHeader header, String storeCode, List<SaleLineRes> items) {
@@ -116,15 +135,16 @@ public class StoreSaleDto {
         }
     }
 
-    // 판매 SKU 요청 DTO
-    // SKU 코드와 판매 수량을 전달
+    @Schema(description = "판매 SKU 라인 요청 DTO")
     @Getter
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
     public static class SaleLineReq {
+        @Schema(description = "SKU 코드", example = "SKU-RED-M")
         @NotBlank
         private String skuCode;
+        @Schema(description = "판매 수량", example = "2")
         @Min(1)
         private Integer quantity;
 
@@ -148,21 +168,30 @@ public class StoreSaleDto {
         }
     }
 
-    // 판매 SKU 응답 DTO
-    // SKU/상품/옵션/금액을 반환
+    @Schema(description = "판매 SKU 라인 응답 DTO")
     @Getter
     @AllArgsConstructor
     @Builder
     public static class SaleLineRes {
+        @Schema(description = "SKU 코드", example = "SKU-RED-M")
         private String skuCode;
+        @Schema(description = "상품 코드", example = "ITEM-001")
         private String productCode;
+        @Schema(description = "상품명", example = "반팔 티셔츠")
         private String productName;
+        @Schema(description = "대분류", example = "상의")
         private String mainCategory;
+        @Schema(description = "소분류", example = "티셔츠")
         private String subCategory;
+        @Schema(description = "색상", example = "레드")
         private String color;
+        @Schema(description = "사이즈", example = "M")
         private String size;
+        @Schema(description = "판매 수량", example = "2")
         private Integer quantity;
+        @Schema(description = "단가 (원)", example = "15000")
         private Long unitPrice;
+        @Schema(description = "라인 금액 (원)", example = "30000")
         private Long lineAmount;
 
         public static SaleLineRes from(StoreSaleItem item) {

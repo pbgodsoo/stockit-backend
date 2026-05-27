@@ -61,13 +61,22 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         chain.doFilter(request, response);
     }
 
-    /** 쿠키에서 Atoken 추출 */
+    /**
+     * 토큰 추출 우선순위:
+     *   1. Atoken HTTP-only 쿠키 (브라우저/FE)
+     *   2. Authorization: Bearer <token> 헤더 (Swagger UI / REST 클라이언트)
+     */
     private String resolveToken(HttpServletRequest request) {
-        if (request.getCookies() == null) return null;
-        for (Cookie cookie : request.getCookies()) {
-            if (ACCESS_TOKEN_COOKIE.equals(cookie.getName())) {
-                return cookie.getValue();
+        if (request.getCookies() != null) {
+            for (Cookie cookie : request.getCookies()) {
+                if (ACCESS_TOKEN_COOKIE.equals(cookie.getName())) {
+                    return cookie.getValue();
+                }
             }
+        }
+        String header = request.getHeader("Authorization");
+        if (header != null && header.startsWith("Bearer ")) {
+            return header.substring(7);
         }
         return null;
     }

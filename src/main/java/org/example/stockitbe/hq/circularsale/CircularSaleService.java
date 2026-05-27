@@ -119,7 +119,10 @@ public class CircularSaleService {
         SalePersistResult persisted = persistSaleAndOutbound(request, me, buyer, warehouseId, contexts);
 
         // 6) 응답 DTO 조립 후 반환
-        List<CircularSaleDto.LineRes> lines = mapLineRes(persisted.items, persisted.materialRows);
+        Infrastructure outboundWarehouse = infrastructureRepository.findById(warehouseId).orElse(null);
+        String whCode = outboundWarehouse == null ? null : outboundWarehouse.getCode();
+        String whName = outboundWarehouse == null ? null : outboundWarehouse.getName();
+        List<CircularSaleDto.LineRes> lines = mapLineRes(persisted.items, persisted.materialRows, whCode, whName);
         return CircularSaleDto.CreateRes.from(
                 persisted.header,
                 buyer.getCode(),
@@ -232,34 +235,14 @@ public class CircularSaleService {
         Infrastructure outboundWarehouse = header.getWarehouseId() == null ? null
                 : infrastructureRepository.findById(header.getWarehouseId()).orElse(null);
 
+        String detailWhCode = outboundWarehouse == null ? null : outboundWarehouse.getCode();
+        String detailWhName = outboundWarehouse == null ? null : outboundWarehouse.getName();
         List<CircularSaleDto.LineRes> lines = items.stream()
-                .map(item -> {
-                    CircularSaleDto.LineRes base = CircularSaleDto.LineRes.from(item, materialsByItem.getOrDefault(item.getId(), List.of()));
-                    return CircularSaleDto.LineRes.builder()
-                            .itemId(base.getItemId())
-                            .inventoryId(base.getInventoryId())
-                            .skuCode(base.getSkuCode())
-                            .productCode(base.getProductCode())
-                            .productName(base.getProductName())
-                            .mainCategory(base.getMainCategory())
-                            .subCategory(base.getSubCategory())
-                            .color(base.getColor())
-                            .size(base.getSize())
-                            .materialType(base.getMaterialType())
-                            .requestedWeightKg(base.getRequestedWeightKg())
-                            .actualWeightKg(base.getActualWeightKg())
-                            .estimatedQuantity(base.getEstimatedQuantity())
-                            .soldQuantity(base.getSoldQuantity())
-                            .availableQuantity(base.getAvailableQuantity())
-                            .availableWeightKg(base.getAvailableWeightKg())
-                            .warehouseCode(outboundWarehouse == null ? null : outboundWarehouse.getCode())
-                            .warehouseName(outboundWarehouse == null ? null : outboundWarehouse.getName())
-                            .unitPrice(base.getUnitPrice())
-                            .lineAmount(base.getLineAmount())
-                            .memo(base.getMemo())
-                            .materials(base.getMaterials())
-                            .build();
-                })
+                .map(item -> CircularSaleDto.LineRes.from(
+                        item,
+                        materialsByItem.getOrDefault(item.getId(), List.of()),
+                        detailWhCode,
+                        detailWhName))
                 .toList();
 
         // 3) 상태 이력 조회
@@ -677,16 +660,17 @@ public class CircularSaleService {
         return "WOB-" + day.format(NUMBER_DATE_FORMAT) + "-" + String.format("%05d", id);
     }
 
-    // 사용하는 메서드: detail/create
+    // 사용하는 메서드: create
     // 판매 라인과 소재 스냅샷을 응답 DTO로 매핑한다.
-    private List<CircularSaleDto.LineRes> mapLineRes(List<CircularSaleItem> items, List<CircularSaleItemMaterial> materials) {
+    private List<CircularSaleDto.LineRes> mapLineRes(List<CircularSaleItem> items, List<CircularSaleItemMaterial> materials,
+                                                     String warehouseCode, String warehouseName) {
         Map<Long, List<CircularSaleDto.MaterialRes>> materialMap = materials.stream()
                 .collect(Collectors.groupingBy(
                         CircularSaleItemMaterial::getSaleItemId,
                         Collectors.mapping(CircularSaleDto.MaterialRes::from, Collectors.toList())
                 ));
         return items.stream()
-                .map(item -> CircularSaleDto.LineRes.from(item, materialMap.getOrDefault(item.getId(), List.of())))
+                .map(item -> CircularSaleDto.LineRes.from(item, materialMap.getOrDefault(item.getId(), List.of()), warehouseCode, warehouseName))
                 .toList();
     }
 

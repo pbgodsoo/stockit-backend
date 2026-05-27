@@ -1,5 +1,10 @@
 package org.example.stockitbe.store.order;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.common.model.BaseResponse;
@@ -12,6 +17,7 @@ import org.example.stockitbe.user.model.entity.AuthUserDetails;
 import java.time.LocalDate;
 import java.util.List;
 
+@Tag(name = "매장 발주", description = "매장 발주 요청 생성·수정·취소·승인 및 조회 API")
 @RestController
 @RequestMapping("/api/store/orders")
 @RequiredArgsConstructor
@@ -19,88 +25,96 @@ public class StoreOrderController {
 
     private final StoreOrderService service;
 
-    // 매장 발주 요청 생성
+    @Operation(summary = "발주 요청 생성", description = "매장의 SKU별 발주 요청을 생성한다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "생성 성공"),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청 데이터")
+    })
     @PostMapping
     public BaseResponse<StoreOrderDto.CreateRes> create(@AuthenticationPrincipal AuthUserDetails me,
                                                          @Valid @RequestBody StoreOrderDto.CreateReq dto) {
-        // 1. 요청 수신: 매장 코드, 요청자, 발주 라인 목록을 받는다.
-        // 2. 서비스 호출: 발주 헤더/아이템/상태이력 생성 로직을 수행한다.
         StoreOrderDto.CreateRes result = service.create(dto, me);
-        // 3. 응답 반환: 생성된 발주 상세를 공통 응답 포맷으로 반환한다.
         return BaseResponse.success(result);
     }
 
-    // 매장 발주 요청 수정 (REQUESTED 상태일 때만 허용)
+    @Operation(summary = "발주 요청 수정", description = "REQUESTED 상태인 발주의 메모 및 SKU 라인을 수정한다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "수정 성공"),
+            @ApiResponse(responseCode = "400", description = "수정 불가 상태이거나 잘못된 요청 데이터")
+    })
     @PutMapping("/{orderNo}")
-    public BaseResponse<StoreOrderDto.UpdateRes> update(@PathVariable String orderNo,
-                                                         @AuthenticationPrincipal AuthUserDetails me,
-                                                         @Valid @RequestBody StoreOrderDto.UpdateReq dto) {
-        // 1. 요청 수신: 발주번호와 수정 요청 라인/메모를 받는다.
-        // 2. 서비스 호출: 상태 검증 후 아이템 재구성과 합계 재계산을 수행한다.
+    public BaseResponse<StoreOrderDto.UpdateRes> update(
+            @Parameter(description = "발주번호", example = "ORD-20240101-001") @PathVariable String orderNo,
+            @AuthenticationPrincipal AuthUserDetails me,
+            @Valid @RequestBody StoreOrderDto.UpdateReq dto) {
         StoreOrderDto.UpdateRes result = service.update(orderNo, dto, me);
-        // 3. 응답 반환: 수정된 발주 상세를 공통 응답 포맷으로 반환한다.
         return BaseResponse.success(result);
     }
 
-    // 매장 발주 요청 취소 (REQUESTED 상태만 허용)
+    @Operation(summary = "발주 요청 취소", description = "REQUESTED 상태인 발주를 취소 처리하고 상태이력을 기록한다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "취소 성공"),
+            @ApiResponse(responseCode = "400", description = "취소 불가 상태이거나 잘못된 요청 데이터")
+    })
     @PatchMapping("/{orderNo}/cancel")
-    public BaseResponse<StoreOrderDto.CancelRes> cancel(@PathVariable String orderNo,
-                                                         @AuthenticationPrincipal AuthUserDetails me,
-                                                         @Valid @RequestBody StoreOrderDto.CancelReq dto) {
-        // 1. 요청 수신: 발주번호와 취소 사유를 받는다.
-        // 2. 서비스 호출: 상태 검증 후 취소 처리 및 상태이력 적재를 수행한다.
+    public BaseResponse<StoreOrderDto.CancelRes> cancel(
+            @Parameter(description = "발주번호", example = "ORD-20240101-001") @PathVariable String orderNo,
+            @AuthenticationPrincipal AuthUserDetails me,
+            @Valid @RequestBody StoreOrderDto.CancelReq dto) {
         StoreOrderDto.CancelRes result = service.cancel(orderNo, dto, me);
-        // 3. 응답 반환: 취소 반영된 발주 상세를 공통 응답 포맷으로 반환한다.
         return BaseResponse.success(result);
     }
 
-    // 승인 완료 상태로 변경시 가용 재고에 발주량 반영
+    @Operation(summary = "발주 승인", description = "발주를 승인 완료 상태로 변경하고 가용 재고에 발주량을 반영한다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "승인 성공"),
+            @ApiResponse(responseCode = "404", description = "발주 없음")
+    })
     @PatchMapping("/{orderNo}/approve")
-    public BaseResponse<StoreOrderDto.ApproveRes> approve(@PathVariable String orderNo,
-                                                           @AuthenticationPrincipal AuthUserDetails me,
-                                                           @RequestBody(required = false) StoreOrderDto.ApproveReq dto) {
+    public BaseResponse<StoreOrderDto.ApproveRes> approve(
+            @Parameter(description = "발주번호", example = "ORD-20240101-001") @PathVariable String orderNo,
+            @AuthenticationPrincipal AuthUserDetails me,
+            @RequestBody(required = false) StoreOrderDto.ApproveReq dto) {
         StoreOrderDto.ApproveRes result = service.approve(orderNo, dto == null ? StoreOrderDto.ApproveReq.builder().build() : dto, me);
         return BaseResponse.success(result);
     }
 
-    // 매장 발주 내역 목록 조회
+    @Operation(summary = "발주 목록 조회", description = "로그인 매장의 발주 내역을 상태·기간·키워드로 필터링해 조회한다.")
+    @ApiResponse(responseCode = "200", description = "조회 성공")
     @GetMapping
     public BaseResponse<List<StoreOrderDto.ListRes>> list(
             @AuthenticationPrincipal AuthUserDetails me,
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(required = false) String keyword
+            @Parameter(description = "발주 상태 (REQUESTED / APPROVED / COMPLETED / CANCELLED)") @RequestParam(required = false) String status,
+            @Parameter(description = "조회 시작일 (yyyy-MM-dd)", example = "2024-01-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "조회 종료일 (yyyy-MM-dd)", example = "2024-12-31") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @Parameter(description = "발주번호·상품명·SKU 코드 검색 키워드") @RequestParam(required = false) String keyword
     ) {
-        // 1. 요청 수신: 매장/상태/기간/키워드 필터를 받는다.
-        // 2. 서비스 호출: 필터 조건에 맞는 발주 내역 목록을 조회한다.
         List<StoreOrderDto.ListRes> result = service.list(status, from, to, keyword, me);
-        // 3. 응답 반환: 목록 데이터를 공통 응답 포맷으로 반환한다.
         return BaseResponse.success(result);
     }
 
-    // 매장 발주 상세 조회
+    @Operation(summary = "발주 상세 조회", description = "발주번호로 헤더·아이템·입고 요약·상태이력을 포함한 상세 정보를 조회한다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(responseCode = "404", description = "발주 없음")
+    })
     @GetMapping("/{orderNo}")
-    public BaseResponse<StoreOrderDto.DetailRes> detail(@PathVariable String orderNo,
-                                                         @AuthenticationPrincipal AuthUserDetails me) {
-        // 1. 요청 수신: 발주번호를 경로 변수로 받는다.
-        // 2. 서비스 호출: 헤더/아이템/상태이력을 포함한 상세를 조회한다.
+    public BaseResponse<StoreOrderDto.DetailRes> detail(
+            @Parameter(description = "발주번호", example = "ORD-20240101-001") @PathVariable String orderNo,
+            @AuthenticationPrincipal AuthUserDetails me) {
         StoreOrderDto.DetailRes result = service.detail(orderNo, me);
-        // 3. 응답 반환: 상세 데이터를 공통 응답 포맷으로 반환한다.
         return BaseResponse.success(result);
     }
 
-    // 매장 발주 분석 조회
+    @Operation(summary = "발주 분석 조회", description = "기간 내 발주 현황을 상태별·SKU별·카테고리별로 집계해 반환한다.")
+    @ApiResponse(responseCode = "200", description = "조회 성공")
     @GetMapping("/analytics")
     public BaseResponse<StoreOrderDto.AnalyticsRes> analytics(
             @AuthenticationPrincipal AuthUserDetails me,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+            @Parameter(description = "조회 시작일 (yyyy-MM-dd)", example = "2024-01-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "조회 종료일 (yyyy-MM-dd)", example = "2024-12-31") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {
-        // 1. 요청 수신: 매장/기간 필터를 받는다.
-        // 2. 서비스 호출: 발주 집계 및 SKU/카테고리 분석 데이터를 계산한다.
         StoreOrderDto.AnalyticsRes result = service.analytics(from, to, me);
-        // 3. 응답 반환: 분석 결과를 공통 응답 포맷으로 반환한다.
         return BaseResponse.success(result);
     }
 }
