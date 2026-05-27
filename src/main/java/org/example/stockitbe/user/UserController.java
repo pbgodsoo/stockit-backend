@@ -1,6 +1,8 @@
 package org.example.stockitbe.user;
 
 import io.jsonwebtoken.Claims;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -20,7 +22,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-
+@Tag(name = "회원 - 인증/마이페이지", description = "회원가입 · Access Token 갱신 · 로그아웃 · 마이페이지 조회/수정 API (USER-001~004, 008)")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/user")
@@ -37,7 +39,19 @@ public class UserController {
 
 
 
+    @Operation(summary = "로그인",
+            description = "사원코드와 비밀번호로 로그인합니다. 성공 시 HttpOnly 쿠키로 Atoken(Access)/Rtoken(Refresh) 토큰이 발급됩니다. " +
+                    "실제 처리는 Spring Security의 LoginFilter가 담당하므로 이 메서드는 호출되지 않으며 Swagger 문서 노출 전용입니다.")
+    @PostMapping("/login")
+    public ResponseEntity<BaseResponse<UserDto.LoginRes>> login(@RequestBody UserDto.LoginReq req) {
+        // LoginFilter (UsernamePasswordAuthenticationFilter 상속) 가 /api/user/login POST 요청을 가로챕니다.
+        // 이 메서드 본문은 실행되지 않으며 Swagger UI 노출 + OpenAPI 스키마 생성 용도입니다.
+        throw new UnsupportedOperationException("Handled by LoginFilter");
+    }
 
+
+    @Operation(summary = "회원가입 신청",
+            description = "신규 회원이 가입을 신청합니다. 본사 관리자 승인 후 사원코드가 자동 발급됩니다.")
     @PostMapping("/signup")
     public ResponseEntity<BaseResponse<UserDto.SignupRes>> signup(
             @RequestBody UserDto.SignupReq req) {
@@ -46,7 +60,8 @@ public class UserController {
 
     }
 
-
+    @Operation(summary = "Access Token 자동 갱신",
+            description = "Refresh Token 쿠키로 새 Access Token을 발급받습니다.")
     @PostMapping("/refresh")
     @Transactional
     public ResponseEntity<BaseResponse<Void>> refresh(HttpServletRequest request,
@@ -92,7 +107,8 @@ public class UserController {
 
 
 
-
+    @Operation(summary = "로그아웃",
+            description = "Access/Refresh Token 쿠키를 삭제하고 DB의 Refresh Token을 무효화합니다.")
     @PostMapping("/logout")
     @Transactional
     public ResponseEntity<BaseResponse<Void>> logout(HttpServletRequest request,
@@ -116,6 +132,8 @@ public class UserController {
         return ResponseEntity.ok(BaseResponse.success(null));
     }
 
+    @Operation(summary = "마이페이지 본인 정보 조회",
+            description = "현재 로그인한 사용자의 본인 정보를 반환합니다.")
     @GetMapping("/mypage")
     public ResponseEntity<BaseResponse<UserDto.MypageRes>> getMypage(
             @AuthenticationPrincipal AuthUserDetails userDetails) {
@@ -124,6 +142,8 @@ public class UserController {
         ));
     }
 
+    @Operation(summary = "비밀번호 변경",
+            description = "기존 비밀번호 검증 후 새 비밀번호로 변경합니다. 변경 시 모든 디바이스가 강제 로그아웃됩니다.")
     @PatchMapping("/mypage/password")
     public ResponseEntity<BaseResponse<Void>> updatePassword(
             @AuthenticationPrincipal AuthUserDetails userDetails,
@@ -136,7 +156,8 @@ public class UserController {
         return ResponseEntity.ok(BaseResponse.success(null));
     }
 
-
+    @Operation(summary = "전화번호 수정",
+            description = "본인 전화번호를 수정합니다. 하이픈 없이 010 + 8자리 숫자 형식.")
     @PatchMapping("/mypage/phone")
     public ResponseEntity<BaseResponse<UserDto.MypageRes>> updatePhone(
             @AuthenticationPrincipal AuthUserDetails userDetails,

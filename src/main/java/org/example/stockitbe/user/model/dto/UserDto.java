@@ -1,5 +1,6 @@
 package org.example.stockitbe.user.model.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -15,14 +16,30 @@ public class UserDto {
     // 회원가입 신청 요청
     @Getter
     @NoArgsConstructor
+    @Schema(description = "회원가입 신청 요청")
     public static class SignupReq {
+        @Schema(description = "이름", example = "테스트유저", requiredMode = Schema.RequiredMode.REQUIRED)
         private String name;
+
+        @Schema(description = "이메일 (영문+숫자, 중복 불가)", example = "swagger-test01@stockit.com", requiredMode = Schema.RequiredMode.REQUIRED)
         private String email;
+
+        @Schema(description = "비밀번호 (대소문자+숫자+특수문자 8자 이상)", example = "Test1234!", requiredMode = Schema.RequiredMode.REQUIRED)
         private String password;
+
+        @Schema(description = "전화번호 (하이픈 없이 010+8자리)", example = "01099990001", requiredMode = Schema.RequiredMode.REQUIRED)
         private String phoneNumber;
+
+        @Schema(description = "지점 코드", example = "ST001", requiredMode = Schema.RequiredMode.REQUIRED)
         private String locationCode;
+
+        @Schema(description = "지점명", example = "테스트 매장", requiredMode = Schema.RequiredMode.REQUIRED)
         private String locationName;
+
+        @Schema(description = "가입 신청 사유 (선택)", example = "Swagger 테스트용 신청")
         private String applicationReason;
+
+        @Schema(description = "권한", example = "STORE", allowableValues = {"HQ", "STORE", "WAREHOUSE"})
         private UserRole role;
 
         public User toEntity(String encodedPassword) {
@@ -46,15 +63,33 @@ public class UserDto {
     // 회원 정보 응답
     @Getter
     @Builder
+    @Schema(description = "회원가입 응답")
     public static class SignupRes {
+        @Schema(description = "회원 PK", example = "5")
         private Long id;
+
+        @Schema(description = "사원코드 (승인 전 null)", example = "null")
         private String employeeCode;
+
+        @Schema(description = "이름", example = "테스트유저")
         private String name;
+
+        @Schema(description = "이메일", example = "test01@stockit.com")
         private String email;
+
+        @Schema(description = "지점 코드", example = "ST001")
         private String locationCode;
+
+        @Schema(description = "지점명", example = "테스트 매장")
         private String locationName;
+
+        @Schema(description = "권한", example = "STORE")
         private UserRole role;
+
+        @Schema(description = "회원 상태", example = "PENDING")
         private UserStatus userStatus;
+
+        @Schema(description = "신청 일시")
         private LocalDateTime appliedAt;
 
         public static SignupRes from(User entity) {
@@ -75,34 +110,66 @@ public class UserDto {
     //  로그인 요청
     @Getter
     @NoArgsConstructor
+    @Schema(description = "로그인 요청")
     public static class LoginReq {
+        @Schema(description = "사원코드", example = "hq0001", requiredMode = Schema.RequiredMode.REQUIRED)
         private String employeeCode;
+
+        @Schema(description = "비밀번호", example = "Test1234!", requiredMode = Schema.RequiredMode.REQUIRED)
         private String password;
     }
 
     //  로그인 응답
     @Getter
     @Builder
+    @Schema(description = "로그인 응답")
     public static class LoginRes {
+        @Schema(description = "사원코드", example = "hq0001")
         private String employeeCode;
+
+        @Schema(description = "이름", example = "홍길동")
         private String name;
+
+        @Schema(description = "권한", example = "HQ")
         private UserRole role;
+
+        @Schema(description = "지점 코드", example = "HQ001")
         private String locationCode;
+
+        @Schema(description = "지점명", example = "본사")
         private String locationName;
     }
 
     //  마이페이지
     @Getter
     @Builder
+    @Schema(description = "마이페이지 응답")
     public static class MypageRes {
+        @Schema(description = "회원 PK", example = "1")
         private Long id;
+
+        @Schema(description = "사원코드", example = "hq0001")
         private String employeeCode;
+
+        @Schema(description = "이름", example = "홍길동")
         private String name;
+
+        @Schema(description = "이메일", example = "hong@stockit.com")
         private String email;
+
+        @Schema(description = "지점 코드", example = "HQ001")
         private String locationCode;
+
+        @Schema(description = "지점명", example = "본사")
         private String locationName;
+
+        @Schema(description = "권한", example = "HQ")
         private UserRole role;
+
+        @Schema(description = "회원 상태", example = "APPROVED")
         private UserStatus status;
+
+        @Schema(description = "전화번호", example = "01012345678")
         private String phoneNumber;
 
         public static MypageRes from(User entity) {
@@ -123,15 +190,21 @@ public class UserDto {
     @Getter
     @NoArgsConstructor
     @AllArgsConstructor
+    @Schema(description = "전화번호 변경 요청")
     public static class UpdatePhoneReq {
+        @Schema(description = "새 전화번호 (하이픈 없이 010+8자리)", example = "01098765432", requiredMode = Schema.RequiredMode.REQUIRED)
         private String phoneNumber;
     }
 
     @Getter
     @NoArgsConstructor
     @AllArgsConstructor
+    @Schema(description = "비밀번호 변경 요청")
     public static class UpdatePasswordReq {
+        @Schema(description = "현재 비밀번호", example = "Test1234!", requiredMode = Schema.RequiredMode.REQUIRED)
         private String currentPassword;
+
+        @Schema(description = "새 비밀번호 (대소문자+숫자+특수문자 8자 이상)", example = "NewPass1234!", requiredMode = Schema.RequiredMode.REQUIRED)
         private String newPassword;
     }
 
