@@ -1,5 +1,6 @@
 package org.example.stockitbe.hq.inventory.model;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -145,24 +146,40 @@ public class InventoryDto {
     }
 
     // 순환재고 후보 목록 행 DTO
+    @Schema(description = "순환재고 후보 목록 행")
     @Getter
     @Builder
     @AllArgsConstructor
     public static class CircularCandidateRes {
+        @Schema(description = "재고 ID", example = "1001")
         private Long inventoryId;
+        @Schema(description = "SKU 코드", example = "SKU-TOP-SS-001-BLK-M")
         private String skuCode;
+        @Schema(description = "품목 코드", example = "PRD-TOP-SS-001")
         private String itemCode;
+        @Schema(description = "상위 카테고리", example = "상의")
         private String parentCategory;
+        @Schema(description = "하위 카테고리", example = "자켓")
         private String childCategory;
+        @Schema(description = "품목명", example = "폴리에스터 자켓")
         private String itemName;
+        @Schema(description = "창고 코드", example = "WH-001")
         private String warehouseCode;
+        @Schema(description = "창고명", example = "서울 물류창고")
         private String warehouseName;
+        @Schema(description = "색상", example = "BLACK")
         private String color;
+        @Schema(description = "사이즈", example = "M")
         private String size;
+        @Schema(description = "실재고 수량", example = "120")
         private Integer actualStock;
+        @Schema(description = "가용재고 수량", example = "100")
         private Integer availableStock;
+        @Schema(description = "순환재고 전환 가능 수량", example = "80")
         private Integer convertibleStock;
+        @Schema(description = "재고 수정 일시")
         private Date updatedAt;
+        @Schema(description = "충족한 순환재고 후보 조건 코드 목록", example = "[1,2]")
         private List<Integer> matchedConditionCodes;
 
         // 후보 재고 집계 필드를 응답 DTO로 변환한다.
@@ -199,16 +216,24 @@ public class InventoryDto {
     }
 
     // 순환재고 후보 페이지 응답 DTO
+    @Schema(description = "순환재고 후보 페이지 응답")
     @Getter
     @Builder
     @AllArgsConstructor
     public static class CircularCandidatePageRes {
+        @Schema(description = "순환재고 후보 목록")
         private List<CircularCandidateRes> content;
+        @Schema(description = "현재 페이지 번호", example = "0")
         private Integer page;
+        @Schema(description = "페이지 크기", example = "20")
         private Integer size;
+        @Schema(description = "전체 후보 수", example = "125")
         private Long totalElements;
+        @Schema(description = "전체 페이지 수", example = "7")
         private Integer totalPages;
+        @Schema(description = "다음 페이지 존재 여부", example = "true")
         private Boolean hasNext;
+        @Schema(description = "이전 페이지 존재 여부", example = "false")
         private Boolean hasPrevious;
 
         // 페이지 계산 결과를 후보 페이지 응답으로 변환한다.
@@ -232,35 +257,46 @@ public class InventoryDto {
     }
 
     // 후보 리프레시 결과 DTO
+    @Schema(description = "순환재고 후보 리프레시 결과")
     @Getter
     @Builder
     @AllArgsConstructor
     public static class CircularCandidateRefreshRes {
+        @Schema(description = "스캔한 재고 수", example = "500")
         private Integer scannedCount;
+        @Schema(description = "후보 상태로 갱신된 재고 수", example = "42")
         private Integer convertedCount;
     }
 
     // 후보 전환 요청 DTO
+    @Schema(description = "순환재고 후보 전환 요청 항목")
     @Getter
     @NoArgsConstructor
     @AllArgsConstructor
     public static class CircularCandidateConvertItemReq {
+        @Schema(description = "전환할 후보 재고 ID", example = "1001", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull
         private Long inventoryId;
 
+        @Schema(description = "순환재고로 전환할 수량", example = "10", minimum = "1", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull
         @Min(1)
         private Integer convertQuantity;
     }
 
     // 후보 전환 결과 행 DTO
+    @Schema(description = "순환재고 후보 전환 결과 항목")
     @Getter
     @Builder
     @AllArgsConstructor
     public static class CircularCandidateConvertItemRes {
+        @Schema(description = "재고 ID", example = "1001")
         private Long inventoryId;
+        @Schema(description = "요청 수량", example = "10")
         private Integer requested;
+        @Schema(description = "전환 완료 수량", example = "10")
         private Integer converted;
+        @Schema(description = "처리 결과 또는 실패 사유", example = "SUCCESS")
         private String reason;
 
         // 전환 처리 결과를 응답 DTO로 변환한다.
@@ -275,13 +311,18 @@ public class InventoryDto {
     }
 
     // 후보 전환 요약 DTO
+    @Schema(description = "순환재고 후보 전환 요약 응답")
     @Getter
     @Builder
     @AllArgsConstructor
     public static class CircularCandidateConvertRes {
+        @Schema(description = "요청 항목 수", example = "3")
         private Integer requestedCount;
+        @Schema(description = "전환 성공 항목 수", example = "2")
         private Integer convertedCount;
+        @Schema(description = "전환 제외 항목 수", example = "1")
         private Integer skippedCount;
+        @Schema(description = "항목별 전환 결과")
         private List<CircularCandidateConvertItemRes> items;
 
         // 전환 처리 집계값을 요약 DTO로 변환한다.
@@ -298,26 +339,44 @@ public class InventoryDto {
     }
 
     // 순환재고 목록 행 DTO
+    @Schema(description = "순환재고 목록 행")
     @Getter
     @Builder
     @AllArgsConstructor
     public static class CircularInventoryRes {
+        @Schema(description = "재고 ID", example = "2001")
         private Long inventoryId;
+        @Schema(description = "SKU 코드", example = "SKU-TOP-SS-001-BLK-M")
         private String skuCode;
+        @Schema(description = "품목 코드", example = "PRD-TOP-SS-001")
         private String itemCode;
+        @Schema(description = "품목명", example = "폴리에스터 자켓")
         private String itemName;
+        @Schema(description = "창고 코드", example = "WH-001")
         private String warehouseCode;
+        @Schema(description = "창고명", example = "서울 물류창고")
         private String warehouseName;
+        @Schema(description = "상위 카테고리", example = "상의")
         private String parentCategory;
+        @Schema(description = "하위 카테고리", example = "자켓")
         private String childCategory;
+        @Schema(description = "색상", example = "BLACK")
         private String color;
+        @Schema(description = "사이즈", example = "M")
         private String size;
+        @Schema(description = "가용 수량", example = "80")
         private Integer availableQuantity;
+        @Schema(description = "소재 그룹", example = "synthetic")
         private String materialType;
+        @Schema(description = "소재 구성 비율 목록")
         private List<MaterialCompositionRes> materialCompositions;
+        @Schema(description = "kg당 소재 단가", example = "1200")
         private Integer materialKgPrice;
+        @Schema(description = "단위 중량(kg)", example = "0.4")
         private Double unitWeightKg;
+        @Schema(description = "총 중량(kg)", example = "32.0")
         private Double totalWeightKg;
+        @Schema(description = "산정된 순환재고 판매가", example = "38400")
         private Long circularSalePrice;
 
         // 순환재고 집계 필드를 응답 DTO로 변환한다.
@@ -358,16 +417,24 @@ public class InventoryDto {
     }
 
     // 순환재고 페이지 응답 DTO
+    @Schema(description = "순환재고 페이지 응답")
     @Getter
     @Builder
     @AllArgsConstructor
     public static class CircularInventoryPageRes {
+        @Schema(description = "순환재고 목록")
         private List<CircularInventoryRes> content;
+        @Schema(description = "현재 페이지 번호", example = "0")
         private Integer page;
+        @Schema(description = "페이지 크기", example = "20")
         private Integer size;
+        @Schema(description = "전체 순환재고 수", example = "85")
         private Long totalElements;
+        @Schema(description = "전체 페이지 수", example = "5")
         private Integer totalPages;
+        @Schema(description = "다음 페이지 존재 여부", example = "true")
         private Boolean hasNext;
+        @Schema(description = "이전 페이지 존재 여부", example = "false")
         private Boolean hasPrevious;
 
         // 페이지 계산 결과를 순환재고 페이지 응답으로 변환한다.
@@ -391,24 +458,34 @@ public class InventoryDto {
     }
 
     // 소재 구성 비율 응답 DTO
+    @Schema(description = "소재 구성 비율")
     @Getter
     @Builder
     @AllArgsConstructor
     public static class MaterialCompositionRes {
+        @Schema(description = "소재 코드", example = "POLYESTER")
         private String materialCode;
+        @Schema(description = "소재 한글명", example = "폴리에스터")
         private String materialNameKo;
+        @Schema(description = "구성 비율", example = "100")
         private Integer ratio;
     }
 
     // 순환재고 소재 단가 정책 응답 DTO
+    @Schema(description = "순환재고 소재 단가 정책")
     @Getter
     @Builder
     @AllArgsConstructor
     public static class CircularMaterialPriceRes {
+        @Schema(description = "소재 코드", example = "POLYESTER")
         private String materialCode;
+        @Schema(description = "소재 한글명", example = "폴리에스터")
         private String materialNameKo;
+        @Schema(description = "소재 그룹", example = "synthetic")
         private String materialGroup;
+        @Schema(description = "kg당 단가", example = "1200")
         private Integer pricePerKg;
+        @Schema(description = "활성 여부", example = "true")
         private Boolean active;
 
         // 소재 단가 정책 엔티티를 응답 DTO로 변환한다.
@@ -424,29 +501,42 @@ public class InventoryDto {
     }
 
     // 순환재고 소재 단가 수정 요청 DTO
+    @Schema(description = "순환재고 소재 단가 수정 요청")
     @Getter
     @NoArgsConstructor
     @AllArgsConstructor
     public static class CircularMaterialPriceUpdateReq {
+        @Schema(description = "변경할 kg당 단가", example = "1300", minimum = "0", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull
         @Min(0)
         private Integer pricePerKg;
     }
 
     // 전사 재고 불균형 SKU 응답 DTO
+    @Schema(description = "창고별 재고 불균형 SKU 응답")
     @Getter
     @Builder
     @AllArgsConstructor
     public static class ImbalancedSkuRes {
+        @Schema(description = "SKU 코드", example = "SKU-TOP-SS-001-BLK-M")
         private String skuCode;
+        @Schema(description = "품목 코드", example = "PRD-TOP-SS-001")
         private String itemCode;
+        @Schema(description = "품목명", example = "폴리에스터 자켓")
         private String itemName;
+        @Schema(description = "색상", example = "BLACK")
         private String color;
+        @Schema(description = "사이즈", example = "M")
         private String size;
+        @Schema(description = "카테고리", example = "상의 > 자켓")
         private String category;
+        @Schema(description = "전체 창고 실재고 합계", example = "120")
         private Integer totalOnHand;
+        @Schema(description = "전체 창고 가용재고 합계", example = "100")
         private Integer totalAvailable;
+        @Schema(description = "부족 상태 창고 수", example = "2")
         private Integer shortageWarehouseCount;
+        @Schema(description = "전체 부족 수량", example = "30")
         private Integer totalShortageQty;
 
         // 불균형 SKU 집계 필드를 응답 DTO로 변환한다.
