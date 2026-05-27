@@ -20,12 +20,16 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/store/inventories")
+// 매장 재고 조회 컨트롤러
+// 로그인 사용자의 매장 기준 품목/SKU 재고 조회 API를 제공한다.
 public class StoreInventoryController {
 
     private final StoreInventoryService service;
 
     @Operation(summary = "매장 재고 품목 목록 조회", description = "로그인 매장의 재고를 품목(상품코드) 단위로 집계해 페이지 조회한다.")
     @ApiResponse(responseCode = "200", description = "조회 성공")
+    // 매장 재고 품목 페이지 조회 API
+    // category 단일 파라미터: 부모 또는 자식 한글 이름 (FE 한 줄 dropdown 호환).
     @GetMapping
     public BaseResponse<StoreInventoryDto.ItemPageRes> getStoreInventories(
             @AuthenticationPrincipal AuthUserDetails me,
@@ -39,8 +43,14 @@ public class StoreInventoryController {
         ));
     }
 
-    @Operation(summary = "매장 재고 SKU 목록 조회 (SKU 모드)", description = "마스터 무관 모든 SKU를 한 표로 조회한다. status는 HAVING 필터로 동작한다.")
-    @ApiResponse(responseCode = "200", description = "조회 성공")
+    @Operation(
+            summary = "매장 재고 SKU 단위 페이지 조회",
+            description = "마스터 무관 모든 SKU 를 한 표로 조회. 색상·사이즈 칩 필터 + 한국어 라벨 상태 필터(정상/부족/품절) 지원."
+    )
+    // 매장 재고 SKU 단위 페이지 조회 API (모드 토글 SKU 모드 — 마스터 무관 모든 SKU 한 표).
+    // status: 한국어 라벨("정상"/"부족"/"품절") — SQL HAVING 으로 필터.
+    // category: 부모 또는 자식 한글 이름 단일 파라미터.
+    // skuSize: SKU 사이즈 (M/L/XL 등) — Pageable 의 size 와 이름 충돌 방지 위해 query param 명 분리.
     @GetMapping("/skus")
     public BaseResponse<StoreInventoryDto.SkuPageRes> getSkus(
             @AuthenticationPrincipal AuthUserDetails me,
@@ -56,8 +66,11 @@ public class StoreInventoryController {
         ));
     }
 
-    @Operation(summary = "SKU 필터 Facets 조회", description = "현재 조건(매장·카테고리·키워드) 안에서 선택 가능한 색상·사이즈 목록을 반환한다.")
-    @ApiResponse(responseCode = "200", description = "조회 성공")
+    @Operation(
+            summary = "매장 재고 SKU facets 조회",
+            description = "현재 카테고리·키워드 조건 안에서 선택 가능한 색상/사이즈 distinct 값 반환. 칩 필터 UI 용."
+    )
+    // 매장 재고 SKU 칩 필터용 facets API — 거점/카테고리/검색 조건 안의 가능한 색상/사이즈 distinct.
     @GetMapping("/skus/facets")
     public BaseResponse<StoreInventoryDto.SkuFacetsRes> getSkuFacets(
             @AuthenticationPrincipal AuthUserDetails me,
