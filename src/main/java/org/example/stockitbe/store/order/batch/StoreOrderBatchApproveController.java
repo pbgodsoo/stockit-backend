@@ -44,6 +44,17 @@ public class StoreOrderBatchApproveController {
     private final Job storeOrderBatchApproveJob;
     private final InfrastructureRepository infrastructureRepository;
 
+    // ── R : Read ─────────────────────────────────────────────────────────────
+    @Operation(summary = "승인 대기 매장 목록 조회", description = "REQUESTED 상태의 발주가 존재하는 매장 목록과 건수를 조회한다.")
+    @ApiResponse(responseCode = "200", description = "조회 성공")
+    @GetMapping("/pending-stores")
+    public BaseResponse<List<StoreOrderBatchDto.PendingStoreRes>> pendingStores(
+            @AuthenticationPrincipal AuthUserDetails me
+    ) {
+        return BaseResponse.success(batchApproveService.listPendingStores());
+    }
+
+    // ── Action : Run ──────────────────────────────────────────────────────────
     @Operation(summary = "발주 배치 승인 수동 실행", description = "지정 기간 내 REQUESTED 상태 발주를 일괄 승인하는 Spring Batch Job을 수동으로 실행한다. mode=STORE이면 storeCode 필수.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "배치 실행 완료"),
@@ -90,14 +101,5 @@ public class StoreOrderBatchApproveController {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-    }
-
-    @Operation(summary = "승인 대기 매장 목록 조회", description = "REQUESTED 상태의 발주가 존재하는 매장 목록과 건수를 조회한다.")
-    @ApiResponse(responseCode = "200", description = "조회 성공")
-    @GetMapping("/pending-stores")
-    public BaseResponse<List<StoreOrderBatchDto.PendingStoreRes>> pendingStores(
-            @AuthenticationPrincipal AuthUserDetails me
-    ) {
-        return BaseResponse.success(batchApproveService.listPendingStores());
     }
 }

@@ -25,6 +25,7 @@ public class StoreOrderController {
 
     private final StoreOrderService service;
 
+    // ── C : Create ──────────────────────────────────────────────────────────────
     @Operation(summary = "발주 요청 생성", description = "매장의 SKU별 발주 요청을 생성한다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "생성 성공"),
@@ -37,6 +38,47 @@ public class StoreOrderController {
         return BaseResponse.success(result);
     }
 
+    // ── R : Read ─────────────────────────────────────────────────────────────
+    @Operation(summary = "발주 목록 조회", description = "로그인 매장의 발주 내역을 상태·기간·키워드로 필터링해 조회한다.")
+    @ApiResponse(responseCode = "200", description = "조회 성공")
+    @GetMapping
+    public BaseResponse<List<StoreOrderDto.ListRes>> list(
+            @AuthenticationPrincipal AuthUserDetails me,
+            @Parameter(description = "발주 상태 (REQUESTED / APPROVED / COMPLETED / CANCELLED)") @RequestParam(required = false) String status,
+            @Parameter(description = "조회 시작일 (yyyy-MM-dd)", example = "2024-01-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "조회 종료일 (yyyy-MM-dd)", example = "2024-12-31") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @Parameter(description = "발주번호·상품명·SKU 코드 검색 키워드") @RequestParam(required = false) String keyword
+    ) {
+        List<StoreOrderDto.ListRes> result = service.list(status, from, to, keyword, me);
+        return BaseResponse.success(result);
+    }
+
+    @Operation(summary = "발주 상세 조회", description = "발주번호로 헤더·아이템·입고 요약·상태이력을 포함한 상세 정보를 조회한다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(responseCode = "404", description = "발주 없음")
+    })
+    @GetMapping("/{orderNo}")
+    public BaseResponse<StoreOrderDto.DetailRes> detail(
+            @Parameter(description = "발주번호", example = "ORD-20240101-001") @PathVariable String orderNo,
+            @AuthenticationPrincipal AuthUserDetails me) {
+        StoreOrderDto.DetailRes result = service.detail(orderNo, me);
+        return BaseResponse.success(result);
+    }
+
+    @Operation(summary = "발주 분석 조회", description = "기간 내 발주 현황을 상태별·SKU별·카테고리별로 집계해 반환한다.")
+    @ApiResponse(responseCode = "200", description = "조회 성공")
+    @GetMapping("/analytics")
+    public BaseResponse<StoreOrderDto.AnalyticsRes> analytics(
+            @AuthenticationPrincipal AuthUserDetails me,
+            @Parameter(description = "조회 시작일 (yyyy-MM-dd)", example = "2024-01-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "조회 종료일 (yyyy-MM-dd)", example = "2024-12-31") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+    ) {
+        StoreOrderDto.AnalyticsRes result = service.analytics(from, to, me);
+        return BaseResponse.success(result);
+    }
+
+    // ── U : Update ────────────────────────────────────────────────────────────
     @Operation(summary = "발주 요청 수정", description = "REQUESTED 상태인 발주의 메모 및 SKU 라인을 수정한다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "수정 성공"),
@@ -76,45 +118,6 @@ public class StoreOrderController {
             @AuthenticationPrincipal AuthUserDetails me,
             @RequestBody(required = false) StoreOrderDto.ApproveReq dto) {
         StoreOrderDto.ApproveRes result = service.approve(orderNo, dto == null ? StoreOrderDto.ApproveReq.builder().build() : dto, me);
-        return BaseResponse.success(result);
-    }
-
-    @Operation(summary = "발주 목록 조회", description = "로그인 매장의 발주 내역을 상태·기간·키워드로 필터링해 조회한다.")
-    @ApiResponse(responseCode = "200", description = "조회 성공")
-    @GetMapping
-    public BaseResponse<List<StoreOrderDto.ListRes>> list(
-            @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "발주 상태 (REQUESTED / APPROVED / COMPLETED / CANCELLED)") @RequestParam(required = false) String status,
-            @Parameter(description = "조회 시작일 (yyyy-MM-dd)", example = "2024-01-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @Parameter(description = "조회 종료일 (yyyy-MM-dd)", example = "2024-12-31") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @Parameter(description = "발주번호·상품명·SKU 코드 검색 키워드") @RequestParam(required = false) String keyword
-    ) {
-        List<StoreOrderDto.ListRes> result = service.list(status, from, to, keyword, me);
-        return BaseResponse.success(result);
-    }
-
-    @Operation(summary = "발주 상세 조회", description = "발주번호로 헤더·아이템·입고 요약·상태이력을 포함한 상세 정보를 조회한다.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "조회 성공"),
-            @ApiResponse(responseCode = "404", description = "발주 없음")
-    })
-    @GetMapping("/{orderNo}")
-    public BaseResponse<StoreOrderDto.DetailRes> detail(
-            @Parameter(description = "발주번호", example = "ORD-20240101-001") @PathVariable String orderNo,
-            @AuthenticationPrincipal AuthUserDetails me) {
-        StoreOrderDto.DetailRes result = service.detail(orderNo, me);
-        return BaseResponse.success(result);
-    }
-
-    @Operation(summary = "발주 분석 조회", description = "기간 내 발주 현황을 상태별·SKU별·카테고리별로 집계해 반환한다.")
-    @ApiResponse(responseCode = "200", description = "조회 성공")
-    @GetMapping("/analytics")
-    public BaseResponse<StoreOrderDto.AnalyticsRes> analytics(
-            @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "조회 시작일 (yyyy-MM-dd)", example = "2024-01-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @Parameter(description = "조회 종료일 (yyyy-MM-dd)", example = "2024-12-31") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
-    ) {
-        StoreOrderDto.AnalyticsRes result = service.analytics(from, to, me);
         return BaseResponse.success(result);
     }
 }

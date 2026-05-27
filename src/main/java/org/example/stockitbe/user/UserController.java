@@ -88,6 +88,29 @@ public class UserController {
     }
 
 
+    @Operation(summary = "로그아웃", description = "Refresh Token을 무효화하고 Access/Refresh 쿠키를 삭제한다.")
+    @ApiResponse(responseCode = "200", description = "로그아웃 성공")
+    @PostMapping("/logout")
+    @Transactional
+    public ResponseEntity<BaseResponse<Void>> logout(HttpServletRequest request,
+                                                     HttpServletResponse response) {
+        String refreshTokenValue = extractCookie(request, REFRESH_TOKEN_COOKIE);
+        if (refreshTokenValue != null) {
+            try {
+                Claims claims = jwtUtil.parseClaims(refreshTokenValue);
+                String employeeCode = claims.getSubject();
+                jwtRefreshRepository.deleteAllByEmployeeCode(employeeCode);
+            } catch (Exception ignored) {
+            }
+        }
+
+        clearCookie(response, ACCESS_TOKEN_COOKIE, "/");
+        clearCookie(response, REFRESH_TOKEN_COOKIE, REFRESH_TOKEN_PATH);
+
+        return ResponseEntity.ok(BaseResponse.success(null));
+    }
+
+
     @Operation(summary = "Access Token 갱신", description = "Refresh Token 쿠키(Rtoken)를 이용해 새 Access Token을 발급한다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "갱신 성공"),
@@ -128,29 +151,6 @@ public class UserController {
         accessCookie.setMaxAge((int) (jwtUtil.getAccessExpirationMs() / 1000));
         accessCookie.setAttribute("SameSite", "Lax");
         response.addCookie(accessCookie);
-
-        return ResponseEntity.ok(BaseResponse.success(null));
-    }
-
-
-    @Operation(summary = "로그아웃", description = "Refresh Token을 무효화하고 Access/Refresh 쿠키를 삭제한다.")
-    @ApiResponse(responseCode = "200", description = "로그아웃 성공")
-    @PostMapping("/logout")
-    @Transactional
-    public ResponseEntity<BaseResponse<Void>> logout(HttpServletRequest request,
-                                                     HttpServletResponse response) {
-        String refreshTokenValue = extractCookie(request, REFRESH_TOKEN_COOKIE);
-        if (refreshTokenValue != null) {
-            try {
-                Claims claims = jwtUtil.parseClaims(refreshTokenValue);
-                String employeeCode = claims.getSubject();
-                jwtRefreshRepository.deleteAllByEmployeeCode(employeeCode);
-            } catch (Exception ignored) {
-            }
-        }
-
-        clearCookie(response, ACCESS_TOKEN_COOKIE, "/");
-        clearCookie(response, REFRESH_TOKEN_COOKIE, REFRESH_TOKEN_PATH);
 
         return ResponseEntity.ok(BaseResponse.success(null));
     }
