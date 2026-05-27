@@ -48,6 +48,7 @@ public class SecurityConfig {
                 ).permitAll()
                 .requestMatchers("/api/user/signup", "/api/user/login", "/api/user/logout", "/api/user/refresh", "/api/public/**").permitAll()
                 .requestMatchers("/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll() // k8s probe / 모니터링용 엔드포인트
+                .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                 // Spring 기본 에러 디스패치 경로 — 인증 없이 도달 가능해야 핸들러가 정상 동작
                 .requestMatchers("/error").permitAll()
                 .requestMatchers("/api/hq/**").hasRole("HQ")                  // 본사
