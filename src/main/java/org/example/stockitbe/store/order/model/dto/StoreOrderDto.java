@@ -288,7 +288,6 @@ public class StoreOrderDto {
     @Builder
     public static class CancelReq {
         @Schema(description = "취소 사유", example = "재고 확인 후 재발주 예정")
-        @NotBlank
         private String cancelReason;
         @Schema(description = "취소자 사번", example = "EMP-001")
         private String cancelledByMemberId;

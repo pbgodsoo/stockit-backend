@@ -618,5 +618,21 @@ public class InventoryDto {
                     .totalShortageQty(totalShortageQty)
                     .build();
         }
+
+        // 네이티브 SQL projection row를 응답 DTO로 변환한다.
+        public static ImbalancedSkuRes from(ImbalancedSkuRow row) {
+            return ImbalancedSkuRes.builder()
+                    .skuCode(row.getSkuCode())
+                    .itemCode(row.getItemCode())
+                    .itemName(row.getItemName())
+                    .color(row.getColor())
+                    .size(row.getSize())
+                    .category(row.getCategory())
+                    .totalOnHand(row.getTotalOnHand())
+                    .totalAvailable(row.getTotalAvailable())
+                    .shortageWarehouseCount(row.getShortageWarehouseCount())
+                    .totalShortageQty(row.getTotalShortageQty())
+                    .build();
+        }
     }
 }

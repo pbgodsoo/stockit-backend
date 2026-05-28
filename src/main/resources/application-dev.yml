@@ -68,7 +68,6 @@ purchase-order:
     delay-ms: ${PURCHASE_ORDER_BATCH_DELAY_MS:300000}      # 스케줄러 fixedDelay (5분)
     wait-minutes: 1       # dev 에선 짧게 (시연·테스트 편의)
 
-
 jwt:
   secret: ${JWT_SECRET}
   access-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS}

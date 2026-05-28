@@ -70,9 +70,13 @@ public class StoreOrderBatchApproveController {
 
             JobParametersBuilder builder = new JobParametersBuilder()
                     .addString("runType", "MANUAL")
-                    .addString("runId", runId)
-                    .addLocalDateTime("fromDateTime", req.getFromDateTime())
-                    .addLocalDateTime("toDateTime", req.getToDateTime());
+                    .addString("runId", runId);
+            if (req.getFromDateTime() != null) {
+                builder.addLocalDateTime("fromDateTime", req.getFromDateTime());
+            }
+            if (req.getToDateTime() != null) {
+                builder.addLocalDateTime("toDateTime", req.getToDateTime());
+            }
 
             if (req.getMode() == StoreOrderBatchScope.STORE) {
                 Long storeId = infrastructureRepository
