@@ -2,6 +2,9 @@ package org.example.stockitbe.user;
 
 import io.jsonwebtoken.Claims;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -46,7 +49,7 @@ public class UserController {
             description = """
                     사번(employeeCode)과 비밀번호로 로그인한다.
 
-                    **테스트 계정 (비밀번호 공통: `Stockit!2026`)**
+                    **테스트 계정 (비밀번호 공통: `Stockit!2026`)** — 서버 부팅 시 `AdminBootstrapRunner` 가 자동 생성
 
                     | 권한 | 사번 |
                     |------|------|
@@ -54,11 +57,11 @@ public class UserController {
                     | 매장 (STORE) | `st0001` |
                     | 창고 (WAREHOUSE) | `wh0001` |
 
-                    **Swagger UI 테스트 방법:**
-                    1. 아래 Request body에 employeeCode / password 입력 후 Execute
-                    2. 응답 body의 `result.accessToken` 값을 복사
-                    3. 화면 상단 **Authorize 🔒** 버튼 클릭 → 복사한 값 붙여넣기 → Authorize
-                    4. 이후 모든 API 요청에 `Authorization: Bearer <token>` 헤더가 자동 첨부됨
+                    **Swagger UI 테스트 흐름**
+                    1. 아래 Examples 드롭다운에서 권한 선택 → Execute
+                    2. 응답의 `result.accessToken` 값 복사
+                    3. 화면 상단 **Authorize 🔒** → 복사한 값 붙여넣기 → Authorize
+                    4. 이후 모든 API 가 인증된 상태로 호출됨
 
                     > 브라우저/FE는 HTTP-only 쿠키(Atoken)를 사용합니다. accessToken 필드는 Swagger 전용입니다.
                     """
@@ -68,7 +71,46 @@ public class UserController {
             @ApiResponse(responseCode = "401", description = "사번 또는 비밀번호 불일치")
     })
     @PostMapping("/login")
-    public ResponseEntity<BaseResponse<UserDto.LoginRes>> login(@RequestBody UserDto.LoginReq req) {
+    public ResponseEntity<BaseResponse<UserDto.LoginRes>> login(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    required = true,
+                    content = @Content(
+                            schema = @Schema(implementation = UserDto.LoginReq.class),
+                            examples = {
+                                    @ExampleObject(
+                                            name = "HQ (본사 — hq0001)",
+                                            summary = "본사 직원 로그인",
+                                            value = """
+                                                    {
+                                                      "employeeCode": "hq0001",
+                                                      "password": "Stockit!2026"
+                                                    }
+                                                    """
+                                    ),
+                                    @ExampleObject(
+                                            name = "STORE (매장 — st0001)",
+                                            summary = "매장 직원 로그인",
+                                            value = """
+                                                    {
+                                                      "employeeCode": "st0001",
+                                                      "password": "Stockit!2026"
+                                                    }
+                                                    """
+                                    ),
+                                    @ExampleObject(
+                                            name = "WAREHOUSE (창고 — wh0001)",
+                                            summary = "창고 직원 로그인",
+                                            value = """
+                                                    {
+                                                      "employeeCode": "wh0001",
+                                                      "password": "Stockit!2026"
+                                                    }
+                                                    """
+                                    )
+                            }
+                    )
+            )
+            @RequestBody UserDto.LoginReq req) {
         // LoginFilter(Spring Security)가 이 요청을 먼저 인터셉트하여 처리한다.
         // 이 메서드 본체는 실행되지 않는다.
         throw new UnsupportedOperationException("Handled by LoginFilter");
@@ -82,6 +124,73 @@ public class UserController {
     })
     @PostMapping("/signup")
     public ResponseEntity<BaseResponse<UserDto.SignupRes>> signup(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = """
+                            회원가입 신청.
+
+                            ⚠ **이메일(email) 은 중복 불가** — `SIGNUP_DUPLICATE_EMAIL` 에러가 발생합니다.
+                            Swagger 에서 반복 테스트 시 이메일 마지막 숫자만 바꿔주세요 (예: swagstore01 → swagstore02 → swagstore03).
+
+                            비밀번호 정책: 대소문자 + 숫자 + 특수문자(`!@#$%^&*`) 8자 이상
+                            전화번호 정책: `010` + 숫자 8자리 (하이픈 없이, 총 11자리)
+
+                            아래 3개 예시(STORE / WAREHOUSE / HQ) 중 하나를 골라 사용하세요.
+                            """,
+                    required = true,
+                    content = @Content(
+                            schema = @Schema(implementation = UserDto.SignupReq.class),
+                            examples = {
+                                    @ExampleObject(
+                                            name = "STORE (매장테스트)",
+                                            summary = "홍대 라이프스타일점 매장 직원 가입",
+                                            value = """
+                                                    {
+                                                      "name": "매장테스트",
+                                                      "email": "swagstore01@test.com",
+                                                      "password": "Stockit!2026",
+                                                      "phoneNumber": "01012312312",
+                                                      "locationCode": "ST-SL-0002",
+                                                      "locationName": "홍대 라이프스타일점",
+                                                      "applicationReason": "Swagger 테스트용 신청",
+                                                      "role": "STORE"
+                                                    }
+                                                    """
+                                    ),
+                                    @ExampleObject(
+                                            name = "WAREHOUSE (창고테스트)",
+                                            summary = "서울 도심 풀필먼트 허브 창고 직원 가입",
+                                            value = """
+                                                    {
+                                                      "name": "창고테스트",
+                                                      "email": "swagwh01@test.com",
+                                                      "password": "Stockit!2026",
+                                                      "phoneNumber": "01034779128",
+                                                      "locationCode": "WH-SL-0001",
+                                                      "locationName": "서울 도심 풀필먼트 허브",
+                                                      "applicationReason": "창고 테스트 계정",
+                                                      "role": "WAREHOUSE"
+                                                    }
+                                                    """
+                                    ),
+                                    @ExampleObject(
+                                            name = "HQ (본사테스트)",
+                                            summary = "본사 운영자 가입",
+                                            value = """
+                                                    {
+                                                      "name": "본사테스트",
+                                                      "email": "swaghq01@test.com",
+                                                      "password": "Stockit!2026",
+                                                      "phoneNumber": "01022222222",
+                                                      "locationCode": "HQ-SL-0001",
+                                                      "locationName": "본사",
+                                                      "applicationReason": "본사 운영자 계정 테스트",
+                                                      "role": "HQ"
+                                                    }
+                                                    """
+                                    )
+                            }
+                    )
+            )
             @RequestBody UserDto.SignupReq req) {
         UserDto.SignupRes result = userService.signup(req);
         return ResponseEntity.ok(BaseResponse.success(result));
