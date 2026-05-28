@@ -33,7 +33,7 @@ public class NotificationDto {
         private String message;
         @Schema(description = "본인 읽음 여부", example = "false")
         private boolean read;
-        @Schema(description = "발생 시각")
+        @Schema(description = "발생 시각", example = "2026-05-27T09:00:00.000+09:00")
         private Date createdAt;
 
         // 본인 기준 읽음 상태와 함께 변환.
@@ -94,7 +94,7 @@ public class NotificationDto {
         private String title;
         @Schema(description = "본문", example = "테스트유저(test@stockit.com) 회원가입 승인 대기 중입니다.")
         private String message;
-        @Schema(description = "발생 시각")
+        @Schema(description = "발생 시각", example = "2026-05-27T09:00:00.000+09:00")
         private Date createdAt;
 
         public static SsePayload from(Notification e) {

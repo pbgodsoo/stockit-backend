@@ -37,11 +37,11 @@ public class WarehouseInventoryController {
     @GetMapping
     public BaseResponse<WarehouseInventoryDto.ItemPageRes> getWarehouseInventories(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "상위 카테고리") @RequestParam(required = false) String parentCategory,
-            @Parameter(description = "하위 카테고리") @RequestParam(required = false) String childCategory,
-            @Parameter(description = "단일 카테고리 파라미터 — 부모 또는 자식 한글 이름. FE 단일 dropdown 호환용") @RequestParam(required = false) String category,
-            @Parameter(description = "재고 상태 한국어 라벨 (정상/부족/품절)") @RequestParam(required = false) String status,
-            @Parameter(description = "검색 키워드 (품목명·품목 코드)") @RequestParam(required = false) String keyword,
+            @Parameter(description = "상위 카테고리", example = "상의") @RequestParam(required = false) String parentCategory,
+            @Parameter(description = "하위 카테고리", example = "반팔") @RequestParam(required = false) String childCategory,
+            @Parameter(description = "단일 카테고리 파라미터 — 부모 또는 자식 한글 이름. FE 단일 dropdown 호환용", example = "상의") @RequestParam(required = false) String category,
+            @Parameter(description = "재고 상태 한국어 라벨 (정상/부족/품절)", example = "정상") @RequestParam(required = false) String status,
+            @Parameter(description = "검색 키워드 (품목명·품목 코드)", example = "코튼") @RequestParam(required = false) String keyword,
             @PageableDefault(size = 20) Pageable pageable
     ) {
         return BaseResponse.success(service.getItems(
@@ -60,11 +60,11 @@ public class WarehouseInventoryController {
     @GetMapping("/skus")
     public BaseResponse<WarehouseInventoryDto.SkuPageRes> getSkus(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "단일 카테고리 파라미터 (부모 또는 자식 한글 이름)") @RequestParam(required = false) String category,
-            @Parameter(description = "재고 상태 한국어 라벨 (정상/부족/품절)") @RequestParam(required = false) String status,
-            @Parameter(description = "색상 필터 (BLK/WHT/NVY 등)") @RequestParam(required = false) String color,
-            @Parameter(description = "사이즈 필터 (S/M/L/XL). Pageable.size 와 충돌 방지를 위해 skuSize 명명") @RequestParam(value = "skuSize", required = false) String skuSize,
-            @Parameter(description = "검색 키워드") @RequestParam(required = false) String keyword,
+            @Parameter(description = "단일 카테고리 파라미터 (부모 또는 자식 한글 이름)", example = "상의") @RequestParam(required = false) String category,
+            @Parameter(description = "재고 상태 한국어 라벨 (정상/부족/품절)", example = "정상") @RequestParam(required = false) String status,
+            @Parameter(description = "색상 필터 (BLK/WHT/NVY 등)", example = "BLK") @RequestParam(required = false) String color,
+            @Parameter(description = "사이즈 필터 (S/M/L/XL). Pageable.size 와 충돌 방지를 위해 skuSize 명명", example = "M") @RequestParam(value = "skuSize", required = false) String skuSize,
+            @Parameter(description = "검색 키워드", example = "코튼") @RequestParam(required = false) String keyword,
             @PageableDefault(size = 20) Pageable pageable
     ) {
         return BaseResponse.success(service.findSkus(
@@ -80,8 +80,8 @@ public class WarehouseInventoryController {
     @GetMapping("/skus/facets")
     public BaseResponse<WarehouseInventoryDto.SkuFacetsRes> getSkuFacets(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "단일 카테고리 파라미터") @RequestParam(required = false) String category,
-            @Parameter(description = "검색 키워드") @RequestParam(required = false) String keyword
+            @Parameter(description = "단일 카테고리 파라미터", example = "상의") @RequestParam(required = false) String category,
+            @Parameter(description = "검색 키워드", example = "코튼") @RequestParam(required = false) String keyword
     ) {
         return BaseResponse.success(service.findSkuFacets(
                 me.getLocationCode(), category, keyword
@@ -97,7 +97,7 @@ public class WarehouseInventoryController {
     @GetMapping("/{itemCode}/skus")
     public BaseResponse<List<WarehouseInventoryDto.SkuRes>> getWarehouseInventorySkus(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "품목 코드 (PRD-{L1}-{L2}-{seq})") @PathVariable String itemCode
+            @Parameter(description = "품목 코드 (PRD-{L1}-{L2}-{seq})", example = "PRD-TOP-SS-001") @PathVariable String itemCode
     ) {
         return BaseResponse.success(service.getItemSkus(me.getLocationCode(), itemCode));
     }

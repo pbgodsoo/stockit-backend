@@ -30,10 +30,10 @@ public class PurchaseOrderController {
     @Operation(summary = "발주 목록 조회", description = "거래처/상태/기간 필터와 페이징을 지원한다. 기본 정렬은 createdAt DESC.")
     @GetMapping
     public BaseResponse<Page<PurchaseOrderDto.ListRes>> list(
-            @Parameter(description = "거래처 코드 필터") @RequestParam(required = false) String vendorCode,
-            @Parameter(description = "발주 상태 필터 (PENDING/APPROVED/READY_TO_SHIP/IN_TRANSIT/ARRIVED/COMPLETED/CANCELLED)") @RequestParam(required = false) PurchaseOrderStatus status,
-            @Parameter(description = "발주 생성일 시작 (yyyy-MM-dd)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @Parameter(description = "발주 생성일 종료 (yyyy-MM-dd)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @Parameter(description = "거래처 코드 필터", example = "VND-001") @RequestParam(required = false) String vendorCode,
+            @Parameter(description = "발주 상태 필터 (PENDING/APPROVED/READY_TO_SHIP/IN_TRANSIT/ARRIVED/COMPLETED/CANCELLED)", example = "PENDING") @RequestParam(required = false) PurchaseOrderStatus status,
+            @Parameter(description = "발주 생성일 시작 (yyyy-MM-dd)", example = "2026-05-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "발주 생성일 종료 (yyyy-MM-dd)", example = "2026-05-27") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return BaseResponse.success(service.findAll(vendorCode, status, from, to, pageable));
     }
@@ -41,7 +41,7 @@ public class PurchaseOrderController {
     @Operation(summary = "발주 단건 상세 조회", description = "발주 코드(PO-{YYYYMMDD}-{NNNNN}) 로 헤더 + 라인 + 거래처 스냅샷을 반환한다.")
     @GetMapping("/{code}")
     public BaseResponse<PurchaseOrderDto.DetailRes> detail(
-            @Parameter(description = "발주 코드 (PO-{YYYYMMDD}-{NNNNN})") @PathVariable String code) {
+            @Parameter(description = "발주 코드 (PO-{YYYYMMDD}-{NNNNN})", example = "PO-20260520-00001") @PathVariable String code) {
         return BaseResponse.success(service.findByCode(code));
     }
 
@@ -64,7 +64,7 @@ public class PurchaseOrderController {
     @Operation(summary = "발주 수정", description = "PENDING 상태 발주의 라인(수량/단가)·창고·메모를 수정한다. APPROVED 이후 단계는 변경 불가.")
     @PatchMapping("/{code}")
     public BaseResponse<PurchaseOrderDto.DetailRes> update(
-            @Parameter(description = "발주 코드") @PathVariable String code,
+            @Parameter(description = "발주 코드", example = "PO-20260520-00001") @PathVariable String code,
             @Valid @RequestBody PurchaseOrderDto.UpdateReq req) {
         return BaseResponse.success(service.update(code, req));
     }
@@ -73,7 +73,7 @@ public class PurchaseOrderController {
     @PostMapping("/{code}/complete")
     public BaseResponse<PurchaseOrderDto.DetailRes> complete(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "발주 코드") @PathVariable String code) {
+            @Parameter(description = "발주 코드", example = "PO-20260520-00001") @PathVariable String code) {
         return BaseResponse.success(service.complete(code, me));
     }
 
@@ -81,7 +81,7 @@ public class PurchaseOrderController {
     @PostMapping("/{code}/cancel")
     public BaseResponse<PurchaseOrderDto.DetailRes> cancel(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "발주 코드") @PathVariable String code,
+            @Parameter(description = "발주 코드", example = "PO-20260520-00001") @PathVariable String code,
             @Valid @RequestBody PurchaseOrderDto.CancelReq req) {
         return BaseResponse.success(service.cancel(code, req, me));
     }

@@ -48,9 +48,9 @@ public class StoreSaleController {
     @GetMapping
     public BaseResponse<List<StoreSaleDto.SaleListRes>> list(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "조회 시작일 (yyyy-MM-dd)", example = "2024-01-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @Parameter(description = "조회 종료일 (yyyy-MM-dd)", example = "2024-12-31") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @Parameter(description = "판매번호·상품명 검색 키워드") @RequestParam(required = false) String keyword) {
+            @Parameter(description = "조회 시작일 (yyyy-MM-dd)", example = "2026-05-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "조회 종료일 (yyyy-MM-dd)", example = "2026-05-27") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @Parameter(description = "판매번호·상품명 검색 키워드", example = "코튼") @RequestParam(required = false) String keyword) {
         List<StoreSaleDto.SaleListRes> result = service.findAll(me, from, to, keyword);
         return BaseResponse.success(result);
     }

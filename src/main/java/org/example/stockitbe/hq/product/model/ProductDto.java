@@ -157,7 +157,7 @@ public class ProductDto {
         private ProductStatus status;
         @Schema(description = "하위 SKU 수", example = "4")
         private long skuCount;
-        @Schema(description = "수정 일시")
+        @Schema(description = "수정 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date updatedAt;
 
         public static ProductMasterRes from(ProductMaster m,
@@ -227,7 +227,7 @@ public class ProductDto {
         private Long unitPrice;
         @Schema(description = "SKU 상태", example = "ACTIVE")
         private ProductStatus status;
-        @Schema(description = "수정 일시")
+        @Schema(description = "수정 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date updatedAt;
 
         public static ProductSkuRes from(ProductSku sku) {

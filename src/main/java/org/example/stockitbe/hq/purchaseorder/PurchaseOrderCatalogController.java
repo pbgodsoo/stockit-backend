@@ -29,12 +29,12 @@ public class PurchaseOrderCatalogController {
     )
     @GetMapping
     public BaseResponse<Page<PurchaseOrderCatalogDto.SkuRowRes>> getCatalog(
-            @Parameter(description = "거래처 코드 필터") @RequestParam(required = false) String vendorCode,
-            @Parameter(description = "검색 키워드 (품목명·SKU 코드)") @RequestParam(required = false) String keyword,
-            @Parameter(description = "색상 필터 (BLK/WHT/NVY 등)") @RequestParam(required = false) String color,
-            @Parameter(description = "사이즈 필터 (S/M/L/XL). Pageable.size 와 충돌 방지를 위해 skuSize 로 명명") @RequestParam(name = "skuSize", required = false) String skuSize,
-            @Parameter(description = "안전재고 미달 SKU 만 노출 (true 시)") @RequestParam(required = false, defaultValue = "false") boolean shortageOnly,
-            @Parameter(description = "창고 ID 필터") @RequestParam(required = false) Long warehouseId,
+            @Parameter(description = "거래처 코드 필터", example = "VND-001") @RequestParam(required = false) String vendorCode,
+            @Parameter(description = "검색 키워드 (품목명·SKU 코드)", example = "코튼") @RequestParam(required = false) String keyword,
+            @Parameter(description = "색상 필터 (BLK/WHT/NVY 등)", example = "BLK") @RequestParam(required = false) String color,
+            @Parameter(description = "사이즈 필터 (S/M/L/XL). Pageable.size 와 충돌 방지를 위해 skuSize 로 명명", example = "M") @RequestParam(name = "skuSize", required = false) String skuSize,
+            @Parameter(description = "안전재고 미달 SKU 만 노출 (true 시)", example = "false") @RequestParam(required = false, defaultValue = "false") boolean shortageOnly,
+            @Parameter(description = "창고 ID 필터", example = "21") @RequestParam(required = false) Long warehouseId,
             @PageableDefault(size = 50, sort = "id", direction = Sort.Direction.ASC) Pageable pageable) {
         return BaseResponse.success(service.getCatalog(
                 vendorCode, keyword, color, skuSize, shortageOnly, warehouseId, pageable));
@@ -46,8 +46,8 @@ public class PurchaseOrderCatalogController {
     )
     @GetMapping("/facets")
     public BaseResponse<PurchaseOrderCatalogDto.FacetsRes> getCatalogFacets(
-            @Parameter(description = "거래처 코드 필터") @RequestParam(required = false) String vendorCode,
-            @Parameter(description = "검색 키워드 (품목명·SKU 코드)") @RequestParam(required = false) String keyword) {
+            @Parameter(description = "거래처 코드 필터", example = "VND-001") @RequestParam(required = false) String vendorCode,
+            @Parameter(description = "검색 키워드 (품목명·SKU 코드)", example = "코튼") @RequestParam(required = false) String keyword) {
         return BaseResponse.success(service.getFacets(vendorCode, keyword));
     }
 }

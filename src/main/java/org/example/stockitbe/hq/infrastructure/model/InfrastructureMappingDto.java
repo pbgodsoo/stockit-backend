@@ -33,7 +33,7 @@ public class InfrastructureMappingDto {
         private String backupWarehouseCode;
         @Schema(description = "예비 창고명", example = "경기 물류창고")
         private String backupWarehouseName;
-        @Schema(description = "매장 정보 수정 일시")
+        @Schema(description = "매장 정보 수정 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date updatedAt;
     }
 

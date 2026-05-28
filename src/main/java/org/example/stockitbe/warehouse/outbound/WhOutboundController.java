@@ -35,10 +35,10 @@ public class WhOutboundController {
     @GetMapping
     public BaseResponse<List<WhOutboundDto.ListRes>> list(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "출고 상태 (PENDING / IN_TRANSIT / ARRIVED / CANCELLED)") @RequestParam(required = false) String status,
-            @Parameter(description = "조회 시작일 (yyyy-MM-dd)", example = "2024-01-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @Parameter(description = "조회 종료일 (yyyy-MM-dd)", example = "2024-12-31") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @Parameter(description = "출고번호·참조번호·목적지 검색 키워드") @RequestParam(required = false) String keyword
+            @Parameter(description = "출고 상태 (PENDING / IN_TRANSIT / ARRIVED / CANCELLED)", example = "IN_TRANSIT") @RequestParam(required = false) String status,
+            @Parameter(description = "조회 시작일 (yyyy-MM-dd)", example = "2026-05-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "조회 종료일 (yyyy-MM-dd)", example = "2026-05-27") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @Parameter(description = "출고번호·참조번호·목적지 검색 키워드", example = "OUT-20260527") @RequestParam(required = false) String keyword
     ) {
         return BaseResponse.success(whOutboundService.list(me, status, from, to, keyword));
     }

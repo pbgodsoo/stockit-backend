@@ -1,5 +1,6 @@
 package org.example.stockitbe.hq.purchaseorder.model;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -15,21 +16,34 @@ import java.util.List;
  */
 public class PurchaseOrderCatalogDto {
 
+    @Schema(description = "발주 카탈로그 SKU 한 행 — vendor_product × product_sku × inventory 평탄화")
     @Getter
     @AllArgsConstructor
     @Builder
     public static class SkuRowRes {
+        @Schema(description = "거래처 코드", example = "VND-001")
         private String vendorCode;
+        @Schema(description = "거래처 이름", example = "(주)테크서플라이")
         private String vendorName;
+        @Schema(description = "거래처 상품 코드", example = "VP-TOP-SS-001-V00")
         private String vendorProductCode;
+        @Schema(description = "본사 상품 코드", example = "PRD-TOP-SS-001")
         private String productCode;
+        @Schema(description = "상품명", example = "코튼 에센셜 크루 반팔")
         private String productName;
+        @Schema(description = "SKU 코드", example = "PRD-TOP-SS-001-BLK-M")
         private String skuCode;
+        @Schema(description = "색상 코드 (3자리)", example = "BLK")
         private String color;
+        @Schema(description = "사이즈", example = "M")
         private String size;
+        @Schema(description = "화면 표기용 옵션 문자열", example = "BLK/M")
         private String displayOption;
+        @Schema(description = "SKU 표준 단가 (KRW)", example = "21100")
         private Long unitPrice;
+        @Schema(description = "거래처 계약 단가 (KRW). 표준 단가와 다를 수 있음", example = "21100")
         private Long contractUnitPrice;
+        @Schema(description = "선택 창고의 가용재고 (warehouseId 미지정 시 전 창고 합계)", example = "342")
         private Long availableQty;
 
         public static SkuRowRes from(SkuRowProjection p) {
@@ -50,11 +64,14 @@ public class PurchaseOrderCatalogDto {
         }
     }
 
+    @Schema(description = "카탈로그 facet 응답 — 현재 조건 안에서 칩 필터에 노출할 색상·사이즈 distinct")
     @Getter
     @AllArgsConstructor
     @Builder
     public static class FacetsRes {
+        @Schema(description = "노출 가능한 색상 코드 목록", example = "[\"BLK\",\"WHT\",\"NVY\",\"GRY\"]")
         private List<String> colors;
+        @Schema(description = "노출 가능한 사이즈 목록", example = "[\"S\",\"M\",\"L\",\"XL\"]")
         private List<String> sizes;
     }
 }

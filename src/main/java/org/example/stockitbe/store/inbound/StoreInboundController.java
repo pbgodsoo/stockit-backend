@@ -29,10 +29,10 @@ public class StoreInboundController {
     @GetMapping
     public BaseResponse<List<StoreInboundDto.ListRes>> list(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "입고 상태 (PENDING / RECEIVED / CANCELLED)") @RequestParam(required = false) String status,
-            @Parameter(description = "조회 시작일 (yyyy-MM-dd)", example = "2024-01-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @Parameter(description = "조회 종료일 (yyyy-MM-dd)", example = "2024-12-31") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @Parameter(description = "입고번호·출고번호 검색 키워드") @RequestParam(required = false) String keyword
+            @Parameter(description = "입고 상태 (PENDING / RECEIVED / CANCELLED)", example = "PENDING") @RequestParam(required = false) String status,
+            @Parameter(description = "조회 시작일 (yyyy-MM-dd)", example = "2026-05-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "조회 종료일 (yyyy-MM-dd)", example = "2026-05-27") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @Parameter(description = "입고번호·출고번호 검색 키워드", example = "INB-20260527") @RequestParam(required = false) String keyword
     ) {
         return BaseResponse.success(storeInboundService.list(me, status, from, to, keyword));
     }

@@ -286,7 +286,7 @@ public class WarehouseTransferDto {
         private String toWarehouseName;
         @Schema(description = "요청자", example = "본사 관리자")
         private String requestedBy;
-        @Schema(description = "요청 일시")
+        @Schema(description = "요청 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date requestedAt;
         @Schema(description = "재고이동 상태. READY_TO_SHIP, IN_TRANSIT, ARRIVED 중 하나", example = "READY_TO_SHIP")
         private String status;
@@ -349,7 +349,7 @@ public class WarehouseTransferDto {
         private String toWarehouseName;
         @Schema(description = "요청자", example = "본사 관리자")
         private String requestedBy;
-        @Schema(description = "요청 일시")
+        @Schema(description = "요청 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date requestedAt;
         @Schema(description = "재고이동 상태. READY_TO_SHIP, IN_TRANSIT, ARRIVED 중 하나", example = "READY_TO_SHIP")
         private String status;
@@ -472,7 +472,7 @@ public class WarehouseTransferDto {
         private Integer safetyStock;
         @Schema(description = "재고 상태", example = "정상")
         private String status;
-        @Schema(description = "재고 최신 수정 일시")
+        @Schema(description = "재고 최신 수정 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date updatedAt;
 
         public static WarehouseSkuDistributionRes from(

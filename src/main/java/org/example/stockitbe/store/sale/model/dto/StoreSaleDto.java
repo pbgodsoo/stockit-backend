@@ -51,7 +51,7 @@ public class StoreSaleDto {
         private String saleNo;
         @Schema(description = "매장 코드", example = "STORE-001")
         private String storeCode;
-        @Schema(description = "판매 일시")
+        @Schema(description = "판매 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date soldAt;
         @Schema(description = "총 판매 수량", example = "5")
         private Integer totalQuantity;
@@ -81,7 +81,7 @@ public class StoreSaleDto {
         private String saleNo;
         @Schema(description = "매장 코드", example = "STORE-001")
         private String storeCode;
-        @Schema(description = "판매 일시")
+        @Schema(description = "판매 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date soldAt;
         @Schema(description = "총 판매 수량", example = "5")
         private Integer totalQuantity;
@@ -111,7 +111,7 @@ public class StoreSaleDto {
         private String saleNo;
         @Schema(description = "매장 코드", example = "STORE-001")
         private String storeCode;
-        @Schema(description = "판매 일시")
+        @Schema(description = "판매 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date soldAt;
         @Schema(description = "총 판매 수량", example = "5")
         private Integer totalQuantity;

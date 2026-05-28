@@ -23,7 +23,7 @@ public class StoreInboundDto {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class ActionReq {
-        @Schema(description = "처리 사유 (선택)")
+        @Schema(description = "처리 사유 (선택)", example = "샘플 메모")
         private String reason;
     }
 
@@ -39,17 +39,17 @@ public class StoreInboundDto {
         private String outboundNo;
         @Schema(description = "출고 상태")
         private OutboundStatus outboundStatus;
-        @Schema(description = "출고 창고 ID")
+        @Schema(description = "출고 창고 ID", example = "1")
         private Long fromWarehouseId;
         @Schema(description = "출고 창고명", example = "경기 물류센터")
         private String fromWarehouseName;
         @Schema(description = "입고 상태")
         private StoreInboundStatus status;
-        @Schema(description = "예상 도착일")
+        @Schema(description = "예상 도착일", example = "2026-05-27T09:00:00.000+09:00")
         private Date expectedArrivalAt;
         @Schema(description = "총 예정 수량", example = "50")
         private Integer totalExpectedQuantity;
-        @Schema(description = "발주 요청 일시")
+        @Schema(description = "발주 요청 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date requestedAt;
 
         public static ListRes from(StoreInboundHeader header, OutboundStatus outboundStatus, String fromWarehouseName) {
@@ -76,13 +76,13 @@ public class StoreInboundDto {
         private String inboundNo;
         @Schema(description = "소스 참조번호", example = "ORD-20240101-001")
         private String sourceRefNo;
-        @Schema(description = "소스 참조 ID")
+        @Schema(description = "소스 참조 ID", example = "1")
         private Long sourceRefId;
         @Schema(description = "연계 출고번호", example = "OUT-20240101-001")
         private String outboundNo;
-        @Schema(description = "매장 ID")
+        @Schema(description = "매장 ID", example = "1")
         private Long storeId;
-        @Schema(description = "출고 창고 ID")
+        @Schema(description = "출고 창고 ID", example = "1")
         private Long fromWarehouseId;
         @Schema(description = "출고 창고명", example = "경기 물류센터")
         private String fromWarehouseName;
@@ -92,11 +92,11 @@ public class StoreInboundDto {
         private Integer totalSkuCount;
         @Schema(description = "총 예정 수량", example = "50")
         private Integer totalExpectedQuantity;
-        @Schema(description = "예상 도착일")
+        @Schema(description = "예상 도착일", example = "2026-05-27T09:00:00.000+09:00")
         private Date expectedArrivalAt;
-        @Schema(description = "발주 요청 일시")
+        @Schema(description = "발주 요청 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date requestedAt;
-        @Schema(description = "입고 확정 일시")
+        @Schema(description = "입고 확정 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date receivedAt;
         @Schema(description = "요청자 사번", example = "EMP-001")
         private String requestedByMemberId;
@@ -106,9 +106,9 @@ public class StoreInboundDto {
         private String receivedByMemberId;
         @Schema(description = "입고 확정자 이름", example = "김영희")
         private String receivedByName;
-        @Schema(description = "배송 그룹 번호")
+        @Schema(description = "배송 그룹 번호", example = "샘플-001")
         private String deliveryGroupNo;
-        @Schema(description = "메모")
+        @Schema(description = "메모", example = "샘플 메모")
         private String memo;
         @Schema(description = "연계 출고 요약")
         private OutboundSummaryRes outbound;
@@ -159,9 +159,9 @@ public class StoreInboundDto {
     @Getter
     @Builder
     public static class ItemRes {
-        @Schema(description = "아이템 ID")
+        @Schema(description = "아이템 ID", example = "1")
         private Long id;
-        @Schema(description = "SKU ID")
+        @Schema(description = "SKU ID", example = "1")
         private Long skuId;
         @Schema(description = "SKU 코드", example = "SKU-RED-M")
         private String skuCode;
@@ -181,7 +181,7 @@ public class StoreInboundDto {
         private Long unitPrice;
         @Schema(description = "예정 수량", example = "10")
         private Integer expectedQuantity;
-        @Schema(description = "메모")
+        @Schema(description = "메모", example = "샘플 메모")
         private String memo;
 
         public static ItemRes from(StoreInboundItem item) {
@@ -206,17 +206,17 @@ public class StoreInboundDto {
     @Getter
     @Builder
     public static class StatusHistoryRes {
-        @Schema(description = "이력 ID")
+        @Schema(description = "이력 ID", example = "1")
         private Long id;
         @Schema(description = "입고 상태")
         private StoreInboundStatus status;
-        @Schema(description = "변경 일시")
+        @Schema(description = "변경 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date changedAt;
         @Schema(description = "변경자 사번", example = "EMP-001")
         private String changedByMemberId;
         @Schema(description = "변경자 이름", example = "홍길동")
         private String changedByName;
-        @Schema(description = "변경 사유")
+        @Schema(description = "변경 사유", example = "샘플 메모")
         private String reason;
 
         public static StatusHistoryRes from(StoreInboundStatusHistory history) {
@@ -245,17 +245,17 @@ public class StoreInboundDto {
     @Getter
     @Builder
     public static class OutboundStatusHistoryRes {
-        @Schema(description = "이력 ID")
+        @Schema(description = "이력 ID", example = "1")
         private Long id;
         @Schema(description = "출고 상태")
         private OutboundStatus status;
-        @Schema(description = "변경 일시")
+        @Schema(description = "변경 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date changedAt;
         @Schema(description = "변경자 사번", example = "EMP-001")
         private String changedByMemberId;
         @Schema(description = "변경자 이름", example = "홍길동")
         private String changedByName;
-        @Schema(description = "변경 사유")
+        @Schema(description = "변경 사유", example = "샘플 메모")
         private String reason;
 
         public static OutboundStatusHistoryRes from(WhOutboundStatusHistory history) {

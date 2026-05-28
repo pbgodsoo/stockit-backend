@@ -45,11 +45,11 @@ public class CircularSaleController {
             @Parameter(description = "페이지 번호 (0부터 시작)", example = "0") @RequestParam(defaultValue = "0") Integer page,
             @Parameter(description = "페이지 크기", example = "20") @RequestParam(defaultValue = "20") Integer size,
             @Parameter(description = "정렬 조건 (필드,방향)", example = "soldAt,desc") @RequestParam(defaultValue = "soldAt,desc") String sort,
-            @Parameter(description = "조회 시작일 (yyyy-MM-dd)", example = "2024-01-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @Parameter(description = "조회 종료일 (yyyy-MM-dd)", example = "2024-12-31") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @Parameter(description = "거래처 코드 필터") @RequestParam(required = false) String buyerCode,
-            @Parameter(description = "소재구분 필터") @RequestParam(required = false) String materialType,
-            @Parameter(description = "판매번호·거래처명 검색 키워드") @RequestParam(required = false) String keyword
+            @Parameter(description = "조회 시작일 (yyyy-MM-dd)", example = "2026-05-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "조회 종료일 (yyyy-MM-dd)", example = "2026-05-27") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @Parameter(description = "거래처 코드 필터", example = "RCV-00001") @RequestParam(required = false) String buyerCode,
+            @Parameter(description = "소재구분 필터", example = "POLYESTER") @RequestParam(required = false) String materialType,
+            @Parameter(description = "판매번호·거래처명 검색 키워드", example = "그린리사이클") @RequestParam(required = false) String keyword
     ) {
         CircularSaleDto.ListPageRes result = circularSaleService.list(page, size, sort, from, to, buyerCode, materialType, keyword);
         return BaseResponse.success(result);

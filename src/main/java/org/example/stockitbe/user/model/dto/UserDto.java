@@ -89,7 +89,7 @@ public class UserDto {
         @Schema(description = "회원 상태", example = "PENDING")
         private UserStatus userStatus;
 
-        @Schema(description = "신청 일시")
+        @Schema(description = "신청 일시", example = "2026-05-27T09:00:00.000+09:00")
         private LocalDateTime appliedAt;
 
         public static SignupRes from(User entity) {

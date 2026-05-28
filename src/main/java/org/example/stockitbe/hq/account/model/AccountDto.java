@@ -37,9 +37,9 @@ public class AccountDto {
         @Schema(description = "회원 상태", example = "PENDING",
                 allowableValues = {"PENDING", "APPROVED", "REJECTED", "WITHDRAWN"})
         private UserStatus status;
-        @Schema(description = "신청 일시")
+        @Schema(description = "신청 일시", example = "2026-05-27T09:00:00.000+09:00")
         private LocalDateTime appliedAt;
-        @Schema(description = "처리 일시 (PENDING은 null)")
+        @Schema(description = "처리 일시 (PENDING은 null)", example = "2026-05-27T09:00:00.000+09:00")
         private LocalDateTime processedAt;
 
         public static PendingRes from(User entity) {
@@ -75,7 +75,7 @@ public class AccountDto {
         private UserRole role;
         @Schema(description = "변경된 상태", example = "APPROVED")
         private UserStatus status;
-        @Schema(description = "처리 일시")
+        @Schema(description = "처리 일시", example = "2026-05-27T09:00:00.000+09:00")
         private LocalDateTime processedAt;
 
         public static ProcessRes from(User entity) {
