@@ -77,7 +77,7 @@ public class InfrastructureDto {
         private String primaryWarehouseCode;
         @Schema(description = "매장에 매핑된 주 창고명. 매장 응답에서 사용", example = "서울 물류창고")
         private String primaryWarehouseName;
-        @Schema(description = "수정 일시")
+        @Schema(description = "수정 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date updatedAt;
 
         public static Res from(Infrastructure infra, Long mappedStoreCount, StoreWarehouseMap primaryWarehouseMap) {
@@ -100,13 +100,18 @@ public class InfrastructureDto {
         }
     }
 
+    @Schema(description = "회원가입용 매장/창고 공개 응답 — 비로그인 상태에서 노출")
     @Getter
     @AllArgsConstructor
     @Builder
     public static class PublicRes {
-        private String code;            // WH-SL-0001
-        private LocationType locationType;  // STORE | WAREHOUSE
-        private String name;            // 서울 도심 풀필먼트 허브
-        private String region;          // 서울
+        @Schema(description = "거점 코드", example = "WH-GW-0001")
+        private String code;
+        @Schema(description = "거점 유형", example = "WAREHOUSE", allowableValues = {"STORE","WAREHOUSE"})
+        private LocationType locationType;
+        @Schema(description = "거점 이름", example = "강원 강릉 동해안 물류허브")
+        private String name;
+        @Schema(description = "지역 한글명", example = "강원")
+        private String region;
     }
 }

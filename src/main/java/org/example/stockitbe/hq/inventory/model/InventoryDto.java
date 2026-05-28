@@ -15,89 +15,138 @@ import java.util.List;
 public class InventoryDto {
 
     // 전사 재고(품목 단위) 응답 DTO
+    @Schema(description = "전사 재고 한 행 — 품목 단위 집계 (거점 그룹별 1개 row)")
     @Getter
     @Builder
     @AllArgsConstructor
     public static class CompanyWideRes {
+        @Schema(description = "품목 코드", example = "PRD-TOP-SS-001")
         private String itemCode;
+        @Schema(description = "상위 카테고리 한글명", example = "상의")
         private String parentCategory;
+        @Schema(description = "하위 카테고리 한글명", example = "반팔")
         private String childCategory;
+        @Schema(description = "품목명", example = "코튼 에센셜 크루 반팔")
         private String itemName;
+        @Schema(description = "실재고 합계 (해당 거점 그룹 안 모든 SKU 합)", example = "1250")
         private Integer actualStock;
+        @Schema(description = "가용재고 합계", example = "1180")
         private Integer availableStock;
+        @Schema(description = "안전재고 임계값", example = "100")
         private Integer safetyStock;
+        @Schema(description = "재고 상태 한국어 라벨", example = "정상", allowableValues = {"정상","부족","품절"})
         private String status;
+        @Schema(description = "마지막 변동 시각", example = "2026-05-25T13:21:20.000+09:00")
         private Date updatedAt;
     }
 
     // 전사 재고 SKU 상세 응답 DTO
+    @Schema(description = "전사 재고 SKU 상세 — 특정 품목 하위 SKU 한 행")
     @Getter
     @Builder
     @AllArgsConstructor
     public static class CompanyWideSkuDetailRes {
+        @Schema(description = "SKU 코드", example = "PRD-TOP-SS-001-BLK-M")
         private String skuCode;
+        @Schema(description = "색상 (3자리 코드)", example = "BLK")
         private String color;
+        @Schema(description = "사이즈", example = "M")
         private String size;
+        @Schema(description = "SKU 단가 (KRW)", example = "21100")
         private Long unitPrice;
+        @Schema(description = "실재고 수량", example = "125")
         private Integer actualStock;
+        @Schema(description = "가용재고 수량", example = "125")
         private Integer availableStock;
+        @Schema(description = "안전재고 임계값", example = "20")
         private Integer safetyStock;
+        @Schema(description = "재고 상태 한국어 라벨", example = "정상", allowableValues = {"정상","부족","품절"})
         private String status;
+        @Schema(description = "마지막 변동 시각", example = "2026-05-25T13:21:20.000+09:00")
         private Date updatedAt;
     }
 
     // 위치 필터 옵션 DTO
     // region: 한글 지역명 (예: "서울"/"경기"). FE 거점 트리 지역 그룹화용.
+    @Schema(description = "거점 필터 옵션 1건 — FE 거점 트리에서 지역으로 그룹화")
     @Getter
     @Builder
     @AllArgsConstructor
     public static class LocationOptionRes {
+        @Schema(description = "거점 PK (infrastructure.id)", example = "21")
         private Long id;
+        @Schema(description = "거점 코드", example = "WH-GW-0001")
         private String code;
+        @Schema(description = "거점 이름", example = "강원 강릉 동해안 물류허브")
         private String name;
+        @Schema(description = "지역 한글명 (FE 그룹화 키)", example = "강원")
         private String region;
     }
 
     // 전사 재고 SKU 단위 응답 DTO (모드 토글 SKU 모드용 — 마스터 무관 페이징)
     // updatedAt 응답 X (FE 컬럼 제거 결정).
+    @Schema(description = "전사 재고 SKU 한 행 — 마스터 무관 SKU 모드 평탄 row")
     @Getter
     @Builder
     @AllArgsConstructor
     public static class CompanyWideSkuRowRes {
+        @Schema(description = "SKU 코드", example = "PRD-TOP-SS-001-BLK-M")
         private String skuCode;
+        @Schema(description = "품목 코드", example = "PRD-TOP-SS-001")
         private String itemCode;
+        @Schema(description = "품목명", example = "코튼 에센셜 크루 반팔")
         private String itemName;
+        @Schema(description = "상위 카테고리", example = "상의")
         private String parentCategory;
+        @Schema(description = "하위 카테고리", example = "반팔")
         private String childCategory;
+        @Schema(description = "색상 코드", example = "BLK")
         private String color;
+        @Schema(description = "사이즈", example = "M")
         private String size;
+        @Schema(description = "실재고 수량", example = "125")
         private Integer actualStock;
+        @Schema(description = "가용재고 수량", example = "125")
         private Integer availableStock;
+        @Schema(description = "안전재고 임계값", example = "20")
         private Integer safetyStock;
+        @Schema(description = "재고 상태 한국어 라벨 (SQL CASE)", example = "정상", allowableValues = {"정상","부족","품절"})
         private String status;     // "정상"/"부족"/"품절" — SQL CASE 라벨
     }
 
     // 전사 재고 SKU facets 응답 DTO (칩 필터용 — 거점/카테고리/검색 조건 안의 distinct 색상/사이즈)
+    @Schema(description = "전사 재고 SKU 화면의 색상·사이즈 칩 필터 옵션")
     @Getter
     @Builder
     @AllArgsConstructor
     public static class CompanyWideSkuFacetsRes {
+        @Schema(description = "노출 가능 색상 코드 목록", example = "[\"BLK\",\"WHT\",\"NVY\",\"GRY\"]")
         private List<String> colors;
+        @Schema(description = "노출 가능 사이즈 목록", example = "[\"S\",\"M\",\"L\",\"XL\"]")
         private List<String> sizes;
     }
 
     // 전사 재고 SKU 페이지 응답 DTO
+    @Schema(description = "전사 재고 SKU 페이지 응답 — 페이지 메타 + 거점 옵션 패키지")
     @Getter
     @Builder
     @AllArgsConstructor
     public static class CompanyWideSkuPageRes {
+        @Schema(description = "현재 페이지 행 목록")
         private List<CompanyWideSkuRowRes> items;
+        @Schema(description = "FE 거점 필터에 노출할 거점 옵션 (보통 전체 STORE+WAREHOUSE 또는 권한 안 거점)")
         private List<LocationOptionRes> locationOptions;
+        @Schema(description = "현재 페이지 번호 (0부터)", example = "0")
         private Integer page;
+        @Schema(description = "페이지 크기", example = "20")
         private Integer size;
+        @Schema(description = "전체 row 수", example = "236280")
         private Long totalElements;
+        @Schema(description = "전체 페이지 수", example = "11814")
         private Integer totalPages;
+        @Schema(description = "다음 페이지 존재 여부", example = "true")
         private Boolean hasNext;
+        @Schema(description = "이전 페이지 존재 여부", example = "false")
         private Boolean hasPrevious;
 
         public static CompanyWideSkuPageRes from(Page<CompanyWideSkuRowRes> page,
@@ -116,17 +165,26 @@ public class InventoryDto {
     }
 
     // 전사 재고 페이지 응답 DTO
+    @Schema(description = "전사 재고 품목 단위 페이지 응답 — 페이지 메타 + 거점 옵션 패키지")
     @Getter
     @Builder
     @AllArgsConstructor
     public static class CompanyWidePageRes {
+        @Schema(description = "현재 페이지 품목 행 목록")
         private List<CompanyWideRes> items;
+        @Schema(description = "FE 거점 필터 옵션 (보통 STORE+WAREHOUSE 전체)")
         private List<LocationOptionRes> locationOptions;
+        @Schema(description = "현재 페이지 번호 (0부터)", example = "0")
         private Integer page;
+        @Schema(description = "페이지 크기", example = "20")
         private Integer size;
+        @Schema(description = "전체 row 수", example = "150")
         private Long totalElements;
+        @Schema(description = "전체 페이지 수", example = "8")
         private Integer totalPages;
+        @Schema(description = "다음 페이지 존재 여부", example = "true")
         private Boolean hasNext;
+        @Schema(description = "이전 페이지 존재 여부", example = "false")
         private Boolean hasPrevious;
 
         // 페이지 결과 + 위치 옵션 목록을 응답 DTO로 변환한다.
@@ -177,7 +235,7 @@ public class InventoryDto {
         private Integer availableStock;
         @Schema(description = "순환재고 전환 가능 수량", example = "80")
         private Integer convertibleStock;
-        @Schema(description = "재고 수정 일시")
+        @Schema(description = "재고 수정 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date updatedAt;
         @Schema(description = "충족한 순환재고 후보 조건 코드 목록", example = "[1,2]")
         private List<Integer> matchedConditionCodes;

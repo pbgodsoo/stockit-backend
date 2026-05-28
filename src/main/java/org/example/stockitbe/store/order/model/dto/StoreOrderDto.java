@@ -67,7 +67,7 @@ public class StoreOrderDto {
         private String storeCode;
         @Schema(description = "매장명", example = "강남점")
         private String storeName;
-        @Schema(description = "발주 요청 일시")
+        @Schema(description = "발주 요청 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date requestedAt;
         @Schema(description = "요청자 사번", example = "EMP-001")
         private String requestedByMemberId;
@@ -79,9 +79,9 @@ public class StoreOrderDto {
         private Integer totalSkuCount;
         @Schema(description = "총 요청 수량", example = "50")
         private Integer totalRequestedQuantity;
-        @Schema(description = "발주 메모")
+        @Schema(description = "발주 메모", example = "샘플 메모")
         private String memo;
-        @Schema(description = "취소 사유")
+        @Schema(description = "취소 사유", example = "샘플 메모")
         private String cancelReason;
         @Schema(description = "총 입고 건수", example = "2")
         private Integer totalInboundCount;
@@ -157,7 +157,7 @@ public class StoreOrderDto {
     @AllArgsConstructor
     @Builder
     public static class CreateLineRes {
-        @Schema(description = "SKU ID")
+        @Schema(description = "SKU ID", example = "1")
         private Long skuId;
         @Schema(description = "SKU 코드", example = "SKU-RED-M")
         private String skuCode;
@@ -203,13 +203,13 @@ public class StoreOrderDto {
         private StoreOrderHistoryType historyType;
         @Schema(description = "상태", example = "REQUESTED")
         private String status;
-        @Schema(description = "변경 일시")
+        @Schema(description = "변경 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date changedAt;
         @Schema(description = "변경자 사번", example = "EMP-001")
         private String changedByMemberId;
         @Schema(description = "변경자 이름", example = "홍길동")
         private String changedByName;
-        @Schema(description = "변경 사유")
+        @Schema(description = "변경 사유", example = "샘플 메모")
         private String reason;
 
         public static CreateHistoryRes from(StoreOrderStatusHistory history) {
@@ -230,7 +230,7 @@ public class StoreOrderDto {
     @AllArgsConstructor
     @Builder
     public static class UpdateReq {
-        @Schema(description = "발주 메모")
+        @Schema(description = "발주 메모", example = "샘플 메모")
         private String memo;
         @Valid
         @NotEmpty
@@ -345,7 +345,7 @@ public class StoreOrderDto {
         private String storeCode;
         @Schema(description = "매장명", example = "강남점")
         private String storeName;
-        @Schema(description = "발주 요청 일시")
+        @Schema(description = "발주 요청 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date requestedAt;
         @Schema(description = "요청자 이름", example = "홍길동")
         private String requestedBy;
@@ -355,9 +355,9 @@ public class StoreOrderDto {
         private Integer totalSkuCount;
         @Schema(description = "총 요청 수량", example = "50")
         private Integer totalRequestedQuantity;
-        @Schema(description = "메모")
+        @Schema(description = "메모", example = "샘플 메모")
         private String memo;
-        @Schema(description = "취소 사유")
+        @Schema(description = "취소 사유", example = "샘플 메모")
         private String cancelReason;
         @Schema(description = "발주 헤드라인 (첫 상품명 외 n건)", example = "반팔 티셔츠 외 2건")
         private String headline;
@@ -398,9 +398,9 @@ public class StoreOrderDto {
         private String inboundNo;
         @Schema(description = "출고번호", example = "OUT-20240101-001")
         private String outboundNo;
-        @Schema(description = "출고 창고 ID")
+        @Schema(description = "출고 창고 ID", example = "1")
         private Long fromWarehouseId;
-        @Schema(description = "예상 도착일")
+        @Schema(description = "예상 도착일", example = "2026-05-27T09:00:00.000+09:00")
         private Date expectedArrivalAt;
         @Schema(description = "총 예정 수량", example = "50")
         private Integer totalExpectedQuantity;

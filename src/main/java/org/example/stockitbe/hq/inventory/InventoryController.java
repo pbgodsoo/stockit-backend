@@ -37,13 +37,13 @@ public class InventoryController {
     )
     @GetMapping("/company-wide")
     public BaseResponse<InventoryDto.CompanyWidePageRes> getCompanyWide(
-            @Parameter(description = "거점 타입 (STORE/WAREHOUSE). 미지정 시 전체") @RequestParam(required = false) LocationType locationType,
-            @Parameter(description = "거점 ID 리스트 (locationType 안 추가 필터)") @RequestParam(required = false) List<Long> locationIds,
-            @Parameter(description = "상위 카테고리 한글 이름") @RequestParam(required = false) String parentCategory,
-            @Parameter(description = "하위 카테고리 한글 이름") @RequestParam(required = false) String childCategory,
-            @Parameter(description = "단일 카테고리 파라미터 — 부모 또는 자식 한글 이름. FE 단일 dropdown 호환용") @RequestParam(required = false) String category,
-            @Parameter(description = "재고 상태 (NORMAL/CIRCULAR_CANDIDATE/CIRCULAR)") @RequestParam(required = false) InventoryStatus status,
-            @Parameter(description = "검색 키워드 (품목명·품목 코드 nori + edge n-gram)") @RequestParam(required = false) String keyword,
+            @Parameter(description = "거점 타입 (STORE/WAREHOUSE). 미지정 시 전체", example = "WAREHOUSE") @RequestParam(required = false) LocationType locationType,
+            @Parameter(description = "거점 ID 리스트 (locationType 안 추가 필터)", example = "21,22") @RequestParam(required = false) List<Long> locationIds,
+            @Parameter(description = "상위 카테고리 한글 이름", example = "상의") @RequestParam(required = false) String parentCategory,
+            @Parameter(description = "하위 카테고리 한글 이름", example = "반팔") @RequestParam(required = false) String childCategory,
+            @Parameter(description = "단일 카테고리 파라미터 — 부모 또는 자식 한글 이름. FE 단일 dropdown 호환용", example = "상의") @RequestParam(required = false) String category,
+            @Parameter(description = "재고 상태 (NORMAL/CIRCULAR_CANDIDATE/CIRCULAR)", example = "NORMAL") @RequestParam(required = false) InventoryStatus status,
+            @Parameter(description = "검색 키워드 (품목명·품목 코드 nori + edge n-gram)", example = "코튼") @RequestParam(required = false) String keyword,
             @PageableDefault(size = 20) Pageable pageable
     ) {
         return BaseResponse.success(inventoryQueryService.findCompanyWide(locationType, locationIds, parentCategory, childCategory, category, status, keyword, pageable));
@@ -57,13 +57,13 @@ public class InventoryController {
     )
     @GetMapping("/company-wide/{itemCode}/skus")
     public BaseResponse<List<InventoryDto.CompanyWideSkuDetailRes>> getCompanyWideSkus(
-            @Parameter(description = "품목 코드 (PRD-{L1}-{L2}-{seq})") @PathVariable String itemCode,
-            @Parameter(description = "거점 타입 필터") @RequestParam(required = false) LocationType locationType,
-            @Parameter(description = "거점 ID 리스트") @RequestParam(required = false) List<Long> locationIds,
-            @Parameter(description = "상위 카테고리") @RequestParam(required = false) String parentCategory,
-            @Parameter(description = "하위 카테고리") @RequestParam(required = false) String childCategory,
-            @Parameter(description = "재고 상태") @RequestParam(required = false) InventoryStatus status,
-            @Parameter(description = "검색 키워드") @RequestParam(required = false) String keyword
+            @Parameter(description = "품목 코드 (PRD-{L1}-{L2}-{seq})", example = "PRD-TOP-SS-001") @PathVariable String itemCode,
+            @Parameter(description = "거점 타입 필터", example = "WAREHOUSE") @RequestParam(required = false) LocationType locationType,
+            @Parameter(description = "거점 ID 리스트", example = "21,22") @RequestParam(required = false) List<Long> locationIds,
+            @Parameter(description = "상위 카테고리", example = "상의") @RequestParam(required = false) String parentCategory,
+            @Parameter(description = "하위 카테고리", example = "반팔") @RequestParam(required = false) String childCategory,
+            @Parameter(description = "재고 상태", example = "NORMAL") @RequestParam(required = false) InventoryStatus status,
+            @Parameter(description = "검색 키워드", example = "코튼") @RequestParam(required = false) String keyword
     ) {
         return BaseResponse.success(inventoryQueryService.findCompanyWideSkuDetails(itemCode, locationType, locationIds, parentCategory, childCategory, status, keyword));
     }
@@ -79,14 +79,14 @@ public class InventoryController {
     )
     @GetMapping("/company-wide/skus")
     public BaseResponse<InventoryDto.CompanyWideSkuPageRes> getCompanyWideSkusPaged(
-            @Parameter(description = "거점 타입 (STORE/WAREHOUSE)") @RequestParam(required = false) LocationType locationType,
-            @Parameter(description = "거점 ID 리스트") @RequestParam(required = false) List<Long> locationIds,
-            @Parameter(description = "상위 카테고리") @RequestParam(required = false) String parentCategory,
-            @Parameter(description = "하위 카테고리") @RequestParam(required = false) String childCategory,
-            @Parameter(description = "재고 상태 한국어 라벨 (정상/부족/품절)") @RequestParam(required = false) String status,
-            @Parameter(description = "색상 필터 (BLK/WHT/NVY 등)") @RequestParam(required = false) String color,
-            @Parameter(description = "사이즈 필터 (S/M/L/XL). Pageable.size 와 충돌 방지를 위해 skuSize 명명") @RequestParam(value = "skuSize", required = false) String skuSize,
-            @Parameter(description = "검색 키워드 (품목명·SKU 코드 nori + edge n-gram)") @RequestParam(required = false) String keyword,
+            @Parameter(description = "거점 타입 (STORE/WAREHOUSE)", example = "WAREHOUSE") @RequestParam(required = false) LocationType locationType,
+            @Parameter(description = "거점 ID 리스트", example = "21,22") @RequestParam(required = false) List<Long> locationIds,
+            @Parameter(description = "상위 카테고리", example = "상의") @RequestParam(required = false) String parentCategory,
+            @Parameter(description = "하위 카테고리", example = "반팔") @RequestParam(required = false) String childCategory,
+            @Parameter(description = "재고 상태 한국어 라벨 (정상/부족/품절)", example = "정상") @RequestParam(required = false) String status,
+            @Parameter(description = "색상 필터 (BLK/WHT/NVY 등)", example = "BLK") @RequestParam(required = false) String color,
+            @Parameter(description = "사이즈 필터 (S/M/L/XL). Pageable.size 와 충돌 방지를 위해 skuSize 명명", example = "M") @RequestParam(value = "skuSize", required = false) String skuSize,
+            @Parameter(description = "검색 키워드 (품목명·SKU 코드 nori + edge n-gram)", example = "코튼") @RequestParam(required = false) String keyword,
             @PageableDefault(size = 20) Pageable pageable
     ) {
         return BaseResponse.success(inventoryQueryService.findCompanyWideSkus(
@@ -102,11 +102,11 @@ public class InventoryController {
     )
     @GetMapping("/company-wide/skus/facets")
     public BaseResponse<InventoryDto.CompanyWideSkuFacetsRes> getCompanyWideSkuFacets(
-            @Parameter(description = "거점 타입") @RequestParam(required = false) LocationType locationType,
-            @Parameter(description = "거점 ID 리스트") @RequestParam(required = false) List<Long> locationIds,
-            @Parameter(description = "상위 카테고리") @RequestParam(required = false) String parentCategory,
-            @Parameter(description = "하위 카테고리") @RequestParam(required = false) String childCategory,
-            @Parameter(description = "검색 키워드") @RequestParam(required = false) String keyword
+            @Parameter(description = "거점 타입", example = "WAREHOUSE") @RequestParam(required = false) LocationType locationType,
+            @Parameter(description = "거점 ID 리스트", example = "21,22") @RequestParam(required = false) List<Long> locationIds,
+            @Parameter(description = "상위 카테고리", example = "상의") @RequestParam(required = false) String parentCategory,
+            @Parameter(description = "하위 카테고리", example = "반팔") @RequestParam(required = false) String childCategory,
+            @Parameter(description = "검색 키워드", example = "코튼") @RequestParam(required = false) String keyword
     ) {
         return BaseResponse.success(inventoryQueryService.findCompanyWideSkuFacets(
                 locationType, locationIds, parentCategory, childCategory, keyword

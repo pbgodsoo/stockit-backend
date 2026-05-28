@@ -44,10 +44,10 @@ public class StoreOrderController {
     @GetMapping
     public BaseResponse<List<StoreOrderDto.ListRes>> list(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "발주 상태 (REQUESTED / APPROVED / COMPLETED / CANCELLED)") @RequestParam(required = false) String status,
-            @Parameter(description = "조회 시작일 (yyyy-MM-dd)", example = "2024-01-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @Parameter(description = "조회 종료일 (yyyy-MM-dd)", example = "2024-12-31") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @Parameter(description = "발주번호·상품명·SKU 코드 검색 키워드") @RequestParam(required = false) String keyword
+            @Parameter(description = "발주 상태 (REQUESTED / APPROVED / COMPLETED / CANCELLED)", example = "REQUESTED") @RequestParam(required = false) String status,
+            @Parameter(description = "조회 시작일 (yyyy-MM-dd)", example = "2026-05-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "조회 종료일 (yyyy-MM-dd)", example = "2026-05-27") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @Parameter(description = "발주번호·상품명·SKU 코드 검색 키워드", example = "코튼") @RequestParam(required = false) String keyword
     ) {
         List<StoreOrderDto.ListRes> result = service.list(status, from, to, keyword, me);
         return BaseResponse.success(result);
@@ -71,8 +71,8 @@ public class StoreOrderController {
     @GetMapping("/analytics")
     public BaseResponse<StoreOrderDto.AnalyticsRes> analytics(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "조회 시작일 (yyyy-MM-dd)", example = "2024-01-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @Parameter(description = "조회 종료일 (yyyy-MM-dd)", example = "2024-12-31") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+            @Parameter(description = "조회 시작일 (yyyy-MM-dd)", example = "2026-05-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "조회 종료일 (yyyy-MM-dd)", example = "2026-05-27") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {
         StoreOrderDto.AnalyticsRes result = service.analytics(from, to, me);
         return BaseResponse.success(result);

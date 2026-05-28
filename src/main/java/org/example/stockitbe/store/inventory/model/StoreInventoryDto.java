@@ -25,9 +25,9 @@ public class StoreInventoryDto {
         private Long totalElements;
         @Schema(description = "총 페이지 수", example = "5")
         private Integer totalPages;
-        @Schema(description = "다음 페이지 존재 여부")
+        @Schema(description = "다음 페이지 존재 여부", example = "true")
         private Boolean hasNext;
-        @Schema(description = "이전 페이지 존재 여부")
+        @Schema(description = "이전 페이지 존재 여부", example = "false")
         private Boolean hasPrevious;
 
         public static ItemPageRes from(Page<ItemRes> page) {
@@ -162,9 +162,9 @@ public class StoreInventoryDto {
         private Long totalElements;
         @Schema(description = "총 페이지 수", example = "5")
         private Integer totalPages;
-        @Schema(description = "다음 페이지 존재 여부")
+        @Schema(description = "다음 페이지 존재 여부", example = "true")
         private Boolean hasNext;
-        @Schema(description = "이전 페이지 존재 여부")
+        @Schema(description = "이전 페이지 존재 여부", example = "false")
         private Boolean hasPrevious;
 
         public static SkuPageRes from(Page<SkuRowRes> page) {

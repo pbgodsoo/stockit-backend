@@ -42,9 +42,9 @@ public class WhInboundController {
     @GetMapping
     public BaseResponse<List<WhInboundDto.ListRes>> list(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "입고 상태 (READY_TO_SHIP/IN_TRANSIT/ARRIVED/COMPLETED)") @RequestParam(required = false) String status,
-            @Parameter(description = "조회 기간 시작 (yyyy-MM-dd)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @Parameter(description = "조회 기간 종료 (yyyy-MM-dd)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+            @Parameter(description = "입고 상태 (READY_TO_SHIP/IN_TRANSIT/ARRIVED/COMPLETED)", example = "ARRIVED") @RequestParam(required = false) String status,
+            @Parameter(description = "조회 기간 시작 (yyyy-MM-dd)", example = "2026-05-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "조회 기간 종료 (yyyy-MM-dd)", example = "2026-05-27") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return BaseResponse.success(whInboundService.findAll(me, status, from, to));
     }
 
@@ -55,7 +55,7 @@ public class WhInboundController {
     @GetMapping("/{inboundCode}")
     public BaseResponse<WhInboundDto.DetailRes> detail(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "입고 코드 (WIB-{YYYYMMDD}-{NNNNN})") @PathVariable String inboundCode) {
+            @Parameter(description = "입고 코드 (WIB-{YYYYMMDD}-{NNNNN})", example = "WIB-20260527-00001") @PathVariable String inboundCode) {
         return BaseResponse.success(whInboundService.findByCode(me, inboundCode));
     }
 
@@ -66,7 +66,7 @@ public class WhInboundController {
     @PostMapping("/{inboundCode}/confirm")
     public BaseResponse<WhInboundDto.DetailRes> confirm(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "입고 코드") @PathVariable String inboundCode,
+            @Parameter(description = "입고 코드", example = "WIB-20260527-00001") @PathVariable String inboundCode,
             @RequestBody(required = false) WhInboundDto.ConfirmReq req) {
         WhInboundHeader saved = whInboundService.confirmInbound(inboundCode, me);
         return BaseResponse.success(whInboundService.findByCode(me, saved.getInboundCode()));

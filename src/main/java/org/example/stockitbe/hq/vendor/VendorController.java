@@ -36,7 +36,7 @@ public class VendorController {
     @Operation(summary = "공급처 단건 상세 조회", description = "공급처 코드로 단건 상세 반환.")
     @GetMapping("/{code}")
     public BaseResponse<VendorDto.ListRes> detail(
-            @Parameter(description = "공급처 코드") @PathVariable String code) {
+            @Parameter(description = "공급처 코드", example = "VND-001") @PathVariable String code) {
         return BaseResponse.success(service.findByCode(code));
     }
 
@@ -50,7 +50,7 @@ public class VendorController {
     )
     @GetMapping("/{code}/contracts")
     public BaseResponse<List<VendorProductDto.ContractRowRes>> contracts(
-            @Parameter(description = "공급처 코드") @PathVariable String code) {
+            @Parameter(description = "공급처 코드", example = "VND-001") @PathVariable String code) {
         return BaseResponse.success(vendorProductService.findContractRows(code));
     }
 }

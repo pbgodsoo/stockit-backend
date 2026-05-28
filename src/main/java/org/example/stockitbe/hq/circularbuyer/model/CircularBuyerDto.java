@@ -263,9 +263,9 @@ public class CircularBuyerDto {
         private String address;
         @Schema(description = "거래처 유형", example = "general")
         private String partnerType;
-        @Schema(description = "등록 일시")
+        @Schema(description = "등록 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date createdAt;
-        @Schema(description = "수정 일시")
+        @Schema(description = "수정 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date updatedAt;
 
         // FE 구버전 호환 alias (2단계 전환 중 임시 유지).

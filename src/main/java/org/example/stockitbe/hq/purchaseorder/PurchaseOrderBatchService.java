@@ -1,5 +1,6 @@
 package org.example.stockitbe.hq.purchaseorder;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.stockitbe.hq.purchaseorder.model.PurchaseOrder;
@@ -84,5 +85,10 @@ public class PurchaseOrderBatchService {
         return success;
     }
 
-    public record BatchResult(int approved, int readyToShip, int inTransit, int arrived) {}
+    @Schema(description = "SYS-001 배치 실행 결과 — 각 단계에서 전이 성공한 발주 건수")
+    public record BatchResult(
+            @Schema(description = "REQUESTED → APPROVED 전환 성공 건수", example = "5") int approved,
+            @Schema(description = "APPROVED → READY_TO_SHIP 전환 성공 건수 (inbound mirror INSERT 포함)", example = "3") int readyToShip,
+            @Schema(description = "READY_TO_SHIP → IN_TRANSIT 전환 성공 건수 (가용재고 + delta)", example = "4") int inTransit,
+            @Schema(description = "IN_TRANSIT → ARRIVED 전환 성공 건수", example = "2") int arrived) {}
 }

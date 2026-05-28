@@ -36,7 +36,7 @@ public class CircularSaleDto {
         @Schema(description = "소재 구분", example = "POLYESTER")
         @NotBlank
         private String materialType;
-        @Schema(description = "메모")
+        @Schema(description = "메모", example = "샘플 메모")
         private String memo;
         @Valid
         @NotEmpty
@@ -50,7 +50,7 @@ public class CircularSaleDto {
     @AllArgsConstructor
     @Builder
     public static class CreateRes {
-        @Schema(description = "판매 ID")
+        @Schema(description = "판매 ID", example = "1")
         private Long saleId;
         @Schema(description = "판매번호", example = "CSALE-20240101-001")
         private String saleNo;
@@ -60,9 +60,9 @@ public class CircularSaleDto {
         private String outboundNo;
         @Schema(description = "출고 상태")
         private OutboundStatus outboundStatus;
-        @Schema(description = "판매 일시")
+        @Schema(description = "판매 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date soldAt;
-        @Schema(description = "완료 일시")
+        @Schema(description = "완료 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date completedAt;
         @Schema(description = "거래처 코드", example = "BUYER-001")
         private String buyerCode;
@@ -80,7 +80,7 @@ public class CircularSaleDto {
         private Integer totalSoldQuantity;
         @Schema(description = "총 판매 금액 (원)", example = "1500000")
         private Long totalAmount;
-        @Schema(description = "메모")
+        @Schema(description = "메모", example = "샘플 메모")
         private String memo;
         @Schema(description = "판매 SKU 라인 목록")
         private List<LineRes> items;
@@ -139,7 +139,7 @@ public class CircularSaleDto {
         @Schema(description = "라인 금액 (원)", example = "500000")
         @Min(0)
         private Long lineAmount;
-        @Schema(description = "메모")
+        @Schema(description = "메모", example = "샘플 메모")
         private String memo;
     }
 
@@ -149,9 +149,9 @@ public class CircularSaleDto {
     @AllArgsConstructor
     @Builder
     public static class LineRes {
-        @Schema(description = "아이템 ID")
+        @Schema(description = "아이템 ID", example = "1")
         private Long itemId;
-        @Schema(description = "재고 ID")
+        @Schema(description = "재고 ID", example = "1")
         private Long inventoryId;
         @Schema(description = "SKU 코드", example = "SKU-RED-M")
         private String skuCode;
@@ -181,15 +181,15 @@ public class CircularSaleDto {
         private Integer availableQuantity;
         @Schema(description = "가용 중량 스냅샷 (kg)", example = "100.0")
         private BigDecimal availableWeightKg;
-        @Schema(description = "창고 코드")
+        @Schema(description = "창고 코드", example = "샘플-001")
         private String warehouseCode;
-        @Schema(description = "창고명")
+        @Schema(description = "창고명", example = "샘플 이름")
         private String warehouseName;
         @Schema(description = "단가 (원)", example = "5000")
         private Long unitPrice;
         @Schema(description = "라인 금액 (원)", example = "500000")
         private Long lineAmount;
-        @Schema(description = "메모")
+        @Schema(description = "메모", example = "샘플 메모")
         private String memo;
         @Schema(description = "소재 스냅샷 목록")
         private List<MaterialRes> materials;
@@ -261,9 +261,9 @@ public class CircularSaleDto {
         private int totalPages;
         @Schema(description = "총 요소 수", example = "100")
         private long totalElements;
-        @Schema(description = "다음 페이지 존재 여부")
+        @Schema(description = "다음 페이지 존재 여부", example = "true")
         private boolean hasNext;
-        @Schema(description = "이전 페이지 존재 여부")
+        @Schema(description = "이전 페이지 존재 여부", example = "false")
         private boolean hasPrevious;
         @Schema(description = "판매 목록")
         private List<ListRowRes> content;
@@ -287,7 +287,7 @@ public class CircularSaleDto {
     @AllArgsConstructor
     @Builder
     public static class ListRowRes {
-        @Schema(description = "판매 ID")
+        @Schema(description = "판매 ID", example = "1")
         private Long saleId;
         @Schema(description = "판매번호", example = "CSALE-20240101-001")
         private String saleNo;
@@ -295,21 +295,21 @@ public class CircularSaleDto {
         private CircularSaleStatus status;
         @Schema(description = "연계 출고번호", example = "OUT-20240101-001")
         private String outboundNo;
-        @Schema(description = "출고 창고 코드")
+        @Schema(description = "출고 창고 코드", example = "샘플-001")
         private String outboundWarehouseCode;
-        @Schema(description = "출고 창고명")
+        @Schema(description = "출고 창고명", example = "샘플 이름")
         private String outboundWarehouseName;
         @Schema(description = "출고 상태")
         private OutboundStatus outboundStatus;
-        @Schema(description = "판매 일시")
+        @Schema(description = "판매 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date soldAt;
-        @Schema(description = "완료 일시")
+        @Schema(description = "완료 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date completedAt;
         @Schema(description = "거래처 코드", example = "BUYER-001")
         private String buyerCode;
         @Schema(description = "거래처명", example = "(주)리사이클코리아")
         private String buyerName;
-        @Schema(description = "거래처 산업군")
+        @Schema(description = "거래처 산업군", example = "샘플그룹")
         private String buyerIndustryGroup;
         @Schema(description = "소재 구분", example = "POLYESTER")
         private String materialType;
@@ -331,7 +331,7 @@ public class CircularSaleDto {
     @AllArgsConstructor
     @Builder
     public static class DetailRes {
-        @Schema(description = "판매 ID")
+        @Schema(description = "판매 ID", example = "1")
         private Long saleId;
         @Schema(description = "판매번호", example = "CSALE-20240101-001")
         private String saleNo;
@@ -341,25 +341,25 @@ public class CircularSaleDto {
         private String outboundNo;
         @Schema(description = "출고 상태")
         private OutboundStatus outboundStatus;
-        @Schema(description = "판매 일시")
+        @Schema(description = "판매 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date soldAt;
-        @Schema(description = "완료 일시")
+        @Schema(description = "완료 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date completedAt;
         @Schema(description = "판매자 사번", example = "EMP-001")
         private String soldByMemberId;
         @Schema(description = "판매자 이름", example = "홍길동")
         private String soldByName;
-        @Schema(description = "출고 헤더 ID")
+        @Schema(description = "출고 헤더 ID", example = "1")
         private Long outboundHeaderId;
-        @Schema(description = "출고 창고 코드")
+        @Schema(description = "출고 창고 코드", example = "샘플-001")
         private String outboundWarehouseCode;
-        @Schema(description = "출고 창고명")
+        @Schema(description = "출고 창고명", example = "샘플 이름")
         private String outboundWarehouseName;
         @Schema(description = "거래처 코드", example = "BUYER-001")
         private String buyerCode;
         @Schema(description = "거래처명", example = "(주)리사이클코리아")
         private String buyerName;
-        @Schema(description = "거래처 산업군")
+        @Schema(description = "거래처 산업군", example = "샘플그룹")
         private String buyerIndustryGroup;
         @Schema(description = "소재 구분", example = "POLYESTER")
         private String materialType;
@@ -373,7 +373,7 @@ public class CircularSaleDto {
         private Integer totalSoldQuantity;
         @Schema(description = "총 판매 금액 (원)", example = "1500000")
         private Long totalAmount;
-        @Schema(description = "메모")
+        @Schema(description = "메모", example = "샘플 메모")
         private String memo;
         @Schema(description = "판매 SKU 라인 목록")
         private List<LineRes> items;
@@ -391,13 +391,13 @@ public class CircularSaleDto {
         private CircularSaleStatus fromStatus;
         @Schema(description = "현재 상태")
         private CircularSaleStatus status;
-        @Schema(description = "변경 일시")
+        @Schema(description = "변경 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date changedAt;
         @Schema(description = "변경자 사번", example = "EMP-001")
         private String changedByMemberId;
         @Schema(description = "변경자 이름", example = "홍길동")
         private String changedByName;
-        @Schema(description = "변경 사유")
+        @Schema(description = "변경 사유", example = "샘플 메모")
         private String reason;
 
         public static StatusHistoryRes from(CircularSaleStatusHistory row) {

@@ -70,7 +70,7 @@ public class CategoryDto {
         private CategoryStatus status;
         @Schema(description = "상위 카테고리 코드", example = "CAT-L1-OUT")
         private String parentCode;
-        @Schema(description = "수정 일시")
+        @Schema(description = "수정 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date updatedAt;
         @Schema(description = "하위 카테고리 목록")
         private List<TreeRes> children;
@@ -103,9 +103,9 @@ public class CategoryDto {
         private CategoryStatus status;
         @Schema(description = "상위 카테고리 코드", example = "CAT-L1-OUT")
         private String parentCode;
-        @Schema(description = "등록 일시")
+        @Schema(description = "등록 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date createdAt;
-        @Schema(description = "수정 일시")
+        @Schema(description = "수정 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date updatedAt;
 
         public static DetailRes from(Category category, String parentCode) {

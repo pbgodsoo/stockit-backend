@@ -34,8 +34,8 @@ public class StoreInventoryController {
     public BaseResponse<StoreInventoryDto.ItemPageRes> getStoreInventories(
             @AuthenticationPrincipal AuthUserDetails me,
             @Parameter(description = "카테고리 이름 (메인 카테고리 또는 서브 카테고리 한글명)", example = "상의") @RequestParam(required = false) String category,
-            @Parameter(description = "재고 상태 (정상 / 부족 / 품절)") @RequestParam(required = false) String status,
-            @Parameter(description = "상품명·상품코드 검색 키워드") @RequestParam(required = false) String keyword,
+            @Parameter(description = "재고 상태 (정상 / 부족 / 품절)", example = "정상") @RequestParam(required = false) String status,
+            @Parameter(description = "상품명·상품코드 검색 키워드", example = "코튼") @RequestParam(required = false) String keyword,
             @PageableDefault(size = 20) Pageable pageable
     ) {
         return BaseResponse.success(service.getItems(
@@ -55,10 +55,10 @@ public class StoreInventoryController {
     public BaseResponse<StoreInventoryDto.SkuPageRes> getSkus(
             @AuthenticationPrincipal AuthUserDetails me,
             @Parameter(description = "카테고리 이름 (부모 또는 자식 한글명)", example = "상의") @RequestParam(required = false) String category,
-            @Parameter(description = "재고 상태 (정상 / 부족 / 품절)") @RequestParam(required = false) String status,
+            @Parameter(description = "재고 상태 (정상 / 부족 / 품절)", example = "정상") @RequestParam(required = false) String status,
             @Parameter(description = "색상 필터", example = "블랙") @RequestParam(required = false) String color,
             @Parameter(description = "사이즈 필터 (Pageable size 파라미터와 충돌 방지를 위해 skuSize 사용)", example = "M") @RequestParam(value = "skuSize", required = false) String skuSize,
-            @Parameter(description = "상품명·SKU 코드 검색 키워드") @RequestParam(required = false) String keyword,
+            @Parameter(description = "상품명·SKU 코드 검색 키워드", example = "코튼") @RequestParam(required = false) String keyword,
             @PageableDefault(size = 20) Pageable pageable
     ) {
         return BaseResponse.success(service.findSkus(
@@ -74,8 +74,8 @@ public class StoreInventoryController {
     @GetMapping("/skus/facets")
     public BaseResponse<StoreInventoryDto.SkuFacetsRes> getSkuFacets(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "카테고리 이름 (부모 또는 자식 한글명)") @RequestParam(required = false) String category,
-            @Parameter(description = "상품명·SKU 코드 검색 키워드") @RequestParam(required = false) String keyword
+            @Parameter(description = "카테고리 이름 (부모 또는 자식 한글명)", example = "상의") @RequestParam(required = false) String category,
+            @Parameter(description = "상품명·SKU 코드 검색 키워드", example = "코튼") @RequestParam(required = false) String keyword
     ) {
         return BaseResponse.success(service.findSkuFacets(
                 me.getLocationCode(), category, keyword

@@ -38,8 +38,8 @@ public class DashboardController {
     @GetMapping("/inbound-progress")
     public BaseResponse<DashboardDto.InboundProgressRes> getInboundProgress(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "집계 기간 시작 (yyyy-MM-dd). 미지정 시 서비스 기본값") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @Parameter(description = "집계 기간 종료 (yyyy-MM-dd). 미지정 시 서비스 기본값") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+            @Parameter(description = "집계 기간 시작 (yyyy-MM-dd). 미지정 시 서비스 기본값", example = "2026-05-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "집계 기간 종료 (yyyy-MM-dd). 미지정 시 서비스 기본값", example = "2026-05-27") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return BaseResponse.success(service.getInboundProgress(me.getLocationCode(), from, to));
     }
 }

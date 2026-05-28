@@ -22,7 +22,7 @@ public class WhOutboundDto {
     @AllArgsConstructor
     @Builder
     public static class ActionReq {
-        @Schema(description = "처리 사유 (선택)")
+        @Schema(description = "처리 사유 (선택)", example = "샘플 메모")
         private String reason;
     }
 
@@ -40,7 +40,7 @@ public class WhOutboundDto {
         private String sourceRefNo;
         @Schema(description = "소스 참조 시퀀스", example = "1")
         private Integer sourceRefSeq;
-        @Schema(description = "창고 ID")
+        @Schema(description = "창고 ID", example = "1")
         private Long warehouseId;
         @Schema(description = "창고 코드", example = "WH-001")
         private String warehouseCode;
@@ -48,7 +48,7 @@ public class WhOutboundDto {
         private String warehouseName;
         @Schema(description = "목적지 유형 (STORE / BUYER 등)", example = "STORE")
         private String destinationType;
-        @Schema(description = "목적지 ID")
+        @Schema(description = "목적지 ID", example = "1")
         private Long destinationId;
         @Schema(description = "목적지명", example = "강남점")
         private String destinationName;
@@ -56,7 +56,7 @@ public class WhOutboundDto {
         private OutboundStatus status;
         @Schema(description = "총 요청 수량", example = "50")
         private Integer totalRequestedQuantity;
-        @Schema(description = "출고 요청 일시")
+        @Schema(description = "출고 요청 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date requestedAt;
     }
 
@@ -74,9 +74,9 @@ public class WhOutboundDto {
         private String sourceRefNo;
         @Schema(description = "소스 참조 시퀀스", example = "1")
         private Integer sourceRefSeq;
-        @Schema(description = "소스 참조 ID")
+        @Schema(description = "소스 참조 ID", example = "1")
         private Long sourceRefId;
-        @Schema(description = "창고 ID")
+        @Schema(description = "창고 ID", example = "1")
         private Long warehouseId;
         @Schema(description = "창고 코드", example = "WH-001")
         private String warehouseCode;
@@ -84,7 +84,7 @@ public class WhOutboundDto {
         private String warehouseName;
         @Schema(description = "목적지 유형", example = "STORE")
         private String destinationType;
-        @Schema(description = "목적지 ID")
+        @Schema(description = "목적지 ID", example = "1")
         private Long destinationId;
         @Schema(description = "목적지명", example = "강남점")
         private String destinationName;
@@ -92,19 +92,19 @@ public class WhOutboundDto {
         private OutboundStatus status;
         @Schema(description = "총 요청 수량", example = "50")
         private Integer totalRequestedQuantity;
-        @Schema(description = "출고 요청 일시")
+        @Schema(description = "출고 요청 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date requestedAt;
-        @Schema(description = "출고 확정 일시")
+        @Schema(description = "출고 확정 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date confirmedAt;
-        @Schema(description = "출발 일시")
+        @Schema(description = "출발 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date departedAt;
-        @Schema(description = "도착 일시")
+        @Schema(description = "도착 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date arrivedAt;
         @Schema(description = "요청자 사번", example = "EMP-001")
         private String requestedByMemberId;
         @Schema(description = "요청자 이름", example = "홍길동")
         private String requestedByName;
-        @Schema(description = "메모")
+        @Schema(description = "메모", example = "샘플 메모")
         private String memo;
         @Schema(description = "출고 아이템 목록")
         private List<ItemRes> items;
@@ -120,11 +120,11 @@ public class WhOutboundDto {
     @AllArgsConstructor
     @Builder
     public static class ItemRes {
-        @Schema(description = "아이템 ID")
+        @Schema(description = "아이템 ID", example = "1")
         private Long id;
-        @Schema(description = "소스 라인 참조 ID")
+        @Schema(description = "소스 라인 참조 ID", example = "1")
         private Long sourceLineRefId;
-        @Schema(description = "SKU ID")
+        @Schema(description = "SKU ID", example = "1")
         private Long skuId;
         @Schema(description = "SKU 코드", example = "SKU-RED-M")
         private String skuCode;
@@ -144,7 +144,7 @@ public class WhOutboundDto {
         private Long unitPrice;
         @Schema(description = "요청 수량", example = "10")
         private Integer requestedQuantity;
-        @Schema(description = "메모")
+        @Schema(description = "메모", example = "샘플 메모")
         private String memo;
 
         public static ItemRes from(WhOutboundItem item) {
@@ -174,13 +174,13 @@ public class WhOutboundDto {
     public static class StatusHistoryRes {
         @Schema(description = "출고 상태")
         private OutboundStatus status;
-        @Schema(description = "변경 일시")
+        @Schema(description = "변경 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date changedAt;
         @Schema(description = "변경자 사번", example = "EMP-001")
         private String changedByMemberId;
         @Schema(description = "변경자 이름", example = "홍길동")
         private String changedByName;
-        @Schema(description = "변경 사유")
+        @Schema(description = "변경 사유", example = "샘플 메모")
         private String reason;
 
         public static StatusHistoryRes from(WhOutboundStatusHistory history) {
