@@ -113,15 +113,13 @@ public class StoreOrderService {
 
     // 매장 발주 요청 취소
     @Transactional
-    // 발주를 취소한다.
-    // 추적을 위해 취소 사유는 필수로 검증한다.
+    // 발주를 취소한다. 취소 사유는 선택 입력이다.
     public StoreOrderDto.CancelRes cancel(String orderNo, StoreOrderDto.CancelReq dto, AuthUserDetails me) {
         // 1) 로그인 매장 범위 내 발주인지 검증하고 대상 발주를 조회한다.
         Infrastructure store = resolveStore(me);
         StoreOrderHeader header = getOwnedOrderByOrderNo(orderNo, store.getId());
-        // 2) 취소 사유를 필수 검증한다.
+        // 2) 취소 사유는 선택 입력 (미입력 허용)
         String cancelReason = trimToNull(dto.getCancelReason());
-        if (cancelReason == null) throw BaseException.from(BaseResponseStatus.STORE_ORDER_CANCEL_REASON_REQUIRED);
 
         // 3) 상태를 CANCELLED로 전이하고 이력을 적재한다.
         header.markCancelled(cancelReason);

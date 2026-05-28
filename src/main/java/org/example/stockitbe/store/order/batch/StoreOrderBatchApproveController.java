@@ -55,9 +55,13 @@ public class StoreOrderBatchApproveController {
 
             JobParametersBuilder builder = new JobParametersBuilder()
                     .addString("runType", "MANUAL")
-                    .addString("runId", runId)
-                    .addLocalDateTime("fromDateTime", req.getFromDateTime())
-                    .addLocalDateTime("toDateTime", req.getToDateTime());
+                    .addString("runId", runId);
+            if (req.getFromDateTime() != null) {
+                builder.addLocalDateTime("fromDateTime", req.getFromDateTime());
+            }
+            if (req.getToDateTime() != null) {
+                builder.addLocalDateTime("toDateTime", req.getToDateTime());
+            }
 
             // mode=STORE일 때만 storeCode → storeId 변환 후 파라미터에 추가.
             // Reader는 storeId=0을 "전체 매장" sentinel로 해석하므로 미전달 시 전체 처리.

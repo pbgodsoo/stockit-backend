@@ -251,7 +251,6 @@ public class StoreOrderDto {
     @AllArgsConstructor
     @Builder
     public static class CancelReq {
-        @NotBlank
         private String cancelReason;
         private String cancelledByMemberId;
         private String cancelledByName;
