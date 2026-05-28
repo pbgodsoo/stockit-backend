@@ -1,0 +1,221 @@
+# StockIt — 퀵스타트 풀스택 compose
+# 사용법:
+#   1) cp .env.example .env  &&  .env 의 OPENAI_API_KEY 채우기
+#   2) docker compose up -d
+#   3) http://localhost:8888  접속 (FE → BE 프록시 포함)
+#
+# 이미지는 Jenkins 가 푸시한 :latest 를 사용. 특정 빌드 핀이 필요하면 .env 에서 override.
+# 양쪽 레포(BE/FE)에 동일한 compose.yml 이 있으므로 어느 레포에서 띄워도 결과는 같다.
+
+name: stockit
+
+services:
+  # ── 데이터베이스 ────────────────────────────────────────────────
+  mariadb:
+    image: mariadb:11.4
+    container_name: stockit-mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${DB_NAME:-stockit}
+      MARIADB_USER: ${DB_USER:-stockit}
+      MARIADB_PASSWORD: ${DB_PASS:-stockit1234}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASS:-rootstockit1234}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # ── BE 레포에서 시드 SQL 11개 받아 공유 볼륨에 적재 (1회) ────────
+  seed-fetcher:
+    image: alpine/git:latest
+    container_name: stockit-seed-fetcher
+    volumes:
+      - seed-data:/seed
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        if [ -f /seed/.done ]; then
+          echo "[seed-fetcher] 시드 캐시 존재, skip"
+          exit 0
+        fi
+        echo "[seed-fetcher] BE 레포에서 시드 SQL 다운로드 중..."
+        rm -rf /tmp/be
+        git clone --depth 1 --branch ${SEED_BRANCH:-main} \
+          https://github.com/beyond-sw-camp/be24-fin-Stockers-Stockit-BE.git /tmp/be
+        cp /tmp/be/src/main/resources/sql/0*.sql /seed/ || true
+        cp /tmp/be/src/main/resources/sql/10-*.sql /seed/ || true
+        cp /tmp/be/src/main/resources/sql/11-*.sql /seed/ || true
+        rm -rf /tmp/be
+        touch /seed/.done
+        echo "[seed-fetcher] $(ls /seed | grep -c .sql) 개 파일 적재 완료"
+
+  # ── Elasticsearch (single-node, security off — quickstart 편의) ─
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ES_VERSION:-8.15.3}
+    container_name: stockit-es
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      xpack.security.http.ssl.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx1g"
+      cluster.name: stockit-quickstart
+    ports:
+      - "${ES_PORT:-9200}:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # ── Kibana ─────────────────────────────────────────────────────
+  kibana:
+    image: docker.elastic.co/kibana/kibana:${ES_VERSION:-8.15.3}
+    container_name: stockit-kibana
+    restart: unless-stopped
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      SERVER_PUBLICBASEURL: http://localhost:5601
+    ports:
+      - "${KIBANA_PORT:-5601}:5601"
+
+  # ── Logstash (MariaDB JDBC → ES inventory 인덱스) ───────────────
+  logstash:
+    image: docker.elastic.co/logstash/logstash:${ES_VERSION:-8.15.3}
+    container_name: stockit-logstash
+    restart: unless-stopped
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      db-seeder:
+        condition: service_completed_successfully
+    environment:
+      DB_URL: jdbc:mariadb://mariadb:3306/${DB_NAME:-stockit}
+      DB_USER: ${DB_USER:-stockit}
+      DB_PASS: ${DB_PASS:-stockit1234}
+      ES_HOSTS: http://elasticsearch:9200
+      LS_JAVA_OPTS: "-Xms256m -Xmx512m"
+    volumes:
+      - ./docker/logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./docker/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+      - logstash-data:/usr/share/logstash/data
+      - logstash-drivers:/usr/share/logstash/drivers
+    # 이미지에 JDBC 드라이버가 없어서 첫 실행 시 자동 다운로드 후 logstash 본체 기동
+    entrypoint:
+      - bash
+      - -c
+      - |
+        set -e
+        DRV=/usr/share/logstash/drivers/mariadb-java-client.jar
+        if [ ! -f $$DRV ]; then
+          echo "[logstash] MariaDB JDBC 드라이버 다운로드..."
+          mkdir -p /usr/share/logstash/drivers
+          curl -fsSL -o $$DRV https://repo1.maven.org/maven2/org/mariadb/jdbc/mariadb-java-client/3.3.3/mariadb-java-client-3.3.3.jar
+        fi
+        exec /usr/local/bin/docker-entrypoint
+
+  # ── 백엔드 (Jenkins 푸시 이미지 그대로) ─────────────────────────
+  backend:
+    image: ${BE_IMAGE:-sunyeoplee/stockit-backend:latest}
+    container_name: stockit-be
+    restart: unless-stopped
+    pull_policy: always
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xms512m -Xmx1500m"
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:mariadb://mariadb:3306/${DB_NAME:-stockit}
+      DB_USER: ${DB_USER:-stockit}
+      DB_PASS: ${DB_PASS:-stockit1234}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_EXPIRATION_MS: "3600000"
+      JWT_REFRESH_EXPIRATION_MS: "604800000"
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # 공공데이터 탄소 가격 API — 미설정 시 application-prod.yml 의 fallback-price 사용
+      PUBLIC_DATA_API_KEY: ${PUBLIC_DATA_API_KEY:-}
+      # ES 동기화는 Logstash 가 담당 — BE 자체 ES sync 는 끔
+      ES_SYNC_ENABLED: "false"
+      ES_HOST: elasticsearch
+      ES_PORT: "9200"
+      ES_USER: elastic
+      ES_PASSWORD: ""
+    ports:
+      - "${BE_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  # ── BE 가 ddl-auto:update 로 테이블 만든 직후 시드 SQL 11개 주입 ─
+  db-seeder:
+    image: mariadb:11.4
+    container_name: stockit-db-seeder
+    depends_on:
+      backend:
+        condition: service_healthy
+      seed-fetcher:
+        condition: service_completed_successfully
+    volumes:
+      - seed-data:/seed:ro
+    environment:
+      DB_HOST: mariadb
+      DB_NAME: ${DB_NAME:-stockit}
+      DB_USER: ${DB_USER:-stockit}
+      DB_PASS: ${DB_PASS:-stockit1234}
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        ROWS=$$(mariadb -h $$DB_HOST -u $$DB_USER -p$$DB_PASS $$DB_NAME -sNe \
+          "SELECT COUNT(*) FROM infrastructure" 2>/dev/null || echo 0)
+        if [ "$$ROWS" -gt "0" ]; then
+          echo "[db-seeder] 이미 시드 데이터 존재 (infrastructure=$$ROWS행), skip"
+          exit 0
+        fi
+        for f in $$(ls /seed/*.sql 2>/dev/null | sort); do
+          echo "[db-seeder] $$f 적용"
+          mariadb -h $$DB_HOST -u $$DB_USER -p$$DB_PASS $$DB_NAME < "$$f"
+        done
+        echo "[db-seeder] 시드 주입 완료"
+
+  # ── 프론트엔드 (Jenkins 푸시 이미지 + /api 프록시 nginx conf 마운트)
+  frontend:
+    image: ${FE_IMAGE:-saralove20/stockit-front:latest}
+    container_name: stockit-fe
+    restart: unless-stopped
+    pull_policy: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./docker/frontend/default.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "${FE_PORT:-8888}:80"
+
+volumes:
+  mariadb-data:
+  es-data:
+  logstash-data:
+  logstash-drivers:
+  seed-data:
