@@ -57,6 +57,7 @@ springdoc:
     path: /api/swagger-ui.html
   api-docs:
     path: /api/v3/api-docs
+    version: openapi_3_0       # swagger-editor html2 export 호환 위해 3.0 출력 강제 (3.1 type-array 표기 미지원)
 
 logging:
   level:
