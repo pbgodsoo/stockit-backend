@@ -1,7 +1,6 @@
 package org.example.stockitbe.store.order.batch.model.dto;
 
 import jakarta.validation.constraints.AssertTrue;
-import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -25,10 +24,8 @@ public class StoreOrderBatchDto {
 
         // Reader SQL의 BETWEEN 절에 직접 전달되는 처리 대상 기간.
         // 호출자(Controller/Scheduler)가 범위를 결정해 전달하므로 BatchConfig 내부에서 날짜를 계산하지 않는다.
-        @NotNull
         private LocalDateTime fromDateTime;
 
-        @NotNull
         private LocalDateTime toDateTime;
 
         // Bean Validation으로는 두 필드 조합 검증이 불가능하므로 @AssertTrue로 보완.

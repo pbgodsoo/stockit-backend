@@ -81,10 +81,13 @@ public class BatchConfig {
 
         // storeId > 0이면 STORE 모드(매장별 필터), 0이면 ALL 모드(전체 매장).
         // PreparedStatement 파라미터 인덱스가 SQL 절 수에 따라 달라지므로 SQL과 setter를 함께 구성한다.
+        boolean hasDateRange = fromDateTime != null && toDateTime != null;
+
         String sql =
                 "SELECT id, order_no, store_id, warehouse_id, requested_at " +
                 "FROM store_order_header " +
-                "WHERE status = 'REQUESTED' AND requested_at BETWEEN ? AND ?" +
+                "WHERE status = 'REQUESTED'" +
+                (hasDateRange ? " AND requested_at BETWEEN ? AND ?" : "") +
                 (storeId > 0 ? " AND store_id = ?" : "") +
                 " ORDER BY requested_at ASC, id ASC";
 
@@ -93,11 +96,13 @@ public class BatchConfig {
                 .dataSource(dataSource)
                 .sql(sql)
                 .preparedStatementSetter(ps -> {
-                    ps.setTimestamp(1, Timestamp.valueOf(fromDateTime));
-                    ps.setTimestamp(2, Timestamp.valueOf(toDateTime));
-                    // storeId 조건이 SQL에 포함된 경우에만 3번 인덱스를 바인딩한다.
+                    int idx = 1;
+                    if (hasDateRange) {
+                        ps.setTimestamp(idx++, Timestamp.valueOf(fromDateTime));
+                        ps.setTimestamp(idx++, Timestamp.valueOf(toDateTime));
+                    }
                     if (storeId > 0) {
-                        ps.setLong(3, storeId);
+                        ps.setLong(idx, storeId);
                     }
                 })
                 .rowMapper((rs, rowNum) -> new StoreOrderBatchItem(
