@@ -15,7 +15,6 @@ import org.example.stockitbe.hq.inventory.model.Inventory;
 import org.example.stockitbe.hq.inventory.model.InventoryCandidateCondition;
 import org.example.stockitbe.hq.inventory.model.InventoryDto;
 import org.example.stockitbe.hq.inventory.model.InventoryStatus;
-import org.example.stockitbe.hq.inventory.model.InventoryStatusPolicy;
 import org.example.stockitbe.hq.product.MaterialRepository;
 import org.example.stockitbe.hq.product.ProductMasterRepository;
 import org.example.stockitbe.hq.product.ProductSkuRepository;
@@ -94,96 +93,11 @@ public class InventoryService {
     private record CircularInventoryCacheEntry(long createdAtMillis, List<InventoryDto.CircularInventoryRes> rows) {}
 
     // 전사 재고 불균형 SKU를 계산해 반환한다.
+    // 창고별 SKU 가용재고를 CTE로 집계한 뒤 부족 창고가 1개 이상인 SKU만 반환한다.
     @Transactional(readOnly = true)
     public List<InventoryDto.ImbalancedSkuRes> findImbalancedSkus() {
-        List<Inventory> inventories = inventoryRepository.findAll();
-
-        Map<Long, Infrastructure> warehouseById = infrastructureRepository.findAll().stream()
-                .filter(infra -> infra.getLocationType() == LocationType.WAREHOUSE)
-                .collect(Collectors.toMap(Infrastructure::getId, Function.identity()));
-        if (warehouseById.isEmpty()) return List.of();
-
-        Set<Long> skuIds = inventories.stream()
-                .filter(inv -> warehouseById.containsKey(inv.getLocationId()))
-                .filter(inv -> InventoryStatusPolicy.QUERY_ALLOWED_STATUSES.contains(inv.getInventoryStatus()))
-                .map(Inventory::getSkuId)
-                .collect(Collectors.toSet());
-        if (skuIds.isEmpty()) return List.of();
-
-        Map<Long, ProductSku> skuById = productSkuRepository.findAllById(skuIds).stream()
-                .collect(Collectors.toMap(ProductSku::getId, Function.identity()));
-        if (skuById.isEmpty()) return List.of();
-
-        Set<String> productCodes = skuById.values().stream()
-                .map(ProductSku::getProductCode)
-                .collect(Collectors.toSet());
-        Map<String, ProductMaster> masterByCode = productMasterRepository.findAllByCodeIn(productCodes).stream()
-                .collect(Collectors.toMap(ProductMaster::getCode, Function.identity()));
-
-        List<Category> categories = categoryRepository.findAllByOrderByIdAsc();
-        Map<String, Category> categoryByCode = categories.stream().collect(Collectors.toMap(Category::getCode, Function.identity()));
-        Map<Long, Category> categoryById = categories.stream().collect(Collectors.toMap(Category::getId, Function.identity()));
-
-        Map<String, WarehouseSkuStock> stockByWarehouseSkuKey = new HashMap<>();
-        for (Inventory inventory : inventories) {
-            if (!warehouseById.containsKey(inventory.getLocationId())) continue;
-            if (!InventoryStatusPolicy.QUERY_ALLOWED_STATUSES.contains(inventory.getInventoryStatus())) continue;
-            String key = inventory.getSkuId() + ":" + inventory.getLocationId();
-            WarehouseSkuStock stock = stockByWarehouseSkuKey.computeIfAbsent(key, ignored -> new WarehouseSkuStock(inventory.getSkuId()));
-            stock.totalOnHand += Math.max(0, n(inventory.getQuantity()));
-            stock.totalAvailable += Math.max(0, n(inventory.getAvailableQuantity()));
-        }
-
-        Map<Long, ImbalancedSkuAggregate> aggregateBySkuId = new HashMap<>();
-        for (ProductSku sku : skuById.values()) {
-            ProductMaster master = masterByCode.get(sku.getProductCode());
-            if (master == null) continue;
-
-            ImbalancedSkuAggregate agg = new ImbalancedSkuAggregate(sku, master);
-            int safetyStock = Math.max(0, n(master.getWarehouseSafetyStock()));
-
-            for (Long warehouseId : warehouseById.keySet()) {
-                String key = sku.getId() + ":" + warehouseId;
-                WarehouseSkuStock stock = stockByWarehouseSkuKey.get(key);
-                int onHand = stock == null ? 0 : stock.totalOnHand;
-                int available = stock == null ? 0 : stock.totalAvailable;
-
-                agg.totalOnHand += onHand;
-                agg.totalAvailable += available;
-
-                if (available < safetyStock) {
-                    agg.shortageWarehouseCount += 1;
-                    agg.totalShortageQty += (safetyStock - available);
-                }
-            }
-            aggregateBySkuId.put(sku.getId(), agg);
-        }
-
-        return aggregateBySkuId.values().stream()
-                .map(agg -> {
-                    Category child = categoryByCode.get(agg.master.getCategoryCode());
-                    Category parent = child == null || child.getParentId() == null
-                            ? child
-                            : categoryById.get(child.getParentId());
-                    String categoryLabel = child == null
-                            ? ""
-                            : (parent == null ? child.getName() : parent.getName() + " > " + child.getName());
-
-                    return InventoryDto.ImbalancedSkuRes.from(
-                            agg.sku,
-                            agg.master,
-                            categoryLabel,
-                            agg.totalOnHand,
-                            agg.totalAvailable,
-                            agg.shortageWarehouseCount,
-                            agg.totalShortageQty
-                    );
-                })
-                .sorted(
-                        Comparator.comparing(InventoryDto.ImbalancedSkuRes::getShortageWarehouseCount, Comparator.reverseOrder())
-                                .thenComparing(InventoryDto.ImbalancedSkuRes::getTotalShortageQty, Comparator.reverseOrder())
-                                .thenComparing(InventoryDto.ImbalancedSkuRes::getSkuCode, Comparator.nullsLast(String::compareTo))
-                )
+        return inventoryRepository.findImbalancedSkuRows().stream()
+                .map(InventoryDto.ImbalancedSkuRes::from)
                 .toList();
     }
 
@@ -434,30 +348,6 @@ public class InventoryService {
                 .refType("INVENTORY")
                 .refId(skuCode)
                 .build());
-    }
-
-    private static class ImbalancedSkuAggregate {
-        private final ProductSku sku;
-        private final ProductMaster master;
-        private int totalOnHand = 0;
-        private int totalAvailable = 0;
-        private int shortageWarehouseCount = 0;
-        private int totalShortageQty = 0;
-
-        private ImbalancedSkuAggregate(ProductSku sku, ProductMaster master) {
-            this.sku = sku;
-            this.master = master;
-        }
-    }
-
-    private static class WarehouseSkuStock {
-        private final Long skuId;
-        private int totalOnHand = 0;
-        private int totalAvailable = 0;
-
-        private WarehouseSkuStock(Long skuId) {
-            this.skuId = skuId;
-        }
     }
 
     // -------- 순환재고 후보 리프레시 --------

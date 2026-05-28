@@ -3,6 +3,7 @@ package org.example.stockitbe.hq.inventory;
 import jakarta.persistence.LockModeType;
 import org.example.stockitbe.hq.inventory.model.CircularInventoryCompositionRow;
 import org.example.stockitbe.hq.inventory.model.CircularInventoryPageRow;
+import org.example.stockitbe.hq.inventory.model.ImbalancedSkuRow;
 import org.example.stockitbe.hq.inventory.model.Inventory;
 import org.example.stockitbe.hq.inventory.model.InventoryStatus;
 import org.example.stockitbe.store.inventory.model.StoreItemRow;
@@ -825,6 +826,61 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
             @Param("sortDirection") String sortDirection,
             Pageable pageable
     );
+
+    /**
+     * 전사 창고 기준 SKU별 재고 현황을 단일 CTE 쿼리로 집계한다.
+     * warehouse_sku_stock: (sku, 창고) 단위 가용재고 합산.
+     * sku_shortage: SKU 단위로 부족 창고 수 + 부족 수량 집계.
+     *   - HAVING 제거: 원본 Java 로직과 동일하게 창고 재고가 있는 모든 SKU를 반환.
+     *     (shortageWarehouseCount == 0 인 SKU도 포함)
+     * 결과는 shortage_warehouse_count DESC → total_shortage_qty DESC → sku_code ASC 정렬.
+     */
+    @Query(value = """
+        WITH warehouse_sku_stock AS (
+            SELECT i.sku_id,
+                   i.location_id,
+                   COALESCE(SUM(i.available_quantity), 0) AS total_available,
+                   COALESCE(SUM(i.quantity), 0) AS total_on_hand
+            FROM inventory i
+            JOIN infrastructure inf ON inf.id = i.location_id
+            WHERE inf.location_type = 'WAREHOUSE'
+              AND i.inventory_status IN ('NORMAL', 'CIRCULAR_CANDIDATE')
+            GROUP BY i.sku_id, i.location_id
+        ),
+        sku_shortage AS (
+            SELECT wss.sku_id,
+                   pm.warehouse_safety_stock,
+                   SUM(wss.total_on_hand) AS total_on_hand,
+                   SUM(wss.total_available) AS total_available,
+                   COUNT(CASE WHEN wss.total_available < COALESCE(pm.warehouse_safety_stock, 0) THEN 1 END) AS shortage_warehouse_count,
+                   SUM(CASE WHEN wss.total_available < COALESCE(pm.warehouse_safety_stock, 0)
+                            THEN COALESCE(pm.warehouse_safety_stock, 0) - wss.total_available
+                            ELSE 0 END) AS total_shortage_qty
+            FROM warehouse_sku_stock wss
+            JOIN product_sku ps ON ps.id = wss.sku_id
+            JOIN product_master pm ON pm.code = ps.product_code
+            GROUP BY wss.sku_id, pm.warehouse_safety_stock
+        )
+        SELECT ps.sku_code AS skuCode,
+               pm.code AS itemCode, pm.name AS itemName,
+               CASE WHEN pc.name IS NOT NULL
+                    THEN CONCAT(pc.name, ' > ', cc.name)
+                    ELSE COALESCE(cc.name, '') END AS category,
+               ps.color AS color, ps.size AS size,
+               ss.total_on_hand AS totalOnHand,
+               ss.total_available AS totalAvailable,
+               ss.shortage_warehouse_count AS shortageWarehouseCount,
+               ss.total_shortage_qty AS totalShortageQty
+        FROM sku_shortage ss
+        JOIN product_sku ps ON ps.id = ss.sku_id
+        JOIN product_master pm ON pm.code = ps.product_code
+        LEFT JOIN category cc ON cc.code = pm.category_code
+        LEFT JOIN category pc ON pc.id = cc.parent_id
+        ORDER BY ss.shortage_warehouse_count DESC,
+                 ss.total_shortage_qty DESC,
+                 ps.sku_code ASC
+        """, nativeQuery = true)
+    List<ImbalancedSkuRow> findImbalancedSkuRows();
 
     /**
      * 페이지 본문에 포함된 itemCode 집합 기준으로 소재 구성을 한 번에 조회한다.
