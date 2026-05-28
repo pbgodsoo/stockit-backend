@@ -112,6 +112,54 @@
 
 ---
 
+## 🏗 System Architecture
+
+<div align="center">
+
+<img width="824" height="530" alt="image" src="https://github.com/user-attachments/assets/27dd4f6e-2b46-407b-affd-a98341156c0c" />
+
+</div>
+
+### 🔹 Architecture Summary
+
+| 구분 | 요약 |
+| :--- | :--- |
+| **Ingress 기반 라우팅** | `/` 요청은 Frontend, `/api` 요청은 Backend로 분기하여 서비스별 독립 스케일링이 가능하도록 구성했습니다. 외부 트래픽은 ALB와 Ingress에서 먼저 받아 클러스터 내부로 안전하게 전달하고, SSL 종료는 ALB에서 처리해 내부 서비스는 HTTP 통신에 집중합니다. |
+| **Nginx 정적 서버** | ALB와 Ingress가 라우팅을 담당하므로 Frontend Nginx는 Vue 빌드 결과물 정적 서빙에만 집중합니다. 라우팅 관심사를 분리해 결합도를 낮추고, 빌드 산출물만 Nginx 이미지에 복사하는 단순한 컨테이너 구조를 유지합니다. |
+| **Blue/Green 배포** | 기존 Blue에 트래픽을 유지한 채 Green을 준비하고 헬스체크 후 한 번에 전환하여 무중단 배포를 지향합니다. 장애 발생 시 Service selector를 이전 색상으로 되돌리면 빠르게 롤백할 수 있고, 구버전과 신버전이 동시에 요청을 처리하는 상황을 줄입니다. |
+| **Spring Batch 분리** | 배치 부하가 메인 API 서버에 영향을 주지 않도록 Batch 서버를 별도 실행 단위로 분리합니다. 이를 통해 Batch만 독립 배포·스케일링할 수 있고, K8s CronJob 기반 운영으로 실행 주기를 인프라에서 제어합니다. |
+| **K8s CronJob** | `concurrencyPolicy: Forbid`로 중복 실행을 인프라 레벨에서 차단하고, 실행 완료 후 Pod를 자동 종료해 리소스 낭비를 줄입니다. 별도 분산 락 코드 없이 배치 중복 실행 방지 전략을 단순화합니다. |
+| **DB 인스턴스 공유 / 스키마 분리** | 메인 서버와 Batch 서버는 같은 RDS 인스턴스를 사용하되 `stockit`, `stockit_batch`처럼 스키마를 논리적으로 분리합니다. Batch는 독립 도메인이 아니라 발주 데이터를 직접 처리하므로 DB 인스턴스를 분리할 경우 데이터 동기화 복잡도가 커질 수 있습니다. |
+| **커넥션 분리 관리** | 메인 API와 Batch의 커넥션 풀을 별도로 관리하여 배치 실행 중 메인 서버 커넥션 잠식을 방지합니다. DB 인스턴스 분리는 Grafana 모니터링에서 실제 병목이 확인될 때 검토합니다. |
+
+---
+
+## 🧩 ERD
+
+<div align="center">
+
+<img width="480" height="726" alt="image" src="https://github.com/user-attachments/assets/075320f3-86a7-43bf-b908-ccc05ea114e3" />
+
+</div>
+
+---
+
+## 📁 Project Structure
+
+| 경로 | 역할 |
+| :--- | :--- |
+| `src/main/java/org/example/stockitbe/common` | 공통 응답 모델, 예외 처리, Spring Security 설정, JWT, CORS, Actuator Health 등 공통 기반 코드 |
+| `src/main/java/org/example/stockitbe/user` | 회원가입, 로그인 이후 사용자 정보, 인증 사용자 모델, 마이페이지 기능 |
+| `src/main/java/org/example/stockitbe/hq` | 본사 도메인: 계정 승인, 상품/카테고리/거래처, 인프라, 전사 재고, 본사 발주, 창고 이동, 순환재고, 분석, ESG |
+| `src/main/java/org/example/stockitbe/store` | 매장 도메인: 매장 재고, 매장 발주, 판매 등록, 매장 입고 |
+| `src/main/java/org/example/stockitbe/warehouse` | 물류창고 도메인: 창고 재고, 창고 입고, 창고 출고, 물류 대시보드 |
+| `src/main/java/org/example/stockitbe/notification` | SSE 기반 실시간 알림, 알림 저장, 미읽음 카운트, 읽음 처리 |
+| `src/main/resources` | 프로필별 설정, SQL seed/migration, ShedLock 테이블, Spring Batch 관련 리소스 |
+| `CICD` | Dockerfile, docker-compose, Kubernetes manifest 등 배포 인프라 설정 |
+| `docs` | 코딩 규칙, 테이블 스키마, 도메인별 설계/구현 문서 |
+
+---
+
 ## 🔄 Service Flow
 
 ### 👤 사용자 및 권한 (Authentication & RBAC)
