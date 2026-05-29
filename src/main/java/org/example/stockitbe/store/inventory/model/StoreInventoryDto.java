@@ -47,7 +47,7 @@ public class StoreInventoryDto {
     @Getter
     @Builder
     public static class ItemRes {
-        @Schema(description = "상품 코드", example = "ITEM-001")
+        @Schema(description = "상품 코드", example = "PRD-TOP-SS-001")
         private String itemCode;
         @Schema(description = "대분류 카테고리", example = "상의")
         private String parentCategory;
@@ -89,9 +89,9 @@ public class StoreInventoryDto {
     @Getter
     @Builder
     public static class SkuRowRes {
-        @Schema(description = "SKU 코드", example = "SKU-RED-M")
+        @Schema(description = "SKU 코드", example = "PRD-TOP-SS-001-BLK-M")
         private String skuCode;
-        @Schema(description = "상품 코드", example = "ITEM-001")
+        @Schema(description = "상품 코드", example = "PRD-TOP-SS-001")
         private String itemCode;
         @Schema(description = "상품명", example = "반팔 티셔츠")
         private String itemName;

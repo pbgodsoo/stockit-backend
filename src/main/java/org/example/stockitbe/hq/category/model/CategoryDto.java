@@ -60,7 +60,7 @@ public class CategoryDto {
     @AllArgsConstructor
     @Builder
     public static class TreeRes {
-        @Schema(description = "카테고리 코드", example = "CAT-L2-OUT-JK")
+        @Schema(description = "카테고리 코드", example = "CAT-L2-TOP-SS")
         private String code;
         @Schema(description = "카테고리명", example = "자켓")
         private String name;
@@ -93,7 +93,7 @@ public class CategoryDto {
     @AllArgsConstructor
     @Builder
     public static class DetailRes {
-        @Schema(description = "카테고리 코드", example = "CAT-L2-OUT-JK")
+        @Schema(description = "카테고리 코드", example = "CAT-L2-TOP-SS")
         private String code;
         @Schema(description = "카테고리명", example = "자켓")
         private String name;

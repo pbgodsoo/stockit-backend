@@ -31,11 +31,11 @@ public class StoreInboundDto {
     @Getter
     @Builder
     public static class ListRes {
-        @Schema(description = "입고번호", example = "INB-20240101-001")
+        @Schema(description = "입고번호", example = "INB-20260528-00001")
         private String inboundNo;
-        @Schema(description = "소스 참조번호 (발주번호 등)", example = "ORD-20240101-001")
+        @Schema(description = "소스 참조번호 (발주번호 등)", example = "SOR-20260510-00001")
         private String sourceRefNo;
-        @Schema(description = "연계 출고번호", example = "OUT-20240101-001")
+        @Schema(description = "연계 출고번호", example = "WOB-20260528-00002")
         private String outboundNo;
         @Schema(description = "출고 상태")
         private OutboundStatus outboundStatus;
@@ -72,13 +72,13 @@ public class StoreInboundDto {
     @Getter
     @Builder
     public static class DetailRes {
-        @Schema(description = "입고번호", example = "INB-20240101-001")
+        @Schema(description = "입고번호", example = "INB-20260528-00001")
         private String inboundNo;
-        @Schema(description = "소스 참조번호", example = "ORD-20240101-001")
+        @Schema(description = "소스 참조번호", example = "SOR-20260510-00001")
         private String sourceRefNo;
         @Schema(description = "소스 참조 ID", example = "1")
         private Long sourceRefId;
-        @Schema(description = "연계 출고번호", example = "OUT-20240101-001")
+        @Schema(description = "연계 출고번호", example = "WOB-20260528-00002")
         private String outboundNo;
         @Schema(description = "매장 ID", example = "1")
         private Long storeId;
@@ -163,9 +163,9 @@ public class StoreInboundDto {
         private Long id;
         @Schema(description = "SKU ID", example = "1")
         private Long skuId;
-        @Schema(description = "SKU 코드", example = "SKU-RED-M")
+        @Schema(description = "SKU 코드", example = "PRD-TOP-SS-001-BLK-M")
         private String skuCode;
-        @Schema(description = "상품 코드", example = "ITEM-001")
+        @Schema(description = "상품 코드", example = "PRD-TOP-SS-001")
         private String productCode;
         @Schema(description = "상품명", example = "반팔 티셔츠")
         private String productName;
@@ -235,7 +235,7 @@ public class StoreInboundDto {
     @Getter
     @Builder
     public static class OutboundSummaryRes {
-        @Schema(description = "출고번호", example = "OUT-20240101-001")
+        @Schema(description = "출고번호", example = "WOB-20260528-00002")
         private String outboundNo;
         @Schema(description = "출고 상태")
         private OutboundStatus outboundStatus;

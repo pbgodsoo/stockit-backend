@@ -24,7 +24,7 @@ public class UserDto {
         @Schema(description = "이메일 (영문+숫자, 중복 불가)", example = "swagger-test01@stockit.com", requiredMode = Schema.RequiredMode.REQUIRED)
         private String email;
 
-        @Schema(description = "비밀번호 (대소문자+숫자+특수문자 8자 이상)", example = "Test1234!", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "비밀번호 (대소문자+숫자+특수문자 8자 이상)", example = "Stockit!2026", requiredMode = Schema.RequiredMode.REQUIRED)
         private String password;
 
         @Schema(description = "전화번호 (하이픈 없이 010+8자리)", example = "01099990001", requiredMode = Schema.RequiredMode.REQUIRED)
@@ -203,7 +203,7 @@ public class UserDto {
     @AllArgsConstructor
     @Schema(description = "비밀번호 변경 요청")
     public static class UpdatePasswordReq {
-        @Schema(description = "현재 비밀번호", example = "Test1234!", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "현재 비밀번호", example = "Stockit!2026", requiredMode = Schema.RequiredMode.REQUIRED)
         private String currentPassword;
 
         @Schema(description = "새 비밀번호 (대소문자+숫자+특수문자 8자 이상)", example = "NewPass1234!", requiredMode = Schema.RequiredMode.REQUIRED)

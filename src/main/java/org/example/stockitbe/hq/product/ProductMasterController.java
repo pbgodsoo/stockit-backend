@@ -34,7 +34,7 @@ public class ProductMasterController {
     public BaseResponse<List<ProductDto.ProductMasterRes>> listProducts(
             @Parameter(description = "제품명 검색어", example = "자켓")
             @RequestParam(required = false) String keyword,
-            @Parameter(description = "카테고리 코드", example = "CAT-L2-OUT-JK")
+            @Parameter(description = "카테고리 코드", example = "CAT-L2-TOP-SS")
             @RequestParam(required = false) String categoryCode) {
         return BaseResponse.success(service.findProducts(keyword, categoryCode));
     }
@@ -51,7 +51,7 @@ public class ProductMasterController {
     })
     @GetMapping("/products/{code}")
     public BaseResponse<ProductDto.ProductMasterRes> detailProduct(
-            @Parameter(description = "제품 코드", example = "PRD-OUT-JK-001")
+            @Parameter(description = "제품 코드", example = "PRD-TOP-SS-001")
             @PathVariable String code) {
         return BaseResponse.success(service.findProductByCode(code));
     }
@@ -83,7 +83,7 @@ public class ProductMasterController {
     })
     @PatchMapping("/products/{code}")
     public BaseResponse<ProductDto.ProductMasterRes> updateProduct(
-            @Parameter(description = "제품 코드", example = "PRD-OUT-JK-001")
+            @Parameter(description = "제품 코드", example = "PRD-TOP-SS-001")
             @PathVariable String code,
             @Valid @RequestBody ProductDto.ProductMasterUpsertReq req) {
         return BaseResponse.success(service.updateProduct(code, req));
@@ -101,7 +101,7 @@ public class ProductMasterController {
     })
     @DeleteMapping("/products/{code}")
     public BaseResponse<Void> deleteProduct(
-            @Parameter(description = "제품 코드", example = "PRD-OUT-JK-001")
+            @Parameter(description = "제품 코드", example = "PRD-TOP-SS-001")
             @PathVariable String code) {
         service.deleteProduct(code);
         return BaseResponse.success(null);
@@ -119,7 +119,7 @@ public class ProductMasterController {
     })
     @GetMapping("/products/{code}/skus")
     public BaseResponse<List<ProductDto.ProductSkuRes>> listSkus(
-            @Parameter(description = "제품 코드", example = "PRD-OUT-JK-001")
+            @Parameter(description = "제품 코드", example = "PRD-TOP-SS-001")
             @PathVariable String code) {
         return BaseResponse.success(service.findSkus(code));
     }
@@ -136,7 +136,7 @@ public class ProductMasterController {
     })
     @PostMapping("/products/{code}/skus")
     public BaseResponse<ProductDto.ProductSkuRes> createSku(
-            @Parameter(description = "제품 코드", example = "PRD-OUT-JK-001")
+            @Parameter(description = "제품 코드", example = "PRD-TOP-SS-001")
             @PathVariable String code,
             @Valid @RequestBody ProductDto.ProductSkuUpsertReq req) {
         return BaseResponse.success(service.createSku(code, req));
@@ -154,7 +154,7 @@ public class ProductMasterController {
     })
     @PostMapping("/products/{code}/skus/bulk")
     public BaseResponse<ProductDto.ProductSkuBulkCreateRes> createSkusBulk(
-            @Parameter(description = "제품 코드", example = "PRD-OUT-JK-001")
+            @Parameter(description = "제품 코드", example = "PRD-TOP-SS-001")
             @PathVariable String code,
             @Valid @RequestBody ProductDto.ProductSkuBulkCreateReq req) {
         return BaseResponse.success(service.bulkCreateSkus(code, req));
@@ -172,7 +172,7 @@ public class ProductMasterController {
     })
     @PatchMapping("/skus/{skuCode}")
     public BaseResponse<ProductDto.ProductSkuRes> updateSku(
-            @Parameter(description = "SKU 코드", example = "PRD-OUT-JK-001-BLK-M")
+            @Parameter(description = "SKU 코드", example = "PRD-TOP-SS-001-BLK-M")
             @PathVariable String skuCode,
             @Valid @RequestBody ProductDto.ProductSkuUpsertReq req) {
         return BaseResponse.success(service.updateSku(skuCode, req));
@@ -190,7 +190,7 @@ public class ProductMasterController {
     })
     @PatchMapping("/products/{code}/skus/price")
     public BaseResponse<ProductDto.ProductSkuPriceBulkUpdateRes> updateSkuPrices(
-            @Parameter(description = "제품 코드", example = "PRD-OUT-JK-001")
+            @Parameter(description = "제품 코드", example = "PRD-TOP-SS-001")
             @PathVariable String code,
             @Valid @RequestBody ProductDto.ProductSkuPriceBulkUpdateReq req) {
         return BaseResponse.success(service.updateAllSkuPrices(code, req));
@@ -208,7 +208,7 @@ public class ProductMasterController {
     })
     @PatchMapping("/products/{code}/skus/status")
     public BaseResponse<ProductDto.ProductSkuStatusBulkUpdateRes> updateSkuStatus(
-            @Parameter(description = "제품 코드", example = "PRD-OUT-JK-001")
+            @Parameter(description = "제품 코드", example = "PRD-TOP-SS-001")
             @PathVariable String code,
             @Valid @RequestBody ProductDto.ProductSkuStatusBulkUpdateReq req) {
         return BaseResponse.success(service.updateAllSkuStatus(code, req));
@@ -226,7 +226,7 @@ public class ProductMasterController {
     })
     @DeleteMapping("/skus/{skuCode}")
     public BaseResponse<Void> deleteSku(
-            @Parameter(description = "SKU 코드", example = "PRD-OUT-JK-001-BLK-M")
+            @Parameter(description = "SKU 코드", example = "PRD-TOP-SS-001-BLK-M")
             @PathVariable String skuCode) {
         service.deleteSku(skuCode);
         return BaseResponse.success(null);

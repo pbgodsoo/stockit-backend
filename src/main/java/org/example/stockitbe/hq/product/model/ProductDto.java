@@ -19,7 +19,7 @@ public class ProductDto {
     public static class ProductMasterUpsertReq {
         @Schema(description = "제품명", example = "폴리에스터 자켓", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotBlank private String name;
-        @Schema(description = "하위 카테고리 코드", example = "CAT-L2-OUT-JK", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "하위 카테고리 코드", example = "CAT-L2-TOP-SS", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotBlank private String categoryCode;
         @Schema(description = "기준 가격", example = "59000", minimum = "0", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull @Min(0) private Long basePrice;
@@ -29,7 +29,7 @@ public class ProductDto {
         @NotNull @Min(0) private Integer warehouseSafetyStock;
         @Schema(description = "매장 안전재고", example = "20", minimum = "0", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull @Min(0) private Integer storeSafetyStock;
-        @Schema(description = "메인 공급처 코드", example = "VEN-00001", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "메인 공급처 코드", example = "VND-001", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotBlank private String mainVendorCode;
         @Schema(description = "소재 타입. 허용값: NATURAL_SINGLE, SYNTHETIC, BLEND", example = "SYNTHETIC", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull private ProductMaterialType materialType;
@@ -133,11 +133,11 @@ public class ProductDto {
     @AllArgsConstructor
     @Builder
     public static class ProductMasterRes {
-        @Schema(description = "제품 코드", example = "PRD-OUT-JK-001")
+        @Schema(description = "제품 코드", example = "PRD-TOP-SS-001")
         private String code;
         @Schema(description = "제품명", example = "폴리에스터 자켓")
         private String name;
-        @Schema(description = "카테고리 코드", example = "CAT-L2-OUT-JK")
+        @Schema(description = "카테고리 코드", example = "CAT-L2-TOP-SS")
         private String categoryCode;
         @Schema(description = "기준 가격", example = "59000")
         private Long basePrice;
@@ -147,7 +147,7 @@ public class ProductDto {
         private Integer warehouseSafetyStock;
         @Schema(description = "매장 안전재고", example = "20")
         private Integer storeSafetyStock;
-        @Schema(description = "메인 공급처 코드", example = "VEN-00001")
+        @Schema(description = "메인 공급처 코드", example = "VND-001")
         private String mainVendorCode;
         @Schema(description = "소재 타입", example = "SYNTHETIC")
         private ProductMaterialType materialType;
@@ -213,9 +213,9 @@ public class ProductDto {
     @AllArgsConstructor
     @Builder
     public static class ProductSkuRes {
-        @Schema(description = "SKU 코드", example = "PRD-OUT-JK-001-BLK-M")
+        @Schema(description = "SKU 코드", example = "PRD-TOP-SS-001-BLK-M")
         private String skuCode;
-        @Schema(description = "제품 코드", example = "PRD-OUT-JK-001")
+        @Schema(description = "제품 코드", example = "PRD-TOP-SS-001")
         private String productCode;
         @Schema(description = "색상 코드", example = "BLK")
         private String color;
@@ -249,7 +249,7 @@ public class ProductDto {
     @AllArgsConstructor
     @Builder
     public static class ProductSkuBulkCreateRes {
-        @Schema(description = "제품 코드", example = "PRD-OUT-JK-001")
+        @Schema(description = "제품 코드", example = "PRD-TOP-SS-001")
         private String productCode;
         @Schema(description = "요청 조합 수", example = "4")
         private int requestedCount;
@@ -264,7 +264,7 @@ public class ProductDto {
     @AllArgsConstructor
     @Builder
     public static class ProductSkuPriceBulkUpdateRes {
-        @Schema(description = "제품 코드", example = "PRD-OUT-JK-001")
+        @Schema(description = "제품 코드", example = "PRD-TOP-SS-001")
         private String productCode;
         @Schema(description = "수정된 SKU 수", example = "4")
         private long updatedCount;
@@ -277,7 +277,7 @@ public class ProductDto {
     @AllArgsConstructor
     @Builder
     public static class ProductSkuStatusBulkUpdateRes {
-        @Schema(description = "제품 코드", example = "PRD-OUT-JK-001")
+        @Schema(description = "제품 코드", example = "PRD-TOP-SS-001")
         private String productCode;
         @Schema(description = "수정된 SKU 수", example = "4")
         private long updatedCount;

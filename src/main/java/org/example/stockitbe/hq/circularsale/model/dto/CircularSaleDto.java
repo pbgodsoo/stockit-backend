@@ -56,7 +56,7 @@ public class CircularSaleDto {
         private String saleNo;
         @Schema(description = "판매 상태")
         private CircularSaleStatus status;
-        @Schema(description = "연계 출고번호", example = "OUT-20240101-001")
+        @Schema(description = "연계 출고번호", example = "WOB-20260528-00002")
         private String outboundNo;
         @Schema(description = "출고 상태")
         private OutboundStatus outboundStatus;
@@ -118,7 +118,7 @@ public class CircularSaleDto {
         @Schema(description = "재고 ID", example = "1")
         @Min(1)
         private Long inventoryId;
-        @Schema(description = "SKU 코드", example = "SKU-RED-M")
+        @Schema(description = "SKU 코드", example = "PRD-TOP-SS-001-BLK-M")
         @NotBlank
         private String skuCode;
         @Schema(description = "요청 중량 (kg)", example = "50.0")
@@ -153,9 +153,9 @@ public class CircularSaleDto {
         private Long itemId;
         @Schema(description = "재고 ID", example = "1")
         private Long inventoryId;
-        @Schema(description = "SKU 코드", example = "SKU-RED-M")
+        @Schema(description = "SKU 코드", example = "PRD-TOP-SS-001-BLK-M")
         private String skuCode;
-        @Schema(description = "상품 코드", example = "ITEM-001")
+        @Schema(description = "상품 코드", example = "PRD-TOP-SS-001")
         private String productCode;
         @Schema(description = "상품명", example = "반팔 티셔츠")
         private String productName;
@@ -293,7 +293,7 @@ public class CircularSaleDto {
         private String saleNo;
         @Schema(description = "판매 상태")
         private CircularSaleStatus status;
-        @Schema(description = "연계 출고번호", example = "OUT-20240101-001")
+        @Schema(description = "연계 출고번호", example = "WOB-20260528-00002")
         private String outboundNo;
         @Schema(description = "출고 창고 코드", example = "샘플-001")
         private String outboundWarehouseCode;
@@ -337,7 +337,7 @@ public class CircularSaleDto {
         private String saleNo;
         @Schema(description = "판매 상태")
         private CircularSaleStatus status;
-        @Schema(description = "연계 출고번호", example = "OUT-20240101-001")
+        @Schema(description = "연계 출고번호", example = "WOB-20260528-00002")
         private String outboundNo;
         @Schema(description = "출고 상태")
         private OutboundStatus outboundStatus;

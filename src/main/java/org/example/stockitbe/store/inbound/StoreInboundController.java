@@ -45,7 +45,7 @@ public class StoreInboundController {
     @GetMapping("/{inboundNo}")
     public BaseResponse<StoreInboundDto.DetailRes> detail(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "입고번호", example = "INB-20240101-001") @PathVariable String inboundNo
+            @Parameter(description = "입고번호", example = "INB-20260528-00001") @PathVariable String inboundNo
     ) {
         return BaseResponse.success(storeInboundService.detail(me, inboundNo));
     }
@@ -58,7 +58,7 @@ public class StoreInboundController {
     @PostMapping("/{inboundNo}/confirm")
     public BaseResponse<StoreInboundDto.DetailRes> confirm(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "입고번호", example = "INB-20240101-001") @PathVariable String inboundNo,
+            @Parameter(description = "입고번호", example = "INB-20260528-00001") @PathVariable String inboundNo,
             @RequestBody(required = false) StoreInboundDto.ActionReq req
     ) {
         return BaseResponse.success(storeInboundService.confirm(me, inboundNo, req == null ? null : req.getReason()));

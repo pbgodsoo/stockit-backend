@@ -8,6 +8,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.DefaultUriBuilderFactory;
 
 import java.time.LocalDate;
+import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
@@ -19,6 +20,7 @@ public class CarbonPriceApiClient {
 
     private static final DateTimeFormatter YYYYMMDD = DateTimeFormatter.BASIC_ISO_DATE;
     private static final String SUCCESS_CODE = "00";   // 공공데이터포털 정상 코드
+    private static final Duration API_TIMEOUT = Duration.ofSeconds(5);
 
     private final WebClient webClient;
     private final String serviceKey;
@@ -54,7 +56,7 @@ public class CarbonPriceApiClient {
                             .build())
                     .retrieve()
                     .bodyToMono(CarbonPriceDto.ApiResponse.class)
-                    .block();
+                    .block(API_TIMEOUT);
 
             if (res == null
                     || res.getResponse() == null
@@ -107,7 +109,7 @@ public class CarbonPriceApiClient {
                             .build())
                     .retrieve()
                     .bodyToMono(CarbonPriceDto.ApiResponse.class)
-                    .block();
+                    .block(API_TIMEOUT);
 
             // 응답 헤더 검증 — resultCode 가 "00" 이 아니면 외부 API 비정상 응답
             if (res == null

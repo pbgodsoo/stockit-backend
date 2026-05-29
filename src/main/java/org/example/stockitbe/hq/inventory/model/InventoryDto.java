@@ -221,7 +221,7 @@ public class InventoryDto {
         private String childCategory;
         @Schema(description = "품목명", example = "폴리에스터 자켓")
         private String itemName;
-        @Schema(description = "창고 코드", example = "WH-001")
+        @Schema(description = "창고 코드", example = "WH-SL-0001")
         private String warehouseCode;
         @Schema(description = "창고명", example = "서울 물류창고")
         private String warehouseName;
@@ -410,7 +410,7 @@ public class InventoryDto {
         private String itemCode;
         @Schema(description = "품목명", example = "폴리에스터 자켓")
         private String itemName;
-        @Schema(description = "창고 코드", example = "WH-001")
+        @Schema(description = "창고 코드", example = "WH-SL-0001")
         private String warehouseCode;
         @Schema(description = "창고명", example = "서울 물류창고")
         private String warehouseName;

@@ -152,7 +152,7 @@ public class InventoryController {
             @RequestParam(required = false) String parentCategory,
             @Parameter(description = "하위 카테고리명", example = "자켓")
             @RequestParam(required = false) String childCategory,
-            @Parameter(description = "창고 코드 목록", example = "WH-001")
+            @Parameter(description = "창고 코드 목록", example = "WH-SL-0001")
             @RequestParam(required = false) List<String> warehouseCodes,
             @Parameter(description = "후보 조건 코드 목록. 전달한 조건 코드를 모두 만족하는 후보만 조회한다.", example = "1")
             @RequestParam(required = false) List<Integer> conditionCodes
@@ -189,7 +189,7 @@ public class InventoryController {
             @RequestParam(defaultValue = "skuCode,asc") String sort,
             @Parameter(description = "SKU 코드, 품목명 등 검색어", example = "폴리에스터")
             @RequestParam(required = false) String keyword,
-            @Parameter(description = "창고 코드 목록", example = "WH-001")
+            @Parameter(description = "창고 코드 목록", example = "WH-SL-0001")
             @RequestParam(required = false) List<String> warehouseCodes,
             @Parameter(description = "소재 그룹", example = "synthetic")
             @RequestParam(required = false) String materialGroup,

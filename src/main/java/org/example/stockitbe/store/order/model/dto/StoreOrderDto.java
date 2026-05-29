@@ -61,9 +61,9 @@ public class StoreOrderDto {
     @AllArgsConstructor
     @Builder
     public static class CreateRes {
-        @Schema(description = "발주번호 (문자열 형식, 예: ORD-20240101-001)", example = "ORD-20240101-001")
+        @Schema(description = "발주번호 (문자열 형식, 예: SOR-20260510-00001)", example = "SOR-20260510-00001")
         private String orderId;
-        @Schema(description = "매장 코드", example = "STORE-001")
+        @Schema(description = "매장 코드", example = "ST-SL-0001")
         private String storeCode;
         @Schema(description = "매장명", example = "강남점")
         private String storeName;
@@ -128,7 +128,7 @@ public class StoreOrderDto {
     @AllArgsConstructor
     @Builder
     public static class CreateLineReq {
-        @Schema(description = "SKU 코드", example = "SKU-RED-M")
+        @Schema(description = "SKU 코드", example = "PRD-TOP-SS-001-BLK-M")
         @NotBlank
         private String skuCode;
         @Schema(description = "요청 수량", example = "10")
@@ -159,9 +159,9 @@ public class StoreOrderDto {
     public static class CreateLineRes {
         @Schema(description = "SKU ID", example = "1")
         private Long skuId;
-        @Schema(description = "SKU 코드", example = "SKU-RED-M")
+        @Schema(description = "SKU 코드", example = "PRD-TOP-SS-001-BLK-M")
         private String skuCode;
-        @Schema(description = "상품 코드", example = "ITEM-001")
+        @Schema(description = "상품 코드", example = "PRD-TOP-SS-001")
         private String productCode;
         @Schema(description = "상품명", example = "반팔 티셔츠")
         private String productName;
@@ -257,7 +257,7 @@ public class StoreOrderDto {
     @AllArgsConstructor
     @Builder
     public static class UpdateLineReq {
-        @Schema(description = "SKU 코드", example = "SKU-RED-M")
+        @Schema(description = "SKU 코드", example = "PRD-TOP-SS-001-BLK-M")
         @NotBlank
         private String skuCode;
         @Schema(description = "요청 수량", example = "10")
@@ -338,9 +338,9 @@ public class StoreOrderDto {
     @AllArgsConstructor
     @Builder
     public static class ListRes {
-        @Schema(description = "발주번호 (문자열 형식, 예: ORD-20240101-001)", example = "ORD-20240101-001")
+        @Schema(description = "발주번호 (문자열 형식, 예: SOR-20260510-00001)", example = "SOR-20260510-00001")
         private String orderId;
-        @Schema(description = "매장 코드", example = "STORE-001")
+        @Schema(description = "매장 코드", example = "ST-SL-0001")
         private String storeCode;
         @Schema(description = "매장명", example = "강남점")
         private String storeName;
@@ -393,9 +393,9 @@ public class StoreOrderDto {
     @AllArgsConstructor
     @Builder
     public static class InboundSummaryRes {
-        @Schema(description = "입고번호", example = "INB-20240101-001")
+        @Schema(description = "입고번호", example = "INB-20260528-00001")
         private String inboundNo;
-        @Schema(description = "출고번호", example = "OUT-20240101-001")
+        @Schema(description = "출고번호", example = "WOB-20260528-00002")
         private String outboundNo;
         @Schema(description = "출고 창고 ID", example = "1")
         private Long fromWarehouseId;
@@ -455,7 +455,7 @@ public class StoreOrderDto {
     @AllArgsConstructor
     @Builder
     public static class AnalyticsSkuRes {
-        @Schema(description = "SKU 코드", example = "SKU-RED-M")
+        @Schema(description = "SKU 코드", example = "PRD-TOP-SS-001-BLK-M")
         private String skuCode;
         @Schema(description = "상품명", example = "반팔 티셔츠")
         private String productName;

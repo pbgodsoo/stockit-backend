@@ -60,7 +60,7 @@ public class StoreOrderController {
     })
     @GetMapping("/{orderNo}")
     public BaseResponse<StoreOrderDto.DetailRes> detail(
-            @Parameter(description = "발주번호", example = "ORD-20240101-001") @PathVariable String orderNo,
+            @Parameter(description = "발주번호", example = "SOR-20260510-00001") @PathVariable String orderNo,
             @AuthenticationPrincipal AuthUserDetails me) {
         StoreOrderDto.DetailRes result = service.detail(orderNo, me);
         return BaseResponse.success(result);
@@ -86,7 +86,7 @@ public class StoreOrderController {
     })
     @PutMapping("/{orderNo}")
     public BaseResponse<StoreOrderDto.UpdateRes> update(
-            @Parameter(description = "발주번호", example = "ORD-20240101-001") @PathVariable String orderNo,
+            @Parameter(description = "발주번호", example = "SOR-20260510-00001") @PathVariable String orderNo,
             @AuthenticationPrincipal AuthUserDetails me,
             @Valid @RequestBody StoreOrderDto.UpdateReq dto) {
         StoreOrderDto.UpdateRes result = service.update(orderNo, dto, me);
@@ -100,7 +100,7 @@ public class StoreOrderController {
     })
     @PatchMapping("/{orderNo}/cancel")
     public BaseResponse<StoreOrderDto.CancelRes> cancel(
-            @Parameter(description = "발주번호", example = "ORD-20240101-001") @PathVariable String orderNo,
+            @Parameter(description = "발주번호", example = "SOR-20260510-00001") @PathVariable String orderNo,
             @AuthenticationPrincipal AuthUserDetails me,
             @Valid @RequestBody StoreOrderDto.CancelReq dto) {
         StoreOrderDto.CancelRes result = service.cancel(orderNo, dto, me);
@@ -114,7 +114,7 @@ public class StoreOrderController {
     })
     @PatchMapping("/{orderNo}/approve")
     public BaseResponse<StoreOrderDto.ApproveRes> approve(
-            @Parameter(description = "발주번호", example = "ORD-20240101-001") @PathVariable String orderNo,
+            @Parameter(description = "발주번호", example = "SOR-20260510-00001") @PathVariable String orderNo,
             @AuthenticationPrincipal AuthUserDetails me,
             @RequestBody(required = false) StoreOrderDto.ApproveReq dto) {
         StoreOrderDto.ApproveRes result = service.approve(orderNo, dto == null ? StoreOrderDto.ApproveReq.builder().build() : dto, me);

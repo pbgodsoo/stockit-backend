@@ -55,11 +55,11 @@ public class WarehouseTransferDto {
         @NotBlank
         private String skuCode;
 
-        @Schema(description = "출발 창고 코드", example = "WH-001", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "출발 창고 코드", example = "WH-SL-0001", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotBlank
         private String fromWarehouseCode;
 
-        @Schema(description = "도착 창고 코드", example = "WH-002", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "도착 창고 코드", example = "WH-SL-0002", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotBlank
         private String toWarehouseCode;
 
@@ -97,9 +97,9 @@ public class WarehouseTransferDto {
         private String lineId;
         @Schema(description = "SKU 코드", example = "SKU-TOP-SS-001-BLK-M")
         private String skuCode;
-        @Schema(description = "출발 창고 코드", example = "WH-001")
+        @Schema(description = "출발 창고 코드", example = "WH-SL-0001")
         private String fromWarehouseCode;
-        @Schema(description = "도착 창고 코드", example = "WH-002")
+        @Schema(description = "도착 창고 코드", example = "WH-SL-0002")
         private String toWarehouseCode;
         @Schema(description = "이동 수량", example = "10")
         private Integer qty;
@@ -132,11 +132,11 @@ public class WarehouseTransferDto {
     public static class ExecuteTransferRes {
         @Schema(description = "창고간 재고이동 번호", example = "WTF-20260527-00001")
         private String transferNo;
-        @Schema(description = "출발 창고 코드", example = "WH-001")
+        @Schema(description = "출발 창고 코드", example = "WH-SL-0001")
         private String fromWarehouseCode;
         @Schema(description = "출발 창고명", example = "서울 물류창고")
         private String fromWarehouseName;
-        @Schema(description = "도착 창고 코드", example = "WH-002")
+        @Schema(description = "도착 창고 코드", example = "WH-SL-0002")
         private String toWarehouseCode;
         @Schema(description = "도착 창고명", example = "부산 물류창고")
         private String toWarehouseName;
@@ -213,9 +213,9 @@ public class WarehouseTransferDto {
     @AllArgsConstructor
     public static class ExecuteFailedRouteRes {
         // 실패한 라우트(출발/도착 창고) 식별값
-        @Schema(description = "출발 창고 코드", example = "WH-001")
+        @Schema(description = "출발 창고 코드", example = "WH-SL-0001")
         private String fromWarehouseCode;
-        @Schema(description = "도착 창고 코드", example = "WH-002")
+        @Schema(description = "도착 창고 코드", example = "WH-SL-0002")
         private String toWarehouseCode;
         // 실패 사유 표준 코드/메시지
         @Schema(description = "실패 코드", example = "2000")
@@ -276,11 +276,11 @@ public class WarehouseTransferDto {
     public static class TransferListItemRes {
         @Schema(description = "창고간 재고이동 번호", example = "WTF-20260527-00001")
         private String transferNo;
-        @Schema(description = "출발 창고 코드", example = "WH-001")
+        @Schema(description = "출발 창고 코드", example = "WH-SL-0001")
         private String fromWarehouseCode;
         @Schema(description = "출발 창고명", example = "서울 물류창고")
         private String fromWarehouseName;
-        @Schema(description = "도착 창고 코드", example = "WH-002")
+        @Schema(description = "도착 창고 코드", example = "WH-SL-0002")
         private String toWarehouseCode;
         @Schema(description = "도착 창고명", example = "부산 물류창고")
         private String toWarehouseName;
@@ -339,11 +339,11 @@ public class WarehouseTransferDto {
     public static class TransferDetailRes {
         @Schema(description = "창고간 재고이동 번호", example = "WTF-20260527-00001")
         private String transferNo;
-        @Schema(description = "출발 창고 코드", example = "WH-001")
+        @Schema(description = "출발 창고 코드", example = "WH-SL-0001")
         private String fromWarehouseCode;
         @Schema(description = "출발 창고명", example = "서울 물류창고")
         private String fromWarehouseName;
-        @Schema(description = "도착 창고 코드", example = "WH-002")
+        @Schema(description = "도착 창고 코드", example = "WH-SL-0002")
         private String toWarehouseCode;
         @Schema(description = "도착 창고명", example = "부산 물류창고")
         private String toWarehouseName;
@@ -456,7 +456,7 @@ public class WarehouseTransferDto {
     @Builder
     @AllArgsConstructor
     public static class WarehouseSkuDistributionRes {
-        @Schema(description = "창고 코드", example = "WH-001")
+        @Schema(description = "창고 코드", example = "WH-SL-0001")
         private String warehouseCode;
         @Schema(description = "창고명", example = "서울 물류창고")
         private String warehouseName;

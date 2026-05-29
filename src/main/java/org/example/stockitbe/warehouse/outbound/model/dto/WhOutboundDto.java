@@ -32,17 +32,17 @@ public class WhOutboundDto {
     @AllArgsConstructor
     @Builder
     public static class ListRes {
-        @Schema(description = "출고번호", example = "OUT-20240101-001")
+        @Schema(description = "출고번호", example = "WOB-20260528-00002")
         private String outboundNo;
         @Schema(description = "소스 유형 (STORE_ORDER / CIRCULAR_SALE 등)", example = "STORE_ORDER")
         private String sourceType;
-        @Schema(description = "소스 참조번호", example = "ORD-20240101-001")
+        @Schema(description = "소스 참조번호", example = "SOR-20260510-00001")
         private String sourceRefNo;
         @Schema(description = "소스 참조 시퀀스", example = "1")
         private Integer sourceRefSeq;
         @Schema(description = "창고 ID", example = "1")
         private Long warehouseId;
-        @Schema(description = "창고 코드", example = "WH-001")
+        @Schema(description = "창고 코드", example = "WH-SL-0001")
         private String warehouseCode;
         @Schema(description = "창고명", example = "경기 물류센터")
         private String warehouseName;
@@ -66,11 +66,11 @@ public class WhOutboundDto {
     @AllArgsConstructor
     @Builder
     public static class DetailRes {
-        @Schema(description = "출고번호", example = "OUT-20240101-001")
+        @Schema(description = "출고번호", example = "WOB-20260528-00002")
         private String outboundNo;
         @Schema(description = "소스 유형", example = "STORE_ORDER")
         private String sourceType;
-        @Schema(description = "소스 참조번호", example = "ORD-20240101-001")
+        @Schema(description = "소스 참조번호", example = "SOR-20260510-00001")
         private String sourceRefNo;
         @Schema(description = "소스 참조 시퀀스", example = "1")
         private Integer sourceRefSeq;
@@ -78,7 +78,7 @@ public class WhOutboundDto {
         private Long sourceRefId;
         @Schema(description = "창고 ID", example = "1")
         private Long warehouseId;
-        @Schema(description = "창고 코드", example = "WH-001")
+        @Schema(description = "창고 코드", example = "WH-SL-0001")
         private String warehouseCode;
         @Schema(description = "창고명", example = "경기 물류센터")
         private String warehouseName;
@@ -126,9 +126,9 @@ public class WhOutboundDto {
         private Long sourceLineRefId;
         @Schema(description = "SKU ID", example = "1")
         private Long skuId;
-        @Schema(description = "SKU 코드", example = "SKU-RED-M")
+        @Schema(description = "SKU 코드", example = "PRD-TOP-SS-001-BLK-M")
         private String skuCode;
-        @Schema(description = "상품 코드", example = "ITEM-001")
+        @Schema(description = "상품 코드", example = "PRD-TOP-SS-001")
         private String productCode;
         @Schema(description = "상품명", example = "반팔 티셔츠")
         private String productName;
@@ -200,7 +200,7 @@ public class WhOutboundDto {
     @AllArgsConstructor
     @Builder
     public static class InboundSummaryRes {
-        @Schema(description = "입고번호", example = "INB-20240101-001")
+        @Schema(description = "입고번호", example = "INB-20260528-00001")
         private String inboundNo;
         @Schema(description = "입고 상태")
         private StoreInboundStatus inboundStatus;

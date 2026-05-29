@@ -24,12 +24,12 @@ public class StoreOrderBatchDto {
         @Schema(description = "배치 범위 (ALL / STORE)", example = "ALL")
         @NotNull
         private StoreOrderBatchScope mode;
-        @Schema(description = "매장 코드 (mode=STORE일 때 필수)", example = "STORE-001")
+        @Schema(description = "매장 코드 (mode=STORE일 때 필수)", example = "ST-SL-0001")
         private String storeCode;
 
         // Reader SQL의 BETWEEN 절에 직접 전달되는 처리 대상 기간.
         // 호출자(Controller/Scheduler)가 범위를 결정해 전달하므로 BatchConfig 내부에서 날짜를 계산하지 않는다.
-        @Schema(description = "처리 대상 시작 일시 (포함)", example = "2024-01-01T00:00:00")
+        @Schema(description = "처리 대상 시작 일시 (포함)", example = "2026-05-01T00:00:00")
         private LocalDateTime fromDateTime;
         @Schema(description = "처리 대상 종료 일시 (포함)", example = "2024-01-31T23:59:59")
         private LocalDateTime toDateTime;
@@ -55,7 +55,7 @@ public class StoreOrderBatchDto {
         private StoreOrderBatchTriggerType triggerType;
         @Schema(description = "처리 범위")
         private StoreOrderBatchScope scope;
-        @Schema(description = "매장 코드 (STORE 범위일 때)", example = "STORE-001")
+        @Schema(description = "매장 코드 (STORE 범위일 때)", example = "ST-SL-0001")
         private String storeCode;
         @Schema(description = "처리 요청 건수", example = "15")
         private Integer requestedCount;
@@ -72,7 +72,7 @@ public class StoreOrderBatchDto {
     @AllArgsConstructor
     @Builder
     public static class ItemRes {
-        @Schema(description = "발주번호", example = "ORD-20240101-001")
+        @Schema(description = "발주번호", example = "SOR-20260510-00001")
         private String orderNo;
         @Schema(description = "처리 결과 (SUCCESS / FAIL)", example = "SUCCESS")
         private String result;
@@ -87,7 +87,7 @@ public class StoreOrderBatchDto {
     @AllArgsConstructor
     @Builder
     public static class PendingStoreRes {
-        @Schema(description = "매장 코드", example = "STORE-001")
+        @Schema(description = "매장 코드", example = "ST-SL-0001")
         private String storeCode;
         @Schema(description = "매장명", example = "강남점")
         private String storeName;

@@ -51,7 +51,7 @@ public class WhOutboundController {
     @GetMapping("/{outboundNo}")
     public BaseResponse<WhOutboundDto.DetailRes> detail(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "출고번호", example = "OUT-20240101-001") @PathVariable String outboundNo
+            @Parameter(description = "출고번호", example = "WOB-20260528-00002") @PathVariable String outboundNo
     ) {
         return BaseResponse.success(whOutboundService.detail(me, outboundNo));
     }
@@ -64,7 +64,7 @@ public class WhOutboundController {
     @PostMapping("/{outboundNo}/confirm")
     public BaseResponse<WhOutboundDto.DetailRes> confirm(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "출고번호", example = "OUT-20240101-001") @PathVariable String outboundNo,
+            @Parameter(description = "출고번호", example = "WOB-20260528-00002") @PathVariable String outboundNo,
             @RequestBody(required = false) WhOutboundDto.ActionReq req
     ) {
         return BaseResponse.success(whOutboundService.confirm(me, outboundNo, req == null ? null : req.getReason()));
@@ -78,7 +78,7 @@ public class WhOutboundController {
     @PostMapping("/{outboundNo}/arrive")
     public BaseResponse<WhOutboundDto.DetailRes> arrive(
             @AuthenticationPrincipal AuthUserDetails me,
-            @Parameter(description = "출고번호", example = "OUT-20240101-001") @PathVariable String outboundNo,
+            @Parameter(description = "출고번호", example = "WOB-20260528-00002") @PathVariable String outboundNo,
             @RequestBody(required = false) WhOutboundDto.ActionReq req
     ) {
         return BaseResponse.success(whOutboundService.arrive(me, outboundNo, req == null ? null : req.getReason()));

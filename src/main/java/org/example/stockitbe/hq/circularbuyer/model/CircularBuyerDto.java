@@ -186,7 +186,7 @@ public class CircularBuyerDto {
         private String quantityHint;
         @Schema(description = "상품 코드. 전달 시 상품 소재 구성을 추천 입력에 보강한다.", example = "PRD-TOP-SS-001")
         private String productCode;
-        @Schema(description = "창고 코드. 전달 시 거래처와의 거리 산정에 사용한다.", example = "WH-001")
+        @Schema(description = "창고 코드. 전달 시 거래처와의 거리 산정에 사용한다.", example = "WH-SL-0001")
         private String warehouseCode;
     }
 

@@ -49,7 +49,7 @@ public class StoreSaleDto {
     public static class SaleRes {
         @Schema(description = "판매번호", example = "SAL-20240101-001")
         private String saleNo;
-        @Schema(description = "매장 코드", example = "STORE-001")
+        @Schema(description = "매장 코드", example = "ST-SL-0001")
         private String storeCode;
         @Schema(description = "판매 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date soldAt;
@@ -79,7 +79,7 @@ public class StoreSaleDto {
     public static class SaleListRes {
         @Schema(description = "판매번호", example = "SAL-20240101-001")
         private String saleNo;
-        @Schema(description = "매장 코드", example = "STORE-001")
+        @Schema(description = "매장 코드", example = "ST-SL-0001")
         private String storeCode;
         @Schema(description = "판매 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date soldAt;
@@ -109,7 +109,7 @@ public class StoreSaleDto {
     public static class SaleDetailRes {
         @Schema(description = "판매번호", example = "SAL-20240101-001")
         private String saleNo;
-        @Schema(description = "매장 코드", example = "STORE-001")
+        @Schema(description = "매장 코드", example = "ST-SL-0001")
         private String storeCode;
         @Schema(description = "판매 일시", example = "2026-05-27T09:00:00.000+09:00")
         private Date soldAt;
@@ -141,7 +141,7 @@ public class StoreSaleDto {
     @AllArgsConstructor
     @Builder
     public static class SaleLineReq {
-        @Schema(description = "SKU 코드", example = "SKU-RED-M")
+        @Schema(description = "SKU 코드", example = "PRD-TOP-SS-001-BLK-M")
         @NotBlank
         private String skuCode;
         @Schema(description = "판매 수량", example = "2")
@@ -173,9 +173,9 @@ public class StoreSaleDto {
     @AllArgsConstructor
     @Builder
     public static class SaleLineRes {
-        @Schema(description = "SKU 코드", example = "SKU-RED-M")
+        @Schema(description = "SKU 코드", example = "PRD-TOP-SS-001-BLK-M")
         private String skuCode;
-        @Schema(description = "상품 코드", example = "ITEM-001")
+        @Schema(description = "상품 코드", example = "PRD-TOP-SS-001")
         private String productCode;
         @Schema(description = "상품명", example = "반팔 티셔츠")
         private String productName;
