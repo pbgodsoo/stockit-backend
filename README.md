@@ -117,7 +117,7 @@
 
 <div align="center">
 
-<img width="824" height="530" alt="image" src="https://github.com/user-attachments/assets/27dd4f6e-2b46-407b-affd-a98341156c0c" />
+<img width="794" height="525" alt="image" src="https://github.com/user-attachments/assets/ed50ce43-ff30-4a15-a9cc-e65c964dca4d" />
 
 </div>
 
@@ -132,16 +132,6 @@
 | **K8s CronJob** | `concurrencyPolicy: Forbid`로 중복 실행을 인프라 레벨에서 차단하고, 실행 완료 후 Pod를 자동 종료해 리소스 낭비를 줄입니다. 별도 분산 락 코드 없이 배치 중복 실행 방지 전략을 단순화합니다.                                           |
 | **DB 인스턴스 공유 / 스키마 분리** | 스프링 배치 서버와 메인 서버는 인스턴스는 1개 공유하도록 하였고,  단 스키마는 논리적으로 분리 하였습니다(stockit, stockit_batch), `stockit-batch` 는 독립 도메인이 아니라 발주 데이터를 직접 처리하는 역할이므로  인스턴스를 분리하면 오히려 데이터 동기화 복잡성이 생기기 때문에 이 방식을 선택하였습니다.  커넥션은 서비스별로 분리 관리 (be=10/pod, batch=30/pod) 하여 배치실행 중 메인 서버 커넥션 잠식을 방지 하였고, 인스턴스 분리는 Grafana 모니터링에서 실제 병목이 확인될 때 검토할 예정입니다. |
 
----
-
-## 🧩 ERD
-
-<div align="center">
-
-<!-- ERD 이미지 추가 위치 -->
-<!-- 예시: <img width="900" alt="STOCKIT ERD" src="이미지_URL_또는_파일_경로" /> -->
-
-</div>
 
 ---
 
