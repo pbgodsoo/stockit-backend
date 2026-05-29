@@ -10,9 +10,10 @@
 
 > ### 🔗 Project Links
 > 🌐 **Web Service** : [STOCKIT 공식 서비스 접속하기](https://www.stockit.kro.kr)<br/>
-> 📘 **API Docs** : [Swagger API 명세서](https://www.stockit.kro.kr/swagger-ui/index.html) (`/api/swagger-ui/index.html` 경로로 프록시될 수 있습니다)<br/>
 > 🗂️ **Backend Repository** : [be24-fin-Stockers-Stockit-BE](https://github.com/beyond-sw-camp/be24-fin-Stockers-Stockit-BE)<br/>
-> 🖥️ **Frontend Repository** : [be24-fin-Stockers-Stockit-FE](https://github.com/beyond-sw-camp/be24-fin-Stockers-Stockit-FE)
+> 🖥️ **Frontend Repository** : [be24-fin-Stockers-Stockit-FE](https://github.com/beyond-sw-camp/be24-fin-Stockers-Stockit-FE)<br/>
+> 📘 **API Docs** : [사용자 인증 API.pdf](https://github.com/user-attachments/files/28377814/API.pdf) / [매장 API.pdf](https://github.com/user-attachments/files/28377803/API.pdf) / [본사 API.pdf](https://github.com/user-attachments/files/28377809/API.pdf)  / [창고 API.pdf](https://github.com/user-attachments/files/28377815/API.pdf)
+
 
 <br>
 
