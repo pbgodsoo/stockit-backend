@@ -24,7 +24,7 @@ public class CircularSaleController {
             @AuthenticationPrincipal AuthUserDetails me,
             @Valid @RequestBody CircularSaleDto.CreateReq request
     ) {
-        // 1. 요청 수신: 판매 생성 요청을 받는다.
+        // 1. 요청 수신: 판매 생성 요청을 받는다
         // 2. 서비스 호출: 판매/출고 동시 생성 오케스트레이션을 수행한다.
         CircularSaleDto.CreateRes result = circularSaleService.create(request, me);
         // 3. 응답 반환: 생성 결과를 공통 응답으로 감싸 반환한다.
