@@ -12,7 +12,7 @@
 -- vendor / vendor_product 만 통합한 단독 시드 (PO 더미 헤더/라인은 제외 — 발주 가능 상태만 만든다).
 --
 -- 의존:
---   - 04-product_master_dummy_data.sql  (product_master 150건 + main_vendor_code = 'VND-001'~'VND-008')
+--   - 04-product_master_dummy_data.sql  (product_master 30건 + main_vendor_code = 'VND-001'~'VND-008')
 --
 -- 멱등: ON DUPLICATE KEY UPDATE (vendor.code / vendor_product.code UNIQUE) — 반복 import 안전.
 -- ============================================================

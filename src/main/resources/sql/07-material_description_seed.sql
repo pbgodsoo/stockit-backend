@@ -12,8 +12,6 @@ UPDATE material SET description = '실크 천연 단백질 단일 섬유 (누에
 
 UPDATE material SET description = '린넨(아마) 천연 셀룰로오스 단일 섬유, 통기성·시원감 여름 의류·호텔 린넨·산업 천 사용. 폐 린넨 의류·호텔 시트 회수 → 펄프 재생 셀룰로오스 회수·재생 비스코스 원사. 린넨 단일 천연 분리 깨끗·자연 분해 친환경. 호텔/리조트 폐섬유 재가공(제클린)·산업 천·종이 다방면.', update_date = NOW() WHERE code = 'LINEN';
 
-UPDATE material SET description = '레이온(비스코스·모달·리오셀) 셀룰로오스 재생 섬유, 광택·드레이프·여성복·블라우스·잠옷 사용. 본래 셀룰로오스 재생이라 폐 레이온 → 셀룰로오스 회수 → 재생 비스코스 원사 순환 깨끗. 면+레이온 혼방 분리 화학 처리·펄프 재생 다방면. 자연 분해 친환경. 한국 셀룰로오스 재생 산업.', update_date = NOW() WHERE code = 'RAYON';
-
 UPDATE material SET description = '폴리아미드(나일론) 합성섬유, 강도·내마모성·신축성 우수, 운동복·수영복·스타킹·어망·자동차 안전벨트 사용. 폐 나일론 어망·카펫·의류 회수 → 카프로락탐 모노머 화학 재활용 → 재생 PA 원사 (ECONYL 류). 단일 합성 화학 재활용 깨끗·자동차 시트·요가복·수영복·산업 로프 다용도. 폐 어망 → 신규 의류 순환 핵심.', update_date = NOW() WHERE code = 'POLYAMIDE';
 
 UPDATE material SET description = '아크릴 합성섬유, 보온성·발색성 우수, 스웨터·니트·담요·인조 모피·산업 펠트 사용. 폐 아크릴 스웨터·니트 풀어서 원사 추출 → 재생 아크릴 원사 기계적 재활용. 단일 합성 분리 깨끗·매트리스 충전·자동차 흡음재·인테리어 매트 다방면. 한국 편직 산업 재활용.', update_date = NOW() WHERE code = 'ACRYLIC';

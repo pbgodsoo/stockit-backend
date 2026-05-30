@@ -1,19 +1,19 @@
 -- ============================================================
 -- 10-1-vendor_product_full_seed.sql
--- 04-product_master_dummy_data.sql 의 150건 product 와
+-- 04-product_master_dummy_data.sql 의 30건 product 와
 -- 10-purchase_order_dummy_data.sql 의 8개 vendor 를 자동 매핑.
 --
--- 기존 10 시드는 vendor_product 27건만 INSERT (발주 더미용 일부 매핑).
+-- 기존 10 시드는 vendor_product 21건만 INSERT (발주 더미용 일부 매핑).
 -- 새 발주 페이지 카탈로그가 ACTIVE vendor_product 전체를 펼치므로
 -- product_master.main_vendor_code 기준으로 누락된 vendor_product 도 채워준다.
 --
 -- 의존:
 --   - 03-category_two_level_seed.sql
 --   - 04-product_master_dummy_data.sql  (product_master.main_vendor_code = 'VND-001'~'VND-008')
---   - 10-purchase_order_dummy_data.sql  (vendor 8건 + vendor_product 27건)
+--   - 10-purchase_order_dummy_data.sql  (vendor 8건 + vendor_product 21건)
 --
--- 적용 후 vendor_product 총 150건 (10 시드 27건은 ON DUPLICATE KEY UPDATE 로 동기화).
--- 카탈로그 페이지 진입 시 ACTIVE product 150건 × 그 SKU 들이 노출된다.
+-- 적용 후 vendor_product 총 30건 (10 시드 21건은 ON DUPLICATE KEY UPDATE 로 동기화).
+-- 카탈로그 페이지 진입 시 ACTIVE product 30건 × 그 SKU 들이 노출된다.
 --
 -- 멱등: ON DUPLICATE KEY UPDATE (code UNIQUE) — 반복 import 안전.
 -- ============================================================
