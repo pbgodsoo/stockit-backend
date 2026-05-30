@@ -27,7 +27,7 @@ spring:
     job:
       enabled: false        # 서버 시작 시 Job 자동 실행 방지 (운영 데이터 보호)
     jdbc:
-      initialize-schema: never        # BATCH_ 메타 테이블 6개 자동 생성 / # TODO: 최초 prod 배포 후 never로 변경
+      initialize-schema: always        # BATCH_ 메타 테이블 6개 자동 생성 / # TODO: 최초 prod 배포 후 never로 변경
 
   sql:
     init:
