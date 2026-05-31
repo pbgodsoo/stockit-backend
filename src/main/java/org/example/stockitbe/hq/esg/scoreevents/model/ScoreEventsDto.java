@@ -3,7 +3,6 @@ package org.example.stockitbe.hq.esg.scoreevents.model;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -66,6 +65,7 @@ public class ScoreEventsDto {
         private final long carbonSum;
         private final long newBuyerSum;
         private final long localPartnerSum;
+        private final long donationExecutionSum;
 
         private final long totalEventCount;     // 필터 적용 후 이벤트 수
         private final long validEventCount;     // scoreValid=true 인 이벤트 수
@@ -89,11 +89,11 @@ public class ScoreEventsDto {
         private final long carbon;
         private final long newBuyer;
         private final long localPartner;
+        private final long donationExecution;
     }
 
     /**
      * 거래 이벤트 1건 (FE EsgTreeScoreView 의 event 객체 형태와 1:1 매칭).
-     *  - donationType / method 는 sale 만 다루므로 미포함
      *  - Phase 2: isLocalPartner 가 circular_buyer.partner_type 기반으로 매핑 (이전: 항상 false)
      *  - Phase 2: 거래별 점수 4종을 BE 가 직접 계산해서 응답 (FE 의 esgScore.js 산식 함수 폐기 준비)
      */
@@ -108,17 +108,15 @@ public class ScoreEventsDto {
         private final Integer weightKg;
         private final boolean isNewBuyer;   // 본 거래가 해당 buyer 의 최초 거래인지
         private final boolean isLocalPartner;  // Phase 2: partner_type=local_small/social_enterprise → true
+        private final String saleType;         // "SALE" | "DONATION"
 
-        // Phase 2 — 혼방 거래 메타 (FE 디버그/상세 표시용. 단일 거래는 null)
-        private final String mainMaterialCode;       // 혼방 주 소재 코드 (탄소 계산 미사용, 표시용)
-        private final BigDecimal mainMaterialRatio;  // 혼방 주 소재 비율 (탄소 계산 미사용, 표시용)
-
-        // Phase 2 — BE 가 계산한 거래별 점수 4종
-        private final int saleExecution;   // 100 (scoreValid 시), 0 (미달 시)
-        private final int carbon;          // weight × effectiveFactor
-        private final int newBuyer;        // 150 (신규 거래처 & scoreValid)
-        private final int localPartner;    // 150 (지역 파트너 & scoreValid)
-        private final int total;           // 위 4종 합계
-        private final boolean scoreValid;  // weight >= MIN_WEIGHT_KG(10kg)
+        // Phase 2 — BE 가 계산한 거래별 점수 5종
+        private final int saleExecution;       // 100 (scoreValid 시), 0 (미달 시)
+        private final int carbon;              // weight × effectiveFactor
+        private final int newBuyer;            // 150 (신규 거래처 & scoreValid)
+        private final int localPartner;        // 150 (지역 파트너 & scoreValid)
+        private final int donationExecution;   // 기부 실행 점수 (판매면 0)
+        private final int total;               // 위 점수 합계
+        private final boolean scoreValid;      // weight >= MIN_WEIGHT_KG(10kg)
     }
 }

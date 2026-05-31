@@ -29,7 +29,7 @@ public class CircularBuyerTransaction {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = true)
-    @JoinColumn(name = "buyer_id", nullable = false)
+    @JoinColumn(name = "buyer_id", nullable = true)
     private CircularBuyer buyer;
 
     @Column(name = "material_code", nullable = false, length = 32)
