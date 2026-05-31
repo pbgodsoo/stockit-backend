@@ -54,6 +54,7 @@ logging:
 purchase-order:
   batch:
     delay-ms: 86400000    # 스케줄러 fixedDelay (24시간) — 자동 전환은 하루 1회, 시연/운영은 강제 배치 트리거 사용
+
     wait-minutes: 30      # PENDING/APPROVED 30분 경과 시 자동 전환
 
 jwt:
