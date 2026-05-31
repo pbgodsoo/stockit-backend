@@ -67,36 +67,46 @@ INSERT INTO product_material_composition
 (product_id, material_id, ratio, composition_order, create_date, update_date)
 SELECT pm.id, m.id, t.ratio, t.composition_order, NOW(), NOW()
 FROM (
-    SELECT 'PRD-TOP-SS-001' AS product_code, 'POLYESTER' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-TOP-SS-002' AS product_code, 'WOOL' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-TOP-LS-001' AS product_code, 'POLYESTER' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-TOP-LS-002' AS product_code, 'WOOL' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-TOP-SH-001' AS product_code, 'POLYESTER' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-TOP-SH-002' AS product_code, 'WOOL' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-TOP-KN-001' AS product_code, 'POLYESTER' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-TOP-KN-002' AS product_code, 'WOOL' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-TOP-HD-001' AS product_code, 'POLYESTER' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-TOP-HD-002' AS product_code, 'WOOL' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-PNT-DN-001' AS product_code, 'POLYESTER' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-PNT-DN-002' AS product_code, 'WOOL' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-PNT-ST-001' AS product_code, 'POLYESTER' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-PNT-ST-002' AS product_code, 'WOOL' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-PNT-LG-001' AS product_code, 'POLYESTER' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-PNT-LG-002' AS product_code, 'WOOL' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-PNT-TR-001' AS product_code, 'POLYESTER' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-PNT-TR-002' AS product_code, 'WOOL' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-SKT-MN-001' AS product_code, 'POLYESTER' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-SKT-MN-002' AS product_code, 'WOOL' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-SKT-LG-001' AS product_code, 'POLYESTER' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-SKT-LG-002' AS product_code, 'WOOL' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-OUT-PD-001' AS product_code, 'POLYESTER' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-OUT-PD-002' AS product_code, 'WOOL' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-OUT-HZ-001' AS product_code, 'POLYESTER' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-OUT-HZ-002' AS product_code, 'WOOL' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-OUT-JK-001' AS product_code, 'POLYESTER' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-OUT-JK-002' AS product_code, 'WOOL' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-OUT-CD-001' AS product_code, 'POLYESTER' AS material_code, 100 AS ratio, 1 AS composition_order
-    UNION ALL SELECT 'PRD-OUT-CD-002' AS product_code, 'WOOL' AS material_code, 100 AS ratio, 1 AS composition_order
+    SELECT 'PRD-TOP-SS-001' AS product_code, 'COTTON' AS material_code, 100 AS ratio, 1 AS composition_order
+    UNION ALL SELECT 'PRD-TOP-SS-002', 'POLYESTER', 100, 1
+    UNION ALL SELECT 'PRD-TOP-LS-001', 'COTTON', 100, 1
+    UNION ALL SELECT 'PRD-TOP-LS-002', 'LINEN', 100, 1
+    UNION ALL SELECT 'PRD-TOP-SH-001', 'COTTON', 100, 1
+    UNION ALL SELECT 'PRD-TOP-SH-002', 'POLYESTER', 95, 1
+    UNION ALL SELECT 'PRD-TOP-SH-002', 'ELASTANE', 5, 2
+    UNION ALL SELECT 'PRD-TOP-KN-001', 'WOOL', 100, 1
+    UNION ALL SELECT 'PRD-TOP-KN-002', 'CASHMERE', 70, 1
+    UNION ALL SELECT 'PRD-TOP-KN-002', 'WOOL', 30, 2
+    UNION ALL SELECT 'PRD-TOP-HD-001', 'COTTON', 60, 1
+    UNION ALL SELECT 'PRD-TOP-HD-001', 'POLYESTER', 40, 2
+    UNION ALL SELECT 'PRD-TOP-HD-002', 'ACRYLIC', 100, 1
+    UNION ALL SELECT 'PRD-PNT-DN-001', 'COTTON', 100, 1
+    UNION ALL SELECT 'PRD-PNT-DN-002', 'COTTON', 98, 1
+    UNION ALL SELECT 'PRD-PNT-DN-002', 'ELASTANE', 2, 2
+    UNION ALL SELECT 'PRD-PNT-ST-001', 'LINEN', 100, 1
+    UNION ALL SELECT 'PRD-PNT-ST-002', 'POLYESTER', 100, 1
+    UNION ALL SELECT 'PRD-PNT-LG-001', 'POLYESTER', 70, 1
+    UNION ALL SELECT 'PRD-PNT-LG-001', 'WOOL', 30, 2
+    UNION ALL SELECT 'PRD-PNT-LG-002', 'WOOL', 100, 1
+    UNION ALL SELECT 'PRD-PNT-TR-001', 'POLYESTER', 100, 1
+    UNION ALL SELECT 'PRD-PNT-TR-002', 'COTTON', 60, 1
+    UNION ALL SELECT 'PRD-PNT-TR-002', 'POLYESTER', 40, 2
+    UNION ALL SELECT 'PRD-SKT-MN-001', 'ELASTANE', 100, 1
+    UNION ALL SELECT 'PRD-SKT-MN-002', 'POLYAMIDE', 95, 1
+    UNION ALL SELECT 'PRD-SKT-MN-002', 'ELASTANE', 5, 2
+    UNION ALL SELECT 'PRD-SKT-LG-001', 'SILK', 100, 1
+    UNION ALL SELECT 'PRD-SKT-LG-002', 'SILK', 60, 1
+    UNION ALL SELECT 'PRD-SKT-LG-002', 'POLYESTER', 40, 2
+    UNION ALL SELECT 'PRD-OUT-PD-001', 'POLYESTER', 100, 1
+    UNION ALL SELECT 'PRD-OUT-PD-002', 'POLYAMIDE', 100, 1
+    UNION ALL SELECT 'PRD-OUT-HZ-001', 'COTTON', 65, 1
+    UNION ALL SELECT 'PRD-OUT-HZ-001', 'POLYESTER', 35, 2
+    UNION ALL SELECT 'PRD-OUT-HZ-002', 'ACRYLIC', 100, 1
+    UNION ALL SELECT 'PRD-OUT-JK-001', 'WOOL', 80, 1
+    UNION ALL SELECT 'PRD-OUT-JK-001', 'POLYAMIDE', 20, 2
+    UNION ALL SELECT 'PRD-OUT-JK-002', 'POLYESTER', 100, 1
+    UNION ALL SELECT 'PRD-OUT-CD-001', 'WOOL', 100, 1
+    UNION ALL SELECT 'PRD-OUT-CD-002', 'CASHMERE', 100, 1
 ) t
 JOIN product_master pm ON pm.code = t.product_code
 JOIN material m ON m.code = t.material_code
