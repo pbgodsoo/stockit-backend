@@ -15,7 +15,14 @@
 --   - 발주 헤더 vendor = 품목 product 의 main_vendor 로 일치시킨다 (한 발주 = 한 거래처).
 --   - purchase_order_item 은 vendor_product_id 를 하드코딩하지 않고 (product_code + vendor) 로 SELECT 조회 →
 --     AUTO_INCREMENT 순서에 무관하게 항상 유효한 FK 를 얻는다.
---   - 모든 product 는 04-product_master_dummy_data.sql 의 ACTIVE 30건, vendor 는 10번 시드 8건(VND-001~008).
+--
+-- 의존 (10-purchase_order 발주 더미는 불필요):
+--   - 01-infrastructure_dummy_data.sql       (창고 — purchase_order.warehouse_id)
+--   - 03-category_two_level_seed.sql
+--   - 04-product_master_dummy_data.sql       (product_master / product_sku)
+--   - 10-1-vendor_product_full_seed.sql      (vendor_product 보강)
+--   - 10-2-vendor_orderable_all.sql          (vendor 8건 VND-001~008 + vendor_product)
+--   → 적용 순서: 01 → 03 → 04 → 10-1 → 10-2 → 12  (10-purchase_order_dummy_data 는 생략 가능)
 --
 -- 신규 발주 상태 분포 (8건): REQUESTED 2 / APPROVED 2 / READY_TO_SHIP 2 / IN_TRANSIT 2
 --   → 강제 배치 1회당 한 단계씩 전진: REQUESTED→APPROVED→READY_TO_SHIP→IN_TRANSIT→ARRIVED
