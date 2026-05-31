@@ -119,7 +119,7 @@ public class ScoreEventsService {
         // code → normalized group ("NATURAL_SINGLE" / "SYNTHETIC" / "BLEND")
         Map<String, String> groupMap = materials.stream()
                 .collect(Collectors.toMap(Material::getCode, m -> normalizeGroup(m.getMaterialGroup())));
-        // code → 한글명 (활동 이력 카드의 "폴리에스터, 레이온, 나일론" 표시용)
+        // code → 한글명 (활동 이력 카드의 소재명 표시용)
         Map<String, String> nameMap = materials.stream()
                 .collect(Collectors.toMap(Material::getCode, Material::getNameKo));
 
@@ -136,7 +136,7 @@ public class ScoreEventsService {
 
         // ④-B 판매 단위(거래처+시점) 그룹화된 EventDto — 활동 이력 / 점수 / KPI 표시용
         //   - 판매 1건 (sale_header) = 같은 buyer + 같은 transacted_at(밀리초) → 1 그룹
-        //   - 소재는 그룹 내 unique 한글명 콤마 구분 ("폴리에스터, 레이온, 나일론")
+        //   - 소재는 그룹 내 unique 한글명 콤마 구분 ("폴리에스터, 나일론")
         //   - 점수는 총 무게 기준 재계산 → 10kg 미만 SKU 들도 합쳐서 점수 부여
         List<ScoreEventsDto.EventDto> groupedEvents = buildGroupedEvents(rows, factorMap, nameMap);
 
@@ -182,7 +182,7 @@ public class ScoreEventsService {
      *  - 판매 1건 (sale_header) = 같은 buyer + 같은 millisecond → 1 그룹 가정
      *    (CircularSaleService 가 같은 sold_at(=now) 으로 transaction INSERT 하므로 안전)
      *  - 그룹별 점수는 총 무게 기준 재계산 (10kg 미만 SKU 들도 합쳐서 점수 부여)
-     *  - 소재는 그룹 내 unique 한글명을 콤마 구분 (예: "폴리에스터, 레이온, 나일론")
+     *  - 소재는 그룹 내 unique 한글명을 콤마 구분 (예: "폴리에스터, 나일론")
      *  - newBuyer / localPartner 는 그룹 내 anyMatch 로 판정
      */
     private List<ScoreEventsDto.EventDto> buildGroupedEvents(
@@ -429,7 +429,7 @@ public class ScoreEventsService {
             if (e.getWeightKg() == null) continue;
             // effective factor — 모든 소재 자기 factor 사용 (buildEventDto 와 동일 산식)
             BigDecimal factor = resolveFactor(e.getMaterial(), factorMap);
-            // weight × factor → 반올림하여 kg 정수. (Higg MSI factor 는 소수 → 반올림 영향 미미)
+            // weight × factor → 반올림하여 kg 정수. (IPCC Eq.5.2 소각 탄소 계수 — 소수, 반올림 영향 미미)
             long reduction = BigDecimal.valueOf(e.getWeightKg())
                     .multiply(factor)
                     .setScale(0, java.math.RoundingMode.HALF_UP)
