@@ -38,7 +38,7 @@ SELECT
     src.transacted_at,
     NOW() AS create_date,
     -- Phase 2: BLEND 거래일 때만 70% 주 소재 코드 분배 (4가지 product 조합 패턴)
-    --   COTTON+POLY / POLYAMIDE+RAYON / LINEN+RAYON / WOOL+POLY 의 주 소재
+    --   COTTON+POLYESTER / POLYAMIDE+POLYESTER / LINEN+POLYESTER / WOOL+POLYESTER 의 주 소재
     CASE
         WHEN src.material_code = 'BLEND'
           THEN ELT(((src.buyer_id - 1) MOD 4) + 1, 'COTTON', 'POLYAMIDE', 'LINEN', 'WOOL')
