@@ -102,7 +102,7 @@ public class ScoreEventsDto {
     public static class EventDto {
         private final Long id;
         private final String date;          // "yyyy-MM-dd"
-        private final String type;          // "sale" 고정 (donation 미지원)
+        private final String type;          // "sale" | "donation" (saleType 과 동일 값 소문자)
         private final String buyer;         // circular_buyer.company_name
         private final String material;      // material_code (e.g. "POLYESTER", "BLEND")
         private final Integer weightKg;

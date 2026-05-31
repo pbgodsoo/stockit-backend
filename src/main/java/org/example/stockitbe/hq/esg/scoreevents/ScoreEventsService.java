@@ -275,7 +275,7 @@ public class ScoreEventsService {
         return ScoreEventsDto.EventDto.builder()
                 .id(groupId)
                 .date(date)
-                .type("sale")
+                .type(saleType == null ? "sale" : saleType.toLowerCase())
                 .buyer(buyer)
                 .material(materialNames)
                 .weightKg(totalWeight)
@@ -334,7 +334,7 @@ public class ScoreEventsService {
         return ScoreEventsDto.EventDto.builder()
                 .id(id)
                 .date(txAt.toLocalDate().format(DATE_FMT))
-                .type("sale")
+                .type(saleType == null ? "sale" : saleType.toLowerCase())
                 .buyer(buyer)
                 .material(material)
                 .weightKg(weightKg)
@@ -504,8 +504,8 @@ public class ScoreEventsService {
 
     /**
      * 거래의 effective carbon factor 산출.
-     *  - 모든 소재(BLEND 포함) 자기 factor 반환
-     *    (BLEND 고유 factor 5.5 그대로 사용)
+     *  - 모든 소재(BLEND 포함) 자기 factor 반환 (DB material.carbon_factor 기준)
+     *    IPCC Eq.5.2 소각 탄소 계수: BLEND=2.0, POLYAMIDE=2.5, ACRYLIC=2.4, 등
      */
     private BigDecimal resolveFactor(String materialCode, Map<String, BigDecimal> factorMap) {
         return factorMap.getOrDefault(materialCode, BigDecimal.ZERO);
