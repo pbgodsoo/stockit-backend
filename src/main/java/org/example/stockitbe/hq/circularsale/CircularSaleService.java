@@ -618,8 +618,9 @@ public class CircularSaleService {
         saleItemMaterialRepository.saveAll(materialRows);
 
         // 4) 출고 헤더/출고 아이템 저장 및 판매 헤더에 연결
-        //    DONATION은 destinationId=null (WhOutboundHeader.destinationId 컬럼이 nullable 이어야 함)
-        Long destinationId = buyer != null ? buyer.getId() : null;
+        //    SALE: destinationType=CIRCULAR_BUYER, destinationId=buyer.id
+        //    DONATION: destinationType=DONATION, destinationId=null, destinationName=기부처명
+        boolean isDonation = "DONATION".equals(saleType);
         WhOutboundHeader outbound = outboundHeaderRepository.save(WhOutboundHeader.builder()
                 .outboundNo(generateTempNo("TMP"))
                 .sourceType(OutboundSourceType.CIRCULAR_SALE)
@@ -627,8 +628,9 @@ public class CircularSaleService {
                 .sourceRefSeq(1)
                 .sourceRefId(header.getId())
                 .warehouseId(warehouseId)
-                .destinationType(OutboundDestinationType.CIRCULAR_BUYER)
-                .destinationId(destinationId)
+                .destinationType(isDonation ? OutboundDestinationType.DONATION : OutboundDestinationType.CIRCULAR_BUYER)
+                .destinationId(isDonation ? null : buyer.getId())
+                .destinationName(isDonation ? request.getDoneeName() : null)
                 .status(OutboundStatus.READY_TO_SHIP)
                 .totalRequestedQuantity(sumInt(contexts, c -> c.request.getSoldQuantity()))
                 .requestedAt(now)
