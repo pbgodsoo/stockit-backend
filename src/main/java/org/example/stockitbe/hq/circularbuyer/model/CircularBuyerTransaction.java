@@ -6,7 +6,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -29,7 +28,7 @@ public class CircularBuyerTransaction {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
     @JoinColumn(name = "buyer_id", nullable = false)
     private CircularBuyer buyer;
 
@@ -48,31 +47,28 @@ public class CircularBuyerTransaction {
     @Column(name = "transacted_at", nullable = false)
     private LocalDateTime transactedAt;
 
-    // Phase 2: 혼방 거래의 주 소재 코드. 단일 거래는 NULL.
-    // 탄소 계산 미사용, 표시 참조용.
-    @Column(name = "main_material_code", length = 32)
-    private String mainMaterialCode;
-
-    // 주 소재 비율 (예: 0.70). 단일 거래는 NULL.
-    @Column(name = "main_material_ratio", precision = 3, scale = 2)
-    private BigDecimal mainMaterialRatio;
-
     @Column(name = "create_date", nullable = false)
     private LocalDateTime createDate;
+
+    @Column(name = "sale_type", nullable = false, length = 20)
+    private String saleType;   // "SALE" | "DONATION"
+
+    @Column(name = "donee_name", length = 200)
+    private String doneeName;
 
     @Builder
     private CircularBuyerTransaction(CircularBuyer buyer, String materialCode,
                                       Integer weightKg, Integer unitPrice,
                                       Long totalAmount, LocalDateTime transactedAt,
-                                      String mainMaterialCode, BigDecimal mainMaterialRatio) {
+                                      String saleType, String doneeName) {
         this.buyer = buyer;
         this.materialCode = materialCode;
         this.weightKg = weightKg;
         this.unitPrice = unitPrice;
         this.totalAmount = totalAmount;
         this.transactedAt = transactedAt;
-        this.mainMaterialCode = mainMaterialCode;
-        this.mainMaterialRatio = mainMaterialRatio;
+        this.saleType = saleType;
+        this.doneeName = doneeName;
         this.createDate = LocalDateTime.now();
     }
 }
