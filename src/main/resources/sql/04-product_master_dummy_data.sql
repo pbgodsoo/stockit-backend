@@ -2,26 +2,27 @@
 -- 실행 순서: category_two_level_seed.sql + vendor + infrastructure 이후
 
 INSERT INTO material
-(code, name_ko, material_group, carbon_factor, active, create_date, update_date)
+(code, name_ko, material_group, carbon_factor, active, description, create_date, update_date)
 VALUES
     -- material_group 어휘는 ProductMasterService.MATERIAL_GROUP_NATURAL='NATURAL' 상수 호환을 위해
     -- 'NATURAL' 유지 (Phase 1 옵션 C — 팀원 코드 기준에 맞춤). FE 는 esgStore.fetchMaterialFactors 에서
     -- NATURAL → NATURAL_SINGLE 로 정규화하여 일관성 유지.
-    ('COTTON',    '면',         'NATURAL',   6.000, 1, NOW(), NOW()),
-    ('WOOL',      '울',         'NATURAL',   5.000, 1, NOW(), NOW()),  -- cap 적용
-    ('CASHMERE',  '캐시미어',   'NATURAL',   8.000, 1, NOW(), NOW()),  -- cap 적용
-    ('SILK',      '실크',       'NATURAL',   5.000, 1, NOW(), NOW()),  -- cap 적용
-    ('LINEN',     '린넨',       'NATURAL',   1.800, 1, NOW(), NOW()),
-    ('POLYESTER', '폴리에스터', 'SYNTHETIC', 6.500, 1, NOW(), NOW()),
-    ('ACRYLIC',   '아크릴',     'SYNTHETIC', 5.700, 1, NOW(), NOW()),
-    ('POLYAMIDE', '나일론',     'SYNTHETIC', 8.000, 1, NOW(), NOW()),
-    ('ELASTANE',  '스판덱스',   'SYNTHETIC', 12.000, 1, NOW(), NOW()),
-    ('BLEND',     '혼방',       'BLEND',     5.500, 1, NOW(), NOW())
+    ('COTTON',    '면',         'NATURAL',   6.000, 1, '면(코튼) 천연 셀룰로오스 단일 섬유. 흡습성·통기성·세탁 내구성 우수, 의류·내의·침구·타올 광범위 사용. 폐 면 의류 회수 시 단일 천연 분리 깨끗 — 펄프 재생(한국제지·전주페이퍼·무림페이퍼)·재생 비스코스 원사 두 경로 적합. 솜 충전 재가공 → 매트리스·이불·인형 다용도. 데님 → 데님 순환. 농업 멀칭·바이오매스·자연 분해 친환경 처리. 한국 면 회수 산업 핵심.', NOW(), NOW()),
+    ('WOOL',      '울',         'NATURAL',   5.000, 1, '울(양모) 천연 단백질 단일 섬유, 보온성·복원력 우수, 코트·정장·니트·스웨터·담요 사용. 폐 울 의류 회수 시 단백질 화학·기계 회수 → 재생 울사·매트리스 충전·자동차 흡음재·산업 펠트(악기·단열) 다용도. 양모 → 양모 순환 가능. 단일 천연 단백질 분리 깨끗·자연 분해 친환경. 한국 울 재생 산업 적용.', NOW(), NOW()),  -- cap 적용
+    ('CASHMERE',  '캐시미어',   'NATURAL',   8.000, 1, '캐시미어 천연 단백질 단일 섬유 (캐시미어 염소 유래), 부드러움·보온성·고급 의류·코트·니트·머플러 사용. 폐 캐시미어 회수 시 단백질 회수·재생 캐시미어 원사 — 매우 고가 자원이라 재생 가치 ↑. 단일 천연 단백질 분리 깨끗·자연 분해 친환경. 한국 고급 의류 재생·매트리스 충전 다용도.', NOW(), NOW()),  -- cap 적용
+    ('SILK',      '실크',       'NATURAL',   5.000, 1, '실크 천연 단백질 단일 섬유 (누에고치 유래), 광택·드레이프·고급 의류·한복·침구·스카프 사용. 폐 실크 한복·침구 회수 시 단백질 화학 추출 → 재생 실크사·화장품 단백질·바이오 의약 원료 고부가가치. 실크 단일 천연 분리 깨끗·자연 분해 친환경. 한국 전통 한복 실크 재생·전통 공방·바이오 산업 다방면.', NOW(), NOW()),  -- cap 적용
+    ('LINEN',     '린넨',       'NATURAL',   1.800, 1, '린넨(아마) 천연 셀룰로오스 단일 섬유, 통기성·시원감 여름 의류·호텔 린넨·산업 천 사용. 폐 린넨 의류·호텔 시트 회수 → 펄프 재생 셀룰로오스 회수·재생 비스코스 원사. 린넨 단일 천연 분리 깨끗·자연 분해 친환경. 호텔/리조트 폐섬유 재가공(제클린)·산업 천·종이 다방면.', NOW(), NOW()),
+    ('POLYESTER', '폴리에스터', 'SYNTHETIC', 6.500, 1, '폴리에스터(PET) 합성섬유, 내구성·형태 안정성 우수, 운동복·아웃도어·산업용 부직포 다용도. 폐 페트병·폐 폴리 의류 화학 재활용(효성티앤씨 리젠·휴비스 에코에버) → 모노머 회수 → 재생 PET 원사. PET 단일 합성 회수 분류 깨끗·GRS 인증 글로벌 표준. 자동차 흡음재·도아트림·헤드라이너(현대모비스)·건설 단열재(벽산·KCC)·매트리스 충전·신발 인솔·물류 패키징 다방면. PET 화학 재활용 순환경제 핵심.', NOW(), NOW()),
+    ('ACRYLIC',   '아크릴',     'SYNTHETIC', 5.700, 1, '아크릴 합성섬유, 보온성·발색성 우수, 스웨터·니트·담요·인조 모피·산업 펠트 사용. 폐 아크릴 스웨터·니트 풀어서 원사 추출 → 재생 아크릴 원사 기계적 재활용. 단일 합성 분리 깨끗·매트리스 충전·자동차 흡음재·인테리어 매트 다방면. 한국 편직 산업 재활용.', NOW(), NOW()),
+    ('POLYAMIDE', '나일론',     'SYNTHETIC', 8.000, 1, '폴리아미드(나일론) 합성섬유, 강도·내마모성·신축성 우수, 운동복·수영복·스타킹·어망·자동차 안전벨트 사용. 폐 나일론 어망·카펫·의류 회수 → 카프로락탐 모노머 화학 재활용 → 재생 PA 원사 (ECONYL 류). 단일 합성 화학 재활용 깨끗·자동차 시트·요가복·수영복·산업 로프 다용도. 폐 어망 → 신규 의류 순환 핵심.', NOW(), NOW()),
+    ('ELASTANE',  '스판덱스',   'SYNTHETIC', 12.000, 1, '엘라스탄(스판덱스·라이크라) 합성 신축성 섬유, 운동복·요가복·수영복·란제리·언더웨어 사용 (대부분 폴리·나일론과 혼방 5~20%). 폐 운동복·요가복 → 화학 분리 → 엘라스탄 + 폴리/나일론 분리 회수. 스판덱스 분리 한국 특화 기술. 분리 후 → 재생 원사·신규 운동복 다방면. 화학 재활용 핵심.', NOW(), NOW()),
+    ('BLEND',     '혼방',       'BLEND',     5.500, 1, '혼방 섬유는 두 가지 이상 소재가 결합된 재고로, 소재별 분리 난이도가 높아 기계적 재활용보다 선별·해체·화학 분리 공정이 중요하다. 면/폴리, 울/나일론, 스판 혼방 등 조성비에 따라 재생 원사·충전재·산업용 부직포·흡음재로 재가공한다.', NOW(), NOW())
     ON DUPLICATE KEY UPDATE
                          name_ko = VALUES(name_ko),
                          material_group = VALUES(material_group),
                          carbon_factor = VALUES(carbon_factor),
                          active = VALUES(active),
+                         description = VALUES(description),
                          update_date = NOW();
 
 INSERT INTO product_master
