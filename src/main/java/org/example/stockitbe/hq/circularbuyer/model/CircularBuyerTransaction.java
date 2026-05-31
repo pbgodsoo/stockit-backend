@@ -48,9 +48,8 @@ public class CircularBuyerTransaction {
     @Column(name = "transacted_at", nullable = false)
     private LocalDateTime transactedAt;
 
-    // Phase 2: 혼방 거래의 70% 주 소재 코드. 단일 거래는 NULL.
-    // ScoreEventsService 가 effective factor 계산 시 materialCode='BLEND' + mainMaterialCode 존재
-    // → (material.carbon_factor[mainMaterialCode]) × mainMaterialRatio 로 가중 적용.
+    // Phase 2: 혼방 거래의 주 소재 코드. 단일 거래는 NULL.
+    // 탄소 계산 미사용, 표시 참조용.
     @Column(name = "main_material_code", length = 32)
     private String mainMaterialCode;
 

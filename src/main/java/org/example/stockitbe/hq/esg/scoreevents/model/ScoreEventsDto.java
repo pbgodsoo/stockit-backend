@@ -27,7 +27,7 @@ public class ScoreEventsDto {
         private final CategoryBreakdown categoryBreakdown;      // 도넛 차트 4종 합계
 
         // ── Phase 3 (B) — ESG 대시보드 카본 절감량 분포 묶음 ──
-        //   필터/페이지와 무관하게 "연도 전체" 기준. 단위: kg CO₂. 점수의 carbon (×0.1) 과 다른 산식.
+        //   필터/페이지와 무관하게 "연도 전체" 기준. 단위: kg CO₂. 점수 carbon 과 동일 산식.
         private final CarbonReduction carbonReduction;
 
         // ── 서버 페이징 메타 ──
@@ -39,8 +39,8 @@ public class ScoreEventsDto {
 
     /**
      * 카본 절감량 분포 (kg CO₂) — ESG 대시보드 KPI/차트 SSOT.
-     *  - 산식: 거래별 weight × effectiveFactor (혼방은 mainFactor × ratio 가중)
-     *  - 점수의 carbon (×CARBON_SCALE 0.1) 과 다른 값 — 실제 감축 환산 단위
+     *  - 산식: 거래별 weight × effectiveFactor (BLEND 포함 자기 factor 사용)
+     *  - 점수 carbon 과 동일 값 — 실제 감축 환산 단위
      *  - 카테고리 필터/페이지와 무관하게 연도 전체 이벤트 합산
      *  - byGroup 키 어휘: FE 와 통일 ("NATURAL_SINGLE" / "SYNTHETIC" / "BLEND")
      *    BE 어휘 'NATURAL' 은 응답 직전 'NATURAL_SINGLE' 로 정규화
@@ -110,12 +110,12 @@ public class ScoreEventsDto {
         private final boolean isLocalPartner;  // Phase 2: partner_type=local_small/social_enterprise → true
 
         // Phase 2 — 혼방 거래 메타 (FE 디버그/상세 표시용. 단일 거래는 null)
-        private final String mainMaterialCode;       // 혼방 70% 주 소재 코드 (예: "COTTON")
-        private final BigDecimal mainMaterialRatio;  // 주 소재 비율 (예: 0.70)
+        private final String mainMaterialCode;       // 혼방 주 소재 코드 (탄소 계산 미사용, 표시용)
+        private final BigDecimal mainMaterialRatio;  // 혼방 주 소재 비율 (탄소 계산 미사용, 표시용)
 
         // Phase 2 — BE 가 계산한 거래별 점수 4종
         private final int saleExecution;   // 100 (scoreValid 시), 0 (미달 시)
-        private final int carbon;          // weight × effectiveFactor × CARBON_SCALE(0.1)
+        private final int carbon;          // weight × effectiveFactor
         private final int newBuyer;        // 150 (신규 거래처 & scoreValid)
         private final int localPartner;    // 150 (지역 파트너 & scoreValid)
         private final int total;           // 위 4종 합계

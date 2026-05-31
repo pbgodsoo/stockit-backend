@@ -132,7 +132,7 @@ public interface CircularBuyerTransactionRepository extends JpaRepository<Circul
      *   r[0] id, r[1] transacted_at, r[2] company_name, r[3] material_code,
      *   r[4] weight_kg, r[5] first_tx_at,
      *   r[6] partner_type            (Phase 2: isLocalPartner 매핑용)
-     *   r[7] main_material_code      (Phase 2: 혼방 70% 주 소재. 단일은 NULL)
+     *   r[7] main_material_code      (Phase 2: 혼방 주 소재 참조용 (탄소 계산 미사용). 단일은 NULL)
      *   r[8] main_material_ratio     (Phase 2: 0.70 또는 NULL)
      *
      * 성능 개선 (2026-05-23): WHERE YEAR(transacted_at) 함수 제거 → 범위 조건. 인덱스 활용.

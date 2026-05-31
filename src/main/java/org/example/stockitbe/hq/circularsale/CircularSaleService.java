@@ -656,7 +656,7 @@ public class CircularSaleService {
                 .build());
 
         // 6) Phase 3 — 실제 판매를 ESG 점수에 즉시 반영 (circular_buyer_transaction 자동 INSERT)
-        //    sale_item 별로 transaction 1건씩 생성 + 혼방 product 의 70% 주 소재 자동 분배
+        //    sale_item 별로 transaction 1건씩 생성 + 혼방 주 소재 참조용 저장 (탄소 계산 미사용)
         createTransactionsFromSale(header, buyer, savedItems, contexts);
 
         // 7) 생성 결과 반환
@@ -710,7 +710,7 @@ public class CircularSaleService {
      * 사용하는 메서드: persistSaleAndOutbound
      * Phase 3: 실제 판매 완료 시 ESG 점수 가산을 위해 circular_buyer_transaction 에도 거래 row 를 INSERT.
      *  - sale_item 별로 transaction 1건씩 생성 (product 별 정밀 ESG 점수)
-     *  - 혼방 product 의 경우 70% 주 소재 코드와 비율도 함께 기록 (ScoreEventsService 의 가중 산식 입력)
+     *  - 혼방 product 의 경우 주 소재 코드와 비율도 함께 기록 (혼방 주 소재 참조용 저장, 탄소 계산 미사용)
      *  - 거래 시점 단가/금액은 sale_item 의 값을 그대로 스냅샷 (KAU 시세와 무관, 실제 거래가 기준)
      */
     private void createTransactionsFromSale(CircularSaleHeader header,

@@ -230,10 +230,9 @@ public class ScoreEventsService {
 
             String materialCode = (String) r[3];
             String mainCode = (String) r[7];
-            BigDecimal mainRatio = (BigDecimal) r[8];
 
             // 가중 carbon 누적 (buildEventDto 와 동일 산식 재사용)
-            BigDecimal factor = resolveFactor(materialCode, mainCode, mainRatio, factorMap);
+            BigDecimal factor = resolveFactor(materialCode, factorMap);
             totalCarbonAmount = totalCarbonAmount.add(BigDecimal.valueOf(w).multiply(factor));
 
             // newBuyer 판정 — 그룹 내 어느 SKU 라도 첫 거래 시점이면 true
@@ -302,8 +301,8 @@ public class ScoreEventsService {
         boolean isLocalPartner = "local_small".equals(partnerType)
                               || "social_enterprise".equals(partnerType);
 
-        // effective factor — 혼방이면 (70% 주 소재 factor × ratio), 단일이면 자기 factor
-        BigDecimal factor = resolveFactor(material, mainMaterialCode, mainRatio, factorMap);
+        // effective factor — 모든 소재 자기 factor 사용
+        BigDecimal factor = resolveFactor(material, factorMap);
 
         // 점수 4종 계산 (CARBON_SCALE 폐기 후 단순 곱)
         boolean scoreValid = weightKg != null && weightKg >= MIN_WEIGHT_KG;
@@ -400,7 +399,7 @@ public class ScoreEventsService {
 
     /**
      * 카본 절감량 분포 계산 (Phase 3 B) — ESG 대시보드 KPI/차트 SSOT.
-     *  단위: kg CO₂. 산식: 거래별 (weight × effectiveFactor), 점수의 CARBON_SCALE(0.1) 미적용.
+     *  단위: kg CO₂. 산식: 거래별 (weight × effectiveFactor), 점수 carbon 과 동일 산식 (weight × effectiveFactor).
      *  - byMaterial: code → 누적 kg. 모든 active material code 키를 0 으로 시드해서 누락 방지.
      *  - byGroup   : 정규화된 group (NATURAL_SINGLE/SYNTHETIC/BLEND) → 누적 kg.
      *  - monthly   : 12개 List (1~12월). 거래 없는 달은 0.
@@ -428,9 +427,8 @@ public class ScoreEventsService {
 
         for (ScoreEventsDto.EventDto e : events) {
             if (e.getWeightKg() == null) continue;
-            // effective factor — 혼방이면 mainFactor × ratio, 단일이면 자기 factor (buildEventDto 와 동일 산식)
-            BigDecimal factor = resolveFactor(e.getMaterial(), e.getMainMaterialCode(),
-                    e.getMainMaterialRatio(), factorMap);
+            // effective factor — 모든 소재 자기 factor 사용 (buildEventDto 와 동일 산식)
+            BigDecimal factor = resolveFactor(e.getMaterial(), factorMap);
             // weight × factor → 반올림하여 kg 정수. (Higg MSI factor 는 소수 → 반올림 영향 미미)
             long reduction = BigDecimal.valueOf(e.getWeightKg())
                     .multiply(factor)
@@ -484,17 +482,10 @@ public class ScoreEventsService {
 
     /**
      * 거래의 effective carbon factor 산출.
-     *  - 혼방 거래(material='BLEND') + main_material_code 존재 → 70% 주 소재 factor × ratio
-     *    (예: COTTON 6.0 × 0.7 = 4.2)
-     *  - 그 외 (단일 거래 또는 main 정보 누락된 BLEND) → 자기 material_code 의 factor 그대로
-     *    (BLEND 자체의 fallback factor 5.5 또는 단일 소재 factor)
+     *  - 모든 소재(BLEND 포함) 자기 factor 반환
+     *    (BLEND 고유 factor 5.5 그대로 사용)
      */
-    private BigDecimal resolveFactor(String materialCode, String mainCode,
-                                      BigDecimal mainRatio, Map<String, BigDecimal> factorMap) {
-        if ("BLEND".equals(materialCode) && mainCode != null && mainRatio != null) {
-            BigDecimal mainFactor = factorMap.getOrDefault(mainCode, BigDecimal.ZERO);
-            return mainFactor.multiply(mainRatio);
-        }
+    private BigDecimal resolveFactor(String materialCode, Map<String, BigDecimal> factorMap) {
         return factorMap.getOrDefault(materialCode, BigDecimal.ZERO);
     }
 }
