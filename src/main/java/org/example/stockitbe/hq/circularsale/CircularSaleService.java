@@ -99,11 +99,13 @@ public class CircularSaleService {
     public CircularSaleDto.CreateRes create(CircularSaleDto.CreateReq request, AuthUserDetails me) {
         // 1) 요청 본문 최소 검증(빈 라인/소재구분 누락 차단)
         validateCreateRequest(request);
-        // 2) 거래처/카테고리 기준 데이터 로드 (조회)
-        CircularBuyer buyer = findBuyerByCode(request.getBuyerCode());
+        // 2) saleType 결정 — null 이면 "SALE" 기본
+        String saleType = request.getSaleType() == null ? "SALE" : request.getSaleType().toUpperCase(Locale.ROOT);
+        // 3) 거래처/카테고리 기준 데이터 로드 (DONATION은 buyer 조회 스킵)
+        CircularBuyer buyer = "DONATION".equals(saleType) ? null : findBuyerByCode(request.getBuyerCode());
         CategoryLookup categoryLookup = buildCategoryLookup();
 
-        // 3) 라인별 SKU/재고/소재 스냅샷 컨텍스트 구성 + 단일 창고 검증
+        // 4) 라인별 SKU/재고/소재 스냅샷 컨텍스트 구성 + 단일 창고 검증
         List<LineContext> contexts = buildLineContexts(request.getItems(), request.getMaterialType(), categoryLookup);
         Long warehouseId = resolveSingleWarehouse(contexts);
         for (LineContext context : contexts) {
@@ -113,17 +115,17 @@ public class CircularSaleService {
             );
         }
 
-        // 4) 재고를 즉시 차감하지 않고 예약 수량으로 선반영
+        // 5) 재고를 즉시 차감하지 않고 예약 수량으로 선반영
         applyInventoryReservations(contexts);
-        // 5) 판매/출고/상태이력을 한 트랜잭션으로 동시 저장
-        SalePersistResult persisted = persistSaleAndOutbound(request, me, buyer, warehouseId, contexts);
+        // 6) 판매/출고/상태이력을 한 트랜잭션으로 동시 저장
+        SalePersistResult persisted = persistSaleAndOutbound(request, me, buyer, warehouseId, contexts, saleType);
 
-        // 6) 응답 DTO 조립 후 반환
+        // 7) 응답 DTO 조립 후 반환
         List<CircularSaleDto.LineRes> lines = mapLineRes(persisted.items, persisted.materialRows);
         return CircularSaleDto.CreateRes.from(
                 persisted.header,
-                buyer.getCode(),
-                buyer.getCompanyName(),
+                buyer != null ? buyer.getCode() : null,
+                buyer != null ? buyer.getCompanyName() : request.getDoneeName(),
                 persisted.outbound.getOutboundNo(),
                 persisted.outbound.getStatus(),
                 lines
@@ -135,30 +137,35 @@ public class CircularSaleService {
     public CircularSaleDto.ListPageRes list(
             Integer page, Integer size, String sort,
             LocalDate from, LocalDate to,
-            String buyerCode, String materialType, String keyword
+            String buyerCode, String materialType, String keyword, String saleType
     ) {
         // 1) 페이지/정렬 파라미터 정규화
         int safePage = page == null ? 0 : Math.max(0, page);
         int safeSize = size == null ? 20 : Math.min(Math.max(1, size), 200);
         Pageable pageable = PageRequest.of(safePage, safeSize, parseSort(sort));
 
-        // 2) 검색 조건 정규화(기간/키워드/소재/거래처코드)
+        // 2) 검색 조건 정규화(기간/키워드/소재/거래처코드/판매유형)
         Date fromDate = from == null ? null : Date.from(from.atStartOfDay(KST).toInstant());
         Date toDateExclusive = to == null ? null : Date.from(to.plusDays(1).atStartOfDay(KST).toInstant());
         String safeKeyword = keyword == null ? null : keyword.trim();
         String safeMaterialType = materialType == null ? null : materialType.trim();
+        String safeSaleType = blankToNull(saleType);
         Long buyerId = resolveBuyerIdOrNull(buyerCode);
 
+        // saleType 조건은 search() 에 추가 (CircularSaleHeaderRepository.search() 시그니처 업데이트 필요)
         Page<CircularSaleHeader> headers = saleHeaderRepository.search(
-                fromDate, toDateExclusive, buyerId, blankToNull(safeMaterialType), blankToNull(safeKeyword), pageable
+                fromDate, toDateExclusive, buyerId, blankToNull(safeMaterialType), blankToNull(safeKeyword),
+                safeSaleType, pageable
         );
         if (headers.isEmpty()) {
             return CircularSaleDto.ListPageRes.from(new PageImpl<>(List.of(), pageable, 0));
         }
 
         // 3) 목록 렌더링에 필요한 연관 데이터(거래처/출고/아이템) 배치 조회
+        //    DONATION 헤더는 buyerId=null 이므로 null 제외 후 조회
         Map<Long, CircularBuyer> buyerById = circularBuyerRepository.findAllById(
-                headers.getContent().stream().map(CircularSaleHeader::getBuyerId).collect(Collectors.toSet())
+                headers.getContent().stream().map(CircularSaleHeader::getBuyerId)
+                        .filter(Objects::nonNull).collect(Collectors.toSet())
         ).stream().collect(Collectors.toMap(CircularBuyer::getId, Function.identity()));
         Map<Long, WhOutboundHeader> outboundById = outboundHeaderRepository.findAllById(
                 headers.getContent().stream()
@@ -203,6 +210,8 @@ public class CircularSaleService {
                     .totalSoldQuantity(header.getTotalSoldQuantity())
                     .totalAmount(header.getTotalAmount())
                     .headline(buildHeadline(items))
+                    .saleType(header.getSaleType())
+                    .doneeName(header.getDoneeName())
                     .build());
         }
         // 5) 페이지 메타 포함 응답으로 반환함
@@ -215,8 +224,9 @@ public class CircularSaleService {
         // 1) 판매 헤더/거래처/출고 헤더 조회
         CircularSaleHeader header = saleHeaderRepository.findById(saleId)
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.CIRCULAR_SALE_NOT_FOUND));
-        CircularBuyer buyer = circularBuyerRepository.findById(header.getBuyerId())
-                .orElseThrow(() -> BaseException.from(BaseResponseStatus.CIRCULAR_SALE_BUYER_NOT_FOUND));
+        // DONATION은 buyerId=null 이므로 null-safe 처리
+        CircularBuyer buyer = header.getBuyerId() == null ? null
+                : circularBuyerRepository.findById(header.getBuyerId()).orElse(null);
         WhOutboundHeader outbound = header.getOutboundHeaderId() == null ? null
                 : outboundHeaderRepository.findById(header.getOutboundHeaderId()).orElse(null);
 
@@ -282,9 +292,9 @@ public class CircularSaleService {
                 .outboundHeaderId(header.getOutboundHeaderId())
                 .outboundWarehouseCode(outboundWarehouse == null ? null : outboundWarehouse.getCode())
                 .outboundWarehouseName(outboundWarehouse == null ? null : outboundWarehouse.getName())
-                .buyerCode(buyer.getCode())
-                .buyerName(buyer.getCompanyName())
-                .buyerIndustryGroup(buyer.getIndustryGroup())
+                .buyerCode(buyer != null ? buyer.getCode() : null)
+                .buyerName(buyer != null ? buyer.getCompanyName() : header.getDoneeName())
+                .buyerIndustryGroup(buyer != null ? buyer.getIndustryGroup() : null)
                 .materialType(header.getMaterialType())
                 .totalSkuCount(header.getTotalSkuCount())
                 .totalRequestedWeightKg(header.getTotalRequestedWeightKg())
@@ -292,6 +302,8 @@ public class CircularSaleService {
                 .totalSoldQuantity(header.getTotalSoldQuantity())
                 .totalAmount(header.getTotalAmount())
                 .memo(header.getMemo())
+                .saleType(header.getSaleType())
+                .doneeName(header.getDoneeName())
                 .items(lines)
                 .statusHistory(histories)
                 .build();
@@ -354,6 +366,11 @@ public class CircularSaleService {
         }
         if (request.getMaterialType() == null || request.getMaterialType().isBlank()) {
             throw BaseException.from(BaseResponseStatus.CIRCULAR_SALE_INVALID_REQUEST);
+        }
+        // DONATION은 doneeName 으로 기부처 식별 — buyerCode 검증 건너뜀
+        String saleType = request.getSaleType() == null ? "SALE" : request.getSaleType().toUpperCase(Locale.ROOT);
+        if (!"DONATION".equals(saleType) && (request.getBuyerCode() == null || request.getBuyerCode().isBlank())) {
+            throw BaseException.from(BaseResponseStatus.CIRCULAR_SALE_BUYER_NOT_FOUND);
         }
     }
 
@@ -524,13 +541,17 @@ public class CircularSaleService {
 
     // 사용하는 메서드: create
     // 판매/출고/상태이력 데이터를 한 트랜잭션에서 저장한다.
-    private SalePersistResult persistSaleAndOutbound(CircularSaleDto.CreateReq request, AuthUserDetails me, CircularBuyer buyer,
-                                                     Long warehouseId, List<LineContext> contexts) {
+    private SalePersistResult persistSaleAndOutbound(CircularSaleDto.CreateReq request, AuthUserDetails me,
+                                                     CircularBuyer buyer, Long warehouseId,
+                                                     List<LineContext> contexts, String saleType) {
         Date now = new Date();
+        // DONATION은 buyerId=null (CircularSaleHeader.buyerId 컬럼이 nullable=true 이어야 함)
+        Long buyerId = buyer != null ? buyer.getId() : null;
+
         // 1) 판매 헤더 저장(임시번호 저장 후 PK 기반 정식번호 재할당)
         CircularSaleHeader header = saleHeaderRepository.save(CircularSaleHeader.builder()
                 .saleNo(generateTempNo("TMP"))
-                .buyerId(buyer.getId())
+                .buyerId(buyerId)
                 .warehouseId(warehouseId)
                 .status(CircularSaleStatus.READY_TO_SHIP)
                 .soldAt(now)
@@ -543,8 +564,10 @@ public class CircularSaleService {
                 .totalSoldQuantity(sumInt(contexts, c -> c.request.getSoldQuantity()))
                 .totalAmount(sumLong(contexts, c -> c.request.getLineAmount()))
                 .memo(request.getMemo())
+                .saleType(saleType)
+                .doneeName(request.getDoneeName())
                 .build());
-        header.assignSaleNo(generateSaleNo(header.getId(), now));
+        header.assignSaleNo(generateSaleNo(header.getId(), now, saleType));
 
         // 2) 판매 아이템 저장
         List<CircularSaleItem> items = new ArrayList<>();
@@ -595,6 +618,8 @@ public class CircularSaleService {
         saleItemMaterialRepository.saveAll(materialRows);
 
         // 4) 출고 헤더/출고 아이템 저장 및 판매 헤더에 연결
+        //    DONATION은 destinationId=null (WhOutboundHeader.destinationId 컬럼이 nullable 이어야 함)
+        Long destinationId = buyer != null ? buyer.getId() : null;
         WhOutboundHeader outbound = outboundHeaderRepository.save(WhOutboundHeader.builder()
                 .outboundNo(generateTempNo("TMP"))
                 .sourceType(OutboundSourceType.CIRCULAR_SALE)
@@ -603,7 +628,7 @@ public class CircularSaleService {
                 .sourceRefId(header.getId())
                 .warehouseId(warehouseId)
                 .destinationType(OutboundDestinationType.CIRCULAR_BUYER)
-                .destinationId(buyer.getId())
+                .destinationId(destinationId)
                 .status(OutboundStatus.READY_TO_SHIP)
                 .totalRequestedQuantity(sumInt(contexts, c -> c.request.getSoldQuantity()))
                 .requestedAt(now)
@@ -657,17 +682,18 @@ public class CircularSaleService {
 
         // 6) Phase 3 — 실제 판매를 ESG 점수에 즉시 반영 (circular_buyer_transaction 자동 INSERT)
         //    sale_item 별로 transaction 1건씩 생성 + 혼방 주 소재 참조용 저장 (탄소 계산 미사용)
-        createTransactionsFromSale(header, buyer, savedItems, contexts);
+        createTransactionsFromSale(header, buyer, savedItems, contexts, saleType, request.getDoneeName());
 
         // 7) 생성 결과 반환
         return new SalePersistResult(header, outbound, savedItems, materialRows);
     }
 
     // 사용하는 메서드: create
-    // 판매번호 규칙: CSR-YYYYMMDD-00001
-    private String generateSaleNo(Long id, Date soldAt) {
+    // 판매번호 규칙: CSR-YYYYMMDD-00001 (DONATION은 DON-YYYYMMDD-00001)
+    private String generateSaleNo(Long id, Date soldAt, String saleType) {
         LocalDate day = soldAt.toInstant().atZone(KST).toLocalDate();
-        return "CSR-" + day.format(NUMBER_DATE_FORMAT) + "-" + String.format("%05d", id);
+        String prefix = "DONATION".equals(saleType) ? "DON" : "CSR";
+        return prefix + "-" + day.format(NUMBER_DATE_FORMAT) + "-" + String.format("%05d", id);
     }
 
     // 사용하는 메서드: create
@@ -710,13 +736,15 @@ public class CircularSaleService {
      * 사용하는 메서드: persistSaleAndOutbound
      * Phase 3: 실제 판매 완료 시 ESG 점수 가산을 위해 circular_buyer_transaction 에도 거래 row 를 INSERT.
      *  - sale_item 별로 transaction 1건씩 생성 (product 별 정밀 ESG 점수)
-     *  - 혼방 product 의 경우 주 소재 코드와 비율도 함께 기록 (혼방 주 소재 참조용 저장, 탄소 계산 미사용)
+     *  - DONATION은 buyer=null (entity optional=true), doneeName 기록
      *  - 거래 시점 단가/금액은 sale_item 의 값을 그대로 스냅샷 (KAU 시세와 무관, 실제 거래가 기준)
      */
     private void createTransactionsFromSale(CircularSaleHeader header,
                                              CircularBuyer buyer,
                                              List<CircularSaleItem> savedItems,
-                                             List<LineContext> contexts) {
+                                             List<LineContext> contexts,
+                                             String saleType,
+                                             String doneeName) {
         // sold_at(Date) → LocalDateTime(KST) 변환 — circular_buyer_transaction.transacted_at 컬럼 매칭
         java.time.LocalDateTime soldAt = header.getSoldAt().toInstant()
                 .atZone(KST).toLocalDateTime();
@@ -726,11 +754,10 @@ public class CircularSaleService {
             CircularSaleItem item = savedItems.get(i);
             ProductMaster master = contexts.get(i).master;
 
-            // composition 기반으로 material_code / main_material_code / main_material_ratio 산출
             TxMaterial tx = deriveTransactionMaterial(master);
 
             rows.add(CircularBuyerTransaction.builder()
-                    .buyer(buyer)
+                    .buyer(buyer)  // SALE: 거래처 엔티티, DONATION: null (optional=true)
                     .materialCode(tx.materialCode())
                     .weightKg(item.getActualWeightKg() != null
                             ? item.getActualWeightKg().intValue()
@@ -740,8 +767,8 @@ public class CircularSaleService {
                     .unitPrice(item.getUnitPrice() != null ? item.getUnitPrice().intValue() : 0)
                     .totalAmount(item.getLineAmount() != null ? item.getLineAmount() : 0L)
                     .transactedAt(soldAt)
-                    .mainMaterialCode(tx.mainMaterialCode())
-                    .mainMaterialRatio(tx.mainMaterialRatio())
+                    .saleType(saleType)
+                    .doneeName(doneeName)
                     .build());
         }
 
@@ -752,41 +779,23 @@ public class CircularSaleService {
 
     /**
      * 사용하는 메서드: createTransactionsFromSale
-     * product 의 composition 분포로 transaction.material_code / main_material_code / main_material_ratio 산출.
-     *  - composition row 2개 이상 → 'BLEND' + composition[0] 의 material/ratio 를 main 으로
-     *  - composition 단일       → 그 material code, main 정보는 NULL
-     *  - composition 없음       → 'BLEND' 폴백 (예외 케이스)
-     *
-     * Phase 1 의 material_group 어휘와는 별개 — 여기서는 거래 단위의 material_code 만 결정.
+     * product 의 composition 분포로 transaction.material_code 산출.
+     *  - composition 단일 → 그 material code
+     *  - composition 2개 이상 또는 없음 → 'BLEND'
      */
     private TxMaterial deriveTransactionMaterial(ProductMaster master) {
         List<ProductMaterialComposition> comps = master.getMaterialCompositions();
         if (comps == null || comps.isEmpty()) {
-            return new TxMaterial("BLEND", null, null);
+            return new TxMaterial("BLEND");
         }
-        // composition_order 오름차순 기준 가장 작은 (즉 주 소재) 1개 선별
-        ProductMaterialComposition primary = comps.stream()
-                .min((a, b) -> Integer.compare(
-                        a.getCompositionOrder() == null ? Integer.MAX_VALUE : a.getCompositionOrder(),
-                        b.getCompositionOrder() == null ? Integer.MAX_VALUE : b.getCompositionOrder()))
-                .orElse(comps.get(0));
-
-        String primaryCode = primary.getMaterial().getCode();
-
-        // 단일 composition → 자기 material 코드 그대로, main 은 NULL
         if (comps.size() == 1) {
-            return new TxMaterial(primaryCode, null, null);
+            return new TxMaterial(comps.get(0).getMaterial().getCode());
         }
-
-        // 2개 이상 → BLEND, 주 소재는 primary, 비율은 ratio/100
-        BigDecimal ratio = primary.getRatio() != null
-                ? BigDecimal.valueOf(primary.getRatio()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
-                : BigDecimal.valueOf(0.70);  // 안전 폴백 (시드 표준 70%)
-        return new TxMaterial("BLEND", primaryCode, ratio);
+        return new TxMaterial("BLEND");
     }
 
     /** Phase 3 — transaction 의 material 결정 결과 보관용 record */
-    private record TxMaterial(String materialCode, String mainMaterialCode, BigDecimal mainMaterialRatio) {}
+    private record TxMaterial(String materialCode) {}
 
     // 사용하는 메서드: create
     // 소재 조합 기반으로 판매 소재 구분 라벨을 산출한다.

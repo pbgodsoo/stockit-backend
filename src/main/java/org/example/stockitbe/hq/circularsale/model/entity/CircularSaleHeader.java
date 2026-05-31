@@ -32,7 +32,7 @@ public class CircularSaleHeader extends BaseEntity {
     @Column(name = "sale_no", nullable = false, length = 40)
     private String saleNo;
 
-    @Column(name = "buyer_id", nullable = false)
+    @Column(name = "buyer_id", nullable = true)
     private Long buyerId;
 
     @Column(name = "warehouse_id", nullable = false)
