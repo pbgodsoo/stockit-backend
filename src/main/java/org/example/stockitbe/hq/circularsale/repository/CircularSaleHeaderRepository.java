@@ -28,6 +28,7 @@ public interface CircularSaleHeaderRepository extends JpaRepository<CircularSale
                          and (lower(i.productName) like concat('%', lower(:keyword), '%')
                               or lower(i.skuCode) like concat('%', lower(:keyword), '%'))
                    ))
+              and (:saleType is null or h.saleType = :saleType)
             """)
     Page<CircularSaleHeader> search(
             @Param("fromDate") Date fromDate,
@@ -35,6 +36,7 @@ public interface CircularSaleHeaderRepository extends JpaRepository<CircularSale
             @Param("buyerId") Long buyerId,
             @Param("materialType") String materialType,
             @Param("keyword") String keyword,
+            @Param("saleType") String saleType,
             Pageable pageable
     );
 
@@ -43,4 +45,3 @@ public interface CircularSaleHeaderRepository extends JpaRepository<CircularSale
     @Query("select count(h) from CircularSaleHeader h where h.status = :status")
     long countByStatus(@Param("status") CircularSaleStatus status);
 }
-

@@ -48,11 +48,14 @@ public class ScoreEventsService {
     //   변경 후: carbon = weight × factor
 
     // ─────────── 카테고리 필터 상수 (FE filterCategory 와 동일 값) ───────────
-    private static final String CAT_ALL            = "ALL";
-    private static final String CAT_SALE_EXECUTION = "saleExecution";
-    private static final String CAT_CARBON         = "carbon";
-    private static final String CAT_NEW_BUYER      = "newBuyer";
-    private static final String CAT_LOCAL_PARTNER  = "localPartner";
+    private static final String CAT_ALL                = "ALL";
+    private static final String CAT_SALE_EXECUTION     = "saleExecution";
+    private static final String CAT_CARBON             = "carbon";
+    private static final String CAT_NEW_BUYER          = "newBuyer";
+    private static final String CAT_LOCAL_PARTNER      = "localPartner";
+    private static final String CAT_DONATION_EXECUTION = "donationExecution";
+    /** 기부 실행 기본 점수 */
+    private static final int DONATION_BASE = 100;
 
     // ─────────── BE material.material_group 어휘 → FE 어휘 정규화 ───────────
     //  - BE: 'NATURAL' (ProductMasterService.MATERIAL_GROUP_NATURAL 상수와 일치)
@@ -119,13 +122,13 @@ public class ScoreEventsService {
         // code → normalized group ("NATURAL_SINGLE" / "SYNTHETIC" / "BLEND")
         Map<String, String> groupMap = materials.stream()
                 .collect(Collectors.toMap(Material::getCode, m -> normalizeGroup(m.getMaterialGroup())));
-        // code → 한글명 (활동 이력 카드의 "폴리에스터, 레이온, 나일론" 표시용)
+        // code → 한글명 (활동 이력 카드의 소재명 표시용)
         Map<String, String> nameMap = materials.stream()
                 .collect(Collectors.toMap(Material::getCode, Material::getNameKo));
 
         // ③ row: r[0] id, r[1] transacted_at, r[2] company_name, r[3] material_code,
         //         r[4] weight_kg, r[5] first_tx_at,
-        //         r[6] partner_type, r[7] main_material_code, r[8] main_material_ratio
+        //         r[6] partner_type, r[7] sale_type
         List<Object[]> rows = txRepo.findEventsForYear(from, to);
 
         // ④-A SKU별 EventDto — CarbonReduction(소재별/그룹별/월별 분포) 정밀 계산용 (그룹화 안 함)
@@ -136,7 +139,7 @@ public class ScoreEventsService {
 
         // ④-B 판매 단위(거래처+시점) 그룹화된 EventDto — 활동 이력 / 점수 / KPI 표시용
         //   - 판매 1건 (sale_header) = 같은 buyer + 같은 transacted_at(밀리초) → 1 그룹
-        //   - 소재는 그룹 내 unique 한글명 콤마 구분 ("폴리에스터, 레이온, 나일론")
+        //   - 소재는 그룹 내 unique 한글명 콤마 구분 ("폴리에스터, 나일론")
         //   - 점수는 총 무게 기준 재계산 → 10kg 미만 SKU 들도 합쳐서 점수 부여
         List<ScoreEventsDto.EventDto> groupedEvents = buildGroupedEvents(rows, factorMap, nameMap);
 
@@ -182,7 +185,7 @@ public class ScoreEventsService {
      *  - 판매 1건 (sale_header) = 같은 buyer + 같은 millisecond → 1 그룹 가정
      *    (CircularSaleService 가 같은 sold_at(=now) 으로 transaction INSERT 하므로 안전)
      *  - 그룹별 점수는 총 무게 기준 재계산 (10kg 미만 SKU 들도 합쳐서 점수 부여)
-     *  - 소재는 그룹 내 unique 한글명을 콤마 구분 (예: "폴리에스터, 레이온, 나일론")
+     *  - 소재는 그룹 내 unique 한글명을 콤마 구분 (예: "폴리에스터, 나일론")
      *  - newBuyer / localPartner 는 그룹 내 anyMatch 로 판정
      */
     private List<ScoreEventsDto.EventDto> buildGroupedEvents(
@@ -207,7 +210,7 @@ public class ScoreEventsService {
         return result;
     }
 
-    /** 그룹화된 row 묶음 → EventDto 1건 (총 무게 기준 점수 재계산). */
+    /** 그룹화된 row 묶음 → EventDto 1건 (총 무게 기준 점수 재계산, SALE/DONATION 분기). */
     private ScoreEventsDto.EventDto buildGroupEventDto(
             List<Object[]> groupRows,
             Map<String, BigDecimal> factorMap,
@@ -217,6 +220,7 @@ public class ScoreEventsService {
         Long groupId = ((Number) first[0]).longValue();      // 대표 id (그룹 첫 SKU)
         Timestamp txAt = (Timestamp) first[1];
         String buyer = (String) first[2];
+        String saleType = (String) first[7];                 // 그룹 첫 row 의 sale_type 사용
 
         int totalWeight = 0;
         BigDecimal totalCarbonAmount = BigDecimal.ZERO;       // sum(weight × effectiveFactor)
@@ -229,11 +233,9 @@ public class ScoreEventsService {
             totalWeight += w;
 
             String materialCode = (String) r[3];
-            String mainCode = (String) r[7];
-            BigDecimal mainRatio = (BigDecimal) r[8];
 
-            // 가중 carbon 누적 (buildEventDto 와 동일 산식 재사용)
-            BigDecimal factor = resolveFactor(materialCode, mainCode, mainRatio, factorMap);
+            // carbon 누적 (buildEventDto 와 동일 산식 재사용)
+            BigDecimal factor = resolveFactor(materialCode, factorMap);
             totalCarbonAmount = totalCarbonAmount.add(BigDecimal.valueOf(w).multiply(factor));
 
             // newBuyer 판정 — 그룹 내 어느 SKU 라도 첫 거래 시점이면 true
@@ -246,20 +248,26 @@ public class ScoreEventsService {
                 isLocalPartner = true;
             }
 
-            // 소재 한글명 집계 — BLEND 면 main 소재 사용 (없으면 코드 그대로)
-            String displayCode = "BLEND".equals(materialCode) && mainCode != null ? mainCode : materialCode;
-            materialSet.add(nameMap.getOrDefault(displayCode, displayCode));
+            // 소재 한글명 집계 — materialCode 직접 사용 (혼방이면 "혼방"으로 표시)
+            materialSet.add(nameMap.getOrDefault(materialCode, materialCode));
         }
 
-        // 점수 4종 재계산 — 그룹 총 무게 기준 (CARBON_SCALE 폐기 후 단순 곱)
         boolean scoreValid = totalWeight >= MIN_WEIGHT_KG;
-        int saleExecution = scoreValid ? SALE_BASE : 0;
-        int carbon = scoreValid
-                ? totalCarbonAmount.intValue()
-                : 0;
-        int newBuyerScore = (scoreValid && isNewBuyer) ? NEW_BUYER_BONUS : 0;
-        int localPartnerScore = (scoreValid && isLocalPartner) ? LOCAL_PARTNER_BONUS : 0;
-        int total = saleExecution + carbon + newBuyerScore + localPartnerScore;
+        int carbon = scoreValid ? totalCarbonAmount.intValue() : 0;
+
+        int saleExecution, donationExecution, newBuyerScore, localPartnerScore;
+        if ("DONATION".equals(saleType)) {
+            saleExecution     = 0;
+            donationExecution = scoreValid ? DONATION_BASE : 0;
+            newBuyerScore     = 0;
+            localPartnerScore = 0;
+        } else {
+            saleExecution     = scoreValid ? SALE_BASE : 0;
+            donationExecution = 0;
+            newBuyerScore     = (scoreValid && isNewBuyer)     ? NEW_BUYER_BONUS     : 0;
+            localPartnerScore = (scoreValid && isLocalPartner) ? LOCAL_PARTNER_BONUS : 0;
+        }
+        int total = saleExecution + carbon + newBuyerScore + localPartnerScore + donationExecution;
 
         String materialNames = String.join(", ", materialSet);
         String date = txAt.toLocalDateTime().toLocalDate().format(DATE_FMT);
@@ -267,24 +275,24 @@ public class ScoreEventsService {
         return ScoreEventsDto.EventDto.builder()
                 .id(groupId)
                 .date(date)
-                .type("sale")
+                .type(saleType == null ? "sale" : saleType.toLowerCase())
                 .buyer(buyer)
-                .material(materialNames)              // 콤마 구분 한글명
-                .weightKg(totalWeight)                // 그룹 총 무게
+                .material(materialNames)
+                .weightKg(totalWeight)
                 .isNewBuyer(isNewBuyer)
                 .isLocalPartner(isLocalPartner)
-                .mainMaterialCode(null)               // 그룹화 후엔 의미 없음
-                .mainMaterialRatio(null)
+                .saleType(saleType)
                 .saleExecution(saleExecution)
                 .carbon(carbon)
                 .newBuyer(newBuyerScore)
                 .localPartner(localPartnerScore)
+                .donationExecution(donationExecution)
                 .total(total)
                 .scoreValid(scoreValid)
                 .build();
     }
 
-    /** native row 1개를 EventDto 로 변환 + 점수 4종 계산. */
+    /** native row 1개를 EventDto 로 변환 + 점수 계산 (SALE/DONATION 분기). */
     private ScoreEventsDto.EventDto buildEventDto(Object[] r, Map<String, BigDecimal> factorMap) {
         Long id                  = ((Number) r[0]).longValue();
         LocalDateTime txAt       = ((Timestamp) r[1]).toLocalDateTime();
@@ -293,8 +301,7 @@ public class ScoreEventsService {
         Integer weightKg         = ((Number) r[4]).intValue();
         LocalDateTime firstAt    = ((Timestamp) r[5]).toLocalDateTime();
         String partnerType       = (String) r[6];
-        String mainMaterialCode  = (String) r[7];   // nullable
-        BigDecimal mainRatio     = (BigDecimal) r[8]; // nullable
+        String saleType          = (String) r[7];   // "SALE" | "DONATION"
 
         boolean isNewBuyer = txAt.equals(firstAt);
         // local_small (지역 소상공인) / social_enterprise (사회적기업) 모두 지역 파트너로 인정.
@@ -302,34 +309,43 @@ public class ScoreEventsService {
         boolean isLocalPartner = "local_small".equals(partnerType)
                               || "social_enterprise".equals(partnerType);
 
-        // effective factor — 혼방이면 (70% 주 소재 factor × ratio), 단일이면 자기 factor
-        BigDecimal factor = resolveFactor(material, mainMaterialCode, mainRatio, factorMap);
+        // effective factor — 모든 소재 자기 factor 사용
+        BigDecimal factor = resolveFactor(material, factorMap);
 
-        // 점수 4종 계산 (CARBON_SCALE 폐기 후 단순 곱)
         boolean scoreValid = weightKg != null && weightKg >= MIN_WEIGHT_KG;
-        int saleExecution = scoreValid ? SALE_BASE : 0;
         int carbon = scoreValid
                 ? BigDecimal.valueOf(weightKg).multiply(factor).intValue()
                 : 0;
-        int newBuyerScore     = (scoreValid && isNewBuyer)     ? NEW_BUYER_BONUS     : 0;
-        int localPartnerScore = (scoreValid && isLocalPartner) ? LOCAL_PARTNER_BONUS : 0;
-        int total = saleExecution + carbon + newBuyerScore + localPartnerScore;
+
+        int saleExecution, donationExecution, newBuyerScore, localPartnerScore;
+        if ("DONATION".equals(saleType)) {
+            saleExecution     = 0;
+            donationExecution = scoreValid ? DONATION_BASE : 0;
+            newBuyerScore     = 0;
+            localPartnerScore = 0;
+        } else {
+            saleExecution     = scoreValid ? SALE_BASE : 0;
+            donationExecution = 0;
+            newBuyerScore     = (scoreValid && isNewBuyer)     ? NEW_BUYER_BONUS     : 0;
+            localPartnerScore = (scoreValid && isLocalPartner) ? LOCAL_PARTNER_BONUS : 0;
+        }
+        int total = saleExecution + carbon + newBuyerScore + localPartnerScore + donationExecution;
 
         return ScoreEventsDto.EventDto.builder()
                 .id(id)
                 .date(txAt.toLocalDate().format(DATE_FMT))
-                .type("sale")
+                .type(saleType == null ? "sale" : saleType.toLowerCase())
                 .buyer(buyer)
                 .material(material)
                 .weightKg(weightKg)
                 .isNewBuyer(isNewBuyer)
                 .isLocalPartner(isLocalPartner)
-                .mainMaterialCode(mainMaterialCode)
-                .mainMaterialRatio(mainRatio)
+                .saleType(saleType)
                 .saleExecution(saleExecution)
                 .carbon(carbon)
                 .newBuyer(newBuyerScore)
                 .localPartner(localPartnerScore)
+                .donationExecution(donationExecution)
                 .total(total)
                 .scoreValid(scoreValid)
                 .build();
@@ -342,10 +358,11 @@ public class ScoreEventsService {
             return events;
         }
         return events.stream().filter(e -> switch (category) {
-            case CAT_SALE_EXECUTION -> e.getSaleExecution() > 0;
-            case CAT_CARBON         -> e.getCarbon()        > 0;
-            case CAT_NEW_BUYER      -> e.getNewBuyer()      > 0;
-            case CAT_LOCAL_PARTNER  -> e.getLocalPartner()  > 0;
+            case CAT_SALE_EXECUTION     -> e.getSaleExecution()     > 0;
+            case CAT_CARBON             -> e.getCarbon()            > 0;
+            case CAT_NEW_BUYER          -> e.getNewBuyer()          > 0;
+            case CAT_LOCAL_PARTNER      -> e.getLocalPartner()      > 0;
+            case CAT_DONATION_EXECUTION -> e.getDonationExecution() > 0;
             // 알 수 없는 카테고리는 ALL 과 동일하게 통과 (FE 가 새 값을 보내도 500 안 나도록)
             default -> true;
         }).collect(Collectors.toList());
@@ -353,7 +370,7 @@ public class ScoreEventsService {
 
     /** Summary 집계 — 상단 KPI 카드. */
     private ScoreEventsDto.Summary buildSummary(List<ScoreEventsDto.EventDto> events) {
-        long saleSum = 0, carbonSum = 0, newBuyerSum = 0, localPartnerSum = 0;
+        long saleSum = 0, carbonSum = 0, newBuyerSum = 0, localPartnerSum = 0, donationSum = 0;
         long totalKg = 0;
         long validCnt = 0;
         for (ScoreEventsDto.EventDto e : events) {
@@ -361,10 +378,11 @@ public class ScoreEventsService {
             carbonSum       += e.getCarbon();
             newBuyerSum     += e.getNewBuyer();
             localPartnerSum += e.getLocalPartner();
+            donationSum     += e.getDonationExecution();
             if (e.getWeightKg() != null) totalKg += e.getWeightKg();
             if (e.isScoreValid()) validCnt++;
         }
-        long totalScore = saleSum + carbonSum + newBuyerSum + localPartnerSum;
+        long totalScore = saleSum + carbonSum + newBuyerSum + localPartnerSum + donationSum;
         long cnt = events.size();
         long avg = cnt > 0 ? Math.round((double) totalScore / cnt) : 0L;
 
@@ -374,6 +392,7 @@ public class ScoreEventsService {
                 .carbonSum(carbonSum)
                 .newBuyerSum(newBuyerSum)
                 .localPartnerSum(localPartnerSum)
+                .donationExecutionSum(donationSum)
                 .totalEventCount(cnt)
                 .validEventCount(validCnt)
                 .totalKg(totalKg)
@@ -383,24 +402,26 @@ public class ScoreEventsService {
 
     /** 도넛 차트용 카테고리별 합계. */
     private ScoreEventsDto.CategoryBreakdown buildCategoryBreakdown(List<ScoreEventsDto.EventDto> events) {
-        long sale = 0, carbon = 0, newBuyer = 0, localPartner = 0;
+        long sale = 0, carbon = 0, newBuyer = 0, localPartner = 0, donation = 0;
         for (ScoreEventsDto.EventDto e : events) {
             sale         += e.getSaleExecution();
             carbon       += e.getCarbon();
             newBuyer     += e.getNewBuyer();
             localPartner += e.getLocalPartner();
+            donation     += e.getDonationExecution();
         }
         return ScoreEventsDto.CategoryBreakdown.builder()
                 .saleExecution(sale)
                 .carbon(carbon)
                 .newBuyer(newBuyer)
                 .localPartner(localPartner)
+                .donationExecution(donation)
                 .build();
     }
 
     /**
      * 카본 절감량 분포 계산 (Phase 3 B) — ESG 대시보드 KPI/차트 SSOT.
-     *  단위: kg CO₂. 산식: 거래별 (weight × effectiveFactor), 점수의 CARBON_SCALE(0.1) 미적용.
+     *  단위: kg CO₂. 산식: 거래별 (weight × effectiveFactor), 점수 carbon 과 동일 산식 (weight × effectiveFactor).
      *  - byMaterial: code → 누적 kg. 모든 active material code 키를 0 으로 시드해서 누락 방지.
      *  - byGroup   : 정규화된 group (NATURAL_SINGLE/SYNTHETIC/BLEND) → 누적 kg.
      *  - monthly   : 12개 List (1~12월). 거래 없는 달은 0.
@@ -428,10 +449,9 @@ public class ScoreEventsService {
 
         for (ScoreEventsDto.EventDto e : events) {
             if (e.getWeightKg() == null) continue;
-            // effective factor — 혼방이면 mainFactor × ratio, 단일이면 자기 factor (buildEventDto 와 동일 산식)
-            BigDecimal factor = resolveFactor(e.getMaterial(), e.getMainMaterialCode(),
-                    e.getMainMaterialRatio(), factorMap);
-            // weight × factor → 반올림하여 kg 정수. (Higg MSI factor 는 소수 → 반올림 영향 미미)
+            // effective factor — 모든 소재 자기 factor 사용 (buildEventDto 와 동일 산식)
+            BigDecimal factor = resolveFactor(e.getMaterial(), factorMap);
+            // weight × factor → 반올림하여 kg 정수. (IPCC Eq.5.2 소각 탄소 계수 — 소수, 반올림 영향 미미)
             long reduction = BigDecimal.valueOf(e.getWeightKg())
                     .multiply(factor)
                     .setScale(0, java.math.RoundingMode.HALF_UP)
@@ -484,17 +504,10 @@ public class ScoreEventsService {
 
     /**
      * 거래의 effective carbon factor 산출.
-     *  - 혼방 거래(material='BLEND') + main_material_code 존재 → 70% 주 소재 factor × ratio
-     *    (예: COTTON 6.0 × 0.7 = 4.2)
-     *  - 그 외 (단일 거래 또는 main 정보 누락된 BLEND) → 자기 material_code 의 factor 그대로
-     *    (BLEND 자체의 fallback factor 5.5 또는 단일 소재 factor)
+     *  - 모든 소재(BLEND 포함) 자기 factor 반환 (DB material.carbon_factor 기준)
+     *    IPCC Eq.5.2 소각 탄소 계수: BLEND=2.0, POLYAMIDE=2.5, ACRYLIC=2.4, 등
      */
-    private BigDecimal resolveFactor(String materialCode, String mainCode,
-                                      BigDecimal mainRatio, Map<String, BigDecimal> factorMap) {
-        if ("BLEND".equals(materialCode) && mainCode != null && mainRatio != null) {
-            BigDecimal mainFactor = factorMap.getOrDefault(mainCode, BigDecimal.ZERO);
-            return mainFactor.multiply(mainRatio);
-        }
+    private BigDecimal resolveFactor(String materialCode, Map<String, BigDecimal> factorMap) {
         return factorMap.getOrDefault(materialCode, BigDecimal.ZERO);
     }
 }
