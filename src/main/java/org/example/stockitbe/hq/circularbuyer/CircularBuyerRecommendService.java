@@ -17,6 +17,7 @@ import org.example.stockitbe.hq.product.model.Material;
 import org.example.stockitbe.hq.product.model.ProductMaterialComposition;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -28,8 +29,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
@@ -41,7 +44,7 @@ import java.util.stream.Collectors;
  * ADR-021 AI 거래처 추천 — 3층 RAG 파이프라인.
  *  1층: primary_material_fit 단일 룰 필터.
  *  2층: 쿼리 임베딩 + Elasticsearch dense_vector kNN → 거리 가중치 재정렬 → top 5.
- *  3층: 단일 ChatModel 호출로 5개 사유 한꺼번에 생성. 실패 시 fallback 텍스트.
+ *  3층: 거래처별 ChatModel 호출을 병렬 실행해 사유 생성. 실패 시 fallback 텍스트.
  *
  * ES/임베딩 장애 시 기존 RDB cosine 또는 앞 N건 fallback 으로 등록 흐름을 보호한다.
  */
@@ -81,6 +84,8 @@ public class CircularBuyerRecommendService {
     private final ProductMasterRepository productMasterRepository;
     private final EmbeddingModel embeddingModel;
     private final ChatModel chatModel;
+    @Qualifier("aiRecommendationExecutor")
+    private final Executor aiRecommendationExecutor;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${stockit.circular-buyer.ai.embedding-timeout-ms:15000}")
@@ -90,12 +95,22 @@ public class CircularBuyerRecommendService {
     private long rationaleTimeoutMs;
 
     public CircularBuyerDto.RecommendRes recommend(CircularBuyerDto.RecommendReq req) {
+        long totalStart = System.nanoTime();
         validateMaterialFit(req.getMaterialFit());
+        log.info("CircularBuyer recommend start materialFit={} warehouseCode={}",
+                req.getMaterialFit(), req.getWarehouseCode());
 
         WarehousePoint warehousePoint = resolveWarehousePoint(req.getWarehouseCode());
-        RankingResult rankingResult = rankByScore(req, buildQueryText(req), warehousePoint);
+        long queryStart = System.nanoTime();
+        String queryText = buildQueryText(req);
+        log.info("CircularBuyer recommend queryText completed elapsedMs={} queryLength={}",
+                elapsedMs(queryStart), queryText.length());
+
+        RankingResult rankingResult = rankByScore(req, queryText, warehousePoint);
         List<RankedBuyer> rankedTop = rankingResult.rankedTop();
         if (rankedTop.isEmpty()) {
+            log.info("CircularBuyer recommend completed totalMs={} materialFit={} recommendations=0 rationaleGenerated=false",
+                    elapsedMs(totalStart), req.getMaterialFit());
             return CircularBuyerDto.RecommendRes.builder()
                     .recommendations(List.of())
                     .build();
@@ -107,6 +122,7 @@ public class CircularBuyerRecommendService {
         Map<String, RationaleSections> rationales = rankingResult.rationaleGenerationAllowed()
                 ? generateRationales(top, req)
                 : Map.of();
+        boolean rationaleGenerated = !rationales.isEmpty();
         Map<String, RankedBuyer> rankedByCode = rankedTop.stream()
                 .filter(Objects::nonNull)
                 .collect(Collectors.toMap(
@@ -141,6 +157,9 @@ public class CircularBuyerRecommendService {
                 })
                 .toList();
 
+        log.info("CircularBuyer recommend completed totalMs={} materialFit={} recommendations={} rationaleGenerationAllowed={} rationaleGenerated={}",
+                elapsedMs(totalStart), req.getMaterialFit(), items.size(),
+                rankingResult.rationaleGenerationAllowed(), rationaleGenerated);
         return CircularBuyerDto.RecommendRes.builder()
                 .recommendations(items)
                 .build();
@@ -207,20 +226,32 @@ public class CircularBuyerRecommendService {
 
     private RankingResult rankByScore(CircularBuyerDto.RecommendReq req, String queryText, WarehousePoint warehousePoint) {
         float[] q;
+        long embeddingStart = System.nanoTime();
         try {
             q = callAiWithTimeout(
                     () -> embeddingModel.embed(queryText),
                     embeddingTimeoutMs,
                     "OpenAI embedding"
             );
+            log.info("CircularBuyer recommend embedding completed elapsedMs={} queryLength={}",
+                    elapsedMs(embeddingStart), queryText.length());
         } catch (Exception e) {
-            log.warn("쿼리 임베딩 생성 실패 — 코사인 정렬 없이 fallback 정렬(앞 N건). reason={}", e.getMessage());
-            return new RankingResult(fallbackWithoutEmbedding(req.getMaterialFit()), false);
+            log.warn("쿼리 임베딩 생성 실패 — 코사인 정렬 없이 fallback 정렬(앞 N건). elapsedMs={} reason={}",
+                    elapsedMs(embeddingStart), e.getMessage());
+            long fallbackStart = System.nanoTime();
+            List<RankedBuyer> fallback = fallbackWithoutEmbedding(req.getMaterialFit());
+            log.info("CircularBuyer recommend fallbackWithoutEmbedding completed elapsedMs={} results={}",
+                    elapsedMs(fallbackStart), fallback.size());
+            return new RankingResult(fallback, false);
         }
 
+        long esStart = System.nanoTime();
         try {
             List<CircularBuyerRecommendSearchService.RecommendedBuyer> esCandidates =
                     recommendSearchService.searchTopKByKnn(q, req.getMaterialFit(), ES_CANDIDATE_K);
+            long esElapsedMs = elapsedMs(esStart);
+            log.info("CircularBuyer recommend esKnn completed elapsedMs={} candidates={}",
+                    esElapsedMs, esCandidates.size());
             if (!esCandidates.isEmpty()) {
                 List<RankedBuyer> rankedTop = esCandidates.stream()
                         .map(candidate -> toRankedBuyer(candidate, warehousePoint))
@@ -229,13 +260,19 @@ public class CircularBuyerRecommendService {
                         .toList();
                 return new RankingResult(rankedTop, true);
             }
-            log.warn("순환재고 거래처 ES kNN 추천 결과 없음 — RDB cosine fallback 수행. materialFit={}", req.getMaterialFit());
+            log.warn("순환재고 거래처 ES kNN 추천 결과 없음 — RDB cosine fallback 수행. elapsedMs={} materialFit={}",
+                    esElapsedMs, req.getMaterialFit());
         } catch (Exception e) {
-            log.warn("순환재고 거래처 ES kNN 추천 실패 — RDB cosine fallback 수행. reason={}", e.getMessage());
+            log.warn("순환재고 거래처 ES kNN 추천 실패 — RDB cosine fallback 수행. elapsedMs={} reason={}",
+                    elapsedMs(esStart), e.getMessage());
         }
 
         List<Double> qVec = toDoubleList(q);
-        return new RankingResult(fallbackByCosine(req.getMaterialFit(), qVec, warehousePoint), true);
+        long fallbackStart = System.nanoTime();
+        List<RankedBuyer> fallback = fallbackByCosine(req.getMaterialFit(), qVec, warehousePoint);
+        log.info("CircularBuyer recommend rdbFallback completed elapsedMs={} results={}",
+                elapsedMs(fallbackStart), fallback.size());
+        return new RankingResult(fallback, true);
     }
 
     private List<RankedBuyer> fallbackByCosine(String materialFit, List<Double> qVec, WarehousePoint warehousePoint) {
@@ -311,42 +348,77 @@ public class CircularBuyerRecommendService {
     // ─── 3층 ─────────────────────────────────────────────────────────────────
 
     /**
-     * 단일 ChatModel 호출로 5개 사유 한꺼번에 받기. 실패 시 빈 Map 반환 → 호출자가 섹션별 fallback 텍스트 박음.
-     * 응답 형식 강제 — JSON 배열 [{"code":..., "companyRationale":..., ...}, ...] 만 허용.
+     * 거래처별 ChatModel 호출을 병렬 실행한다. 거래처 단위 실패는 해당 거래처만 fallback 텍스트를 사용한다.
+     * 응답 형식 강제 — JSON 배열 [{"code":..., "companyRationale":..., ...}] 만 허용.
      */
     private Map<String, RationaleSections> generateRationales(List<RecommendedCandidate> top, CircularBuyerDto.RecommendReq req) {
         if (top.isEmpty()) return Map.of();
+        long totalStart = System.nanoTime();
+        List<CompletableFuture<RationaleResult>> futures = top.stream()
+                .map(candidate -> generateRationaleFuture(candidate, req))
+                .toList();
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+        Map<String, RationaleSections> result = new HashMap<>();
+        for (CompletableFuture<RationaleResult> future : futures) {
+            RationaleResult rationaleResult = future.join();
+            if (rationaleResult != null && rationaleResult.code() != null) {
+                result.put(rationaleResult.code(), rationaleResult.rationale());
+            }
+        }
+        log.info("CircularBuyer recommend rationale completed elapsedMs={} parsed={}",
+                elapsedMs(totalStart), result.size());
+        return result;
+    }
+
+    private CompletableFuture<RationaleResult> generateRationaleFuture(
+            RecommendedCandidate candidate,
+            CircularBuyerDto.RecommendReq req
+    ) {
+        long startedAt = System.nanoTime();
+        return CompletableFuture
+                .supplyAsync(() -> generateRationaleForBuyer(candidate, req, startedAt), aiRecommendationExecutor)
+                .orTimeout(rationaleTimeoutMs, TimeUnit.MILLISECONDS)
+                .exceptionally(e -> {
+                    log.warn("CircularBuyer recommend rationaleBuyer failed code={} elapsedMs={} reason={}",
+                            candidate.code(), elapsedMs(startedAt), exceptionMessage(e));
+                    return null;
+                });
+    }
+
+    private RationaleResult generateRationaleForBuyer(
+            RecommendedCandidate candidate,
+            CircularBuyerDto.RecommendReq req,
+            long startedAt
+    ) {
+        String prompt = buildPrompt(List.of(candidate), req);
+        String response = chatModel.call(prompt);
+        log.info("CircularBuyer recommend rationaleChat completed code={} elapsedMs={} promptLength={} responseLength={}",
+                candidate.code(), elapsedMs(startedAt), prompt.length(), response == null ? 0 : response.length());
+
+        String json = extractJsonArray(response);
+        if (json == null) {
+            throw new IllegalStateException("JSON array not found in LLM response");
+        }
         try {
-            String prompt = buildPrompt(top, req);
-            String response = callAiWithTimeout(
-                    () -> chatModel.call(prompt),
-                    rationaleTimeoutMs,
-                    "OpenAI chat rationale"
+            List<RationaleJsonItem> parsed = objectMapper.readValue(
+                    json, new TypeReference<List<RationaleJsonItem>>() {}
             );
-            String json = extractJsonArray(response);
-            if (json == null) {
-                log.warn("LLM 응답에서 JSON 배열 추출 실패. raw={}", response);
-                return Map.of();
-            }
-            List<Map<String, String>> parsed = objectMapper.readValue(
-                    json, new TypeReference<List<Map<String, String>>>() {}
+            RationaleJsonItem item = parsed.stream()
+                    .filter(entry -> candidate.code().equals(entry.code()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException("matching code not found in LLM response"));
+            RationaleSections rationale = new RationaleSections(
+                    item.companyRationale(),
+                    item.materialRationale(),
+                    item.distanceRationale()
             );
-            Map<String, RationaleSections> result = new HashMap<>();
-            for (Map<String, String> entry : parsed) {
-                String code = entry.get("code");
-                RationaleSections rationale = new RationaleSections(
-                        entry.get("companyRationale"),
-                        entry.get("materialRationale"),
-                        entry.get("distanceRationale")
-                );
-                if (code != null) {
-                    result.put(code, rationale);
-                }
-            }
-            return result;
+            log.info("CircularBuyer recommend rationaleBuyer completed code={} elapsedMs={} promptLength={} responseLength={} parsed=true",
+                    candidate.code(), elapsedMs(startedAt), prompt.length(), response == null ? 0 : response.length());
+            return new RationaleResult(candidate.code(), rationale);
         } catch (Exception e) {
-            log.warn("LLM rationale generation failed — fallback 텍스트 사용. reason={}", e.getMessage());
-            return Map.of();
+            throw new IllegalStateException("failed to parse rationale JSON", e);
         }
     }
 
@@ -412,7 +484,13 @@ public class CircularBuyerRecommendService {
             sb.append("\n");
         }
 
-        sb.append("\n반드시 아래 JSON 배열 형식으로만 답해 (다른 텍스트·코드블록·마크다운 절대 금지):\n");
+        sb.append("\n[응답 JSON 계약]\n");
+        sb.append("- 최상위는 반드시 JSON 배열만 사용.\n");
+        sb.append("- 각 객체는 code, companyRationale, materialRationale, distanceRationale 4개 필드만 포함.\n");
+        sb.append("- 아래 후보 code 를 빠짐없이 모두 포함하고, code 값은 후보 code 와 정확히 일치.\n");
+        sb.append("- 모든 rationale 값은 빈 문자열/null 금지.\n");
+        sb.append("- 다른 텍스트·코드블록·마크다운 절대 금지.\n");
+        sb.append("반드시 아래 JSON 배열 형식으로만 답해:\n");
         sb.append("[\n");
         for (int i = 0; i < top.size(); i++) {
             sb.append("  {\"code\": \"").append(top.get(i).code())
@@ -459,6 +537,10 @@ public class CircularBuyerRecommendService {
         return value == null || value.isBlank() ? fallback : value;
     }
 
+    private static long elapsedMs(long startedAtNanos) {
+        return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
+    }
+
     private <T> T callAiWithTimeout(Supplier<T> supplier, long timeoutMs, String label) throws Exception {
         CompletableFuture<T> future = CompletableFuture.supplyAsync(supplier);
         try {
@@ -483,6 +565,15 @@ public class CircularBuyerRecommendService {
             return exception;
         }
         return new IllegalStateException(cause);
+    }
+
+    private static String exceptionMessage(Throwable throwable) {
+        Throwable cause = throwable;
+        if (cause instanceof CompletionException completionException && completionException.getCause() != null) {
+            cause = completionException.getCause();
+        }
+        String message = cause.getMessage();
+        return message == null || message.isBlank() ? cause.getClass().getSimpleName() : message;
     }
 
     // ─── 공통 헬퍼 ──────────────────────────────────────────────────────────
@@ -587,6 +678,13 @@ public class CircularBuyerRecommendService {
     ) {}
     private record RankingResult(List<RankedBuyer> rankedTop, boolean rationaleGenerationAllowed) {}
     private record RankedBuyer(RecommendedCandidate buyer, Double distanceKm, double score) {}
+    private record RationaleResult(String code, RationaleSections rationale) {}
+    private record RationaleJsonItem(
+            String code,
+            String companyRationale,
+            String materialRationale,
+            String distanceRationale
+    ) {}
     private record RationaleSections(
             String companyRationale,
             String materialRationale,

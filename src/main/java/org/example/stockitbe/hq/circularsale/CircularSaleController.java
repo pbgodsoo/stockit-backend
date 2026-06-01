@@ -41,11 +41,12 @@ public class CircularSaleController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) String buyerCode,
             @RequestParam(required = false) String materialType,
-            @RequestParam(required = false) String keyword
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String saleType
     ) {
         // 1. 요청 수신: 판매 이력 조회 조건/페이지 파라미터를 받는다.
         // 2. 서비스 호출: 조건 기반 목록 조회를 수행한다.
-        CircularSaleDto.ListPageRes result = circularSaleService.list(page, size, sort, from, to, buyerCode, materialType, keyword);
+        CircularSaleDto.ListPageRes result = circularSaleService.list(page, size, sort, from, to, buyerCode, materialType, keyword, saleType);
 
         // 3. 응답 반환: 페이지 응답을 공통 응답으로 반환한다.
         return BaseResponse.success(result);

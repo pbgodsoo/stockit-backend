@@ -54,8 +54,11 @@ public class WhOutboundHeader extends BaseEntity {
     @Column(name = "destination_type", nullable = false, length = 30)
     private OutboundDestinationType destinationType;
 
-    @Column(name = "destination_id", nullable = false)
+    @Column(name = "destination_id", nullable = true)
     private Long destinationId;
+
+    @Column(name = "destination_name", length = 200)
+    private String destinationName;  // DONATION일 때 기부처명 (destination_id=null 대체)
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
@@ -91,7 +94,7 @@ public class WhOutboundHeader extends BaseEntity {
 
     @Builder
     private WhOutboundHeader(String outboundNo, OutboundSourceType sourceType, String sourceRefNo, Integer sourceRefSeq, Long sourceRefId,
-                             Long warehouseId, OutboundDestinationType destinationType, Long destinationId,
+                             Long warehouseId, OutboundDestinationType destinationType, Long destinationId, String destinationName,
                              OutboundStatus status, Integer totalRequestedQuantity,
                              Date requestedAt, Date confirmedAt, Date departedAt, Date arrivedAt,
                              String requestedByMemberId, String requestedByName, String memo) {
@@ -103,6 +106,7 @@ public class WhOutboundHeader extends BaseEntity {
         this.warehouseId = warehouseId;
         this.destinationType = destinationType;
         this.destinationId = destinationId;
+        this.destinationName = destinationName;
         this.status = status == null ? OutboundStatus.READY_TO_SHIP : status;
         this.totalRequestedQuantity = totalRequestedQuantity == null ? 0 : totalRequestedQuantity;
         this.requestedAt = requestedAt == null ? new Date() : requestedAt;

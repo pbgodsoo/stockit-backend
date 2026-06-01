@@ -98,7 +98,7 @@ stockit:
     password: ${ES_PASSWORD:}
     circular-buyer-index: ${ES_CIRCULAR_BUYER_INDEX:circular-buyer-search}
     sync:
-      enabled: ${ES_SYNC_ENABLED:true}
+      enabled: ${ES_SYNC_ENABLED:false}
       embedding-model: ${ES_SYNC_EMBEDDING_MODEL:text-embedding-3-small}
       embedding-version: ${ES_SYNC_EMBEDDING_VERSION:1}
       retry:

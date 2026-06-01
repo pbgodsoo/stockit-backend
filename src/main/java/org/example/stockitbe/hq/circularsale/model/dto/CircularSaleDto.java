@@ -30,11 +30,12 @@ public class CircularSaleDto {
     @AllArgsConstructor
     @Builder
     public static class CreateReq {
-        @NotBlank
-        private String buyerCode;
+        private String buyerCode;       // SALE은 필수, DONATION은 null 허용
         @NotBlank
         private String materialType;
         private String memo;
+        private String saleType;        // "SALE" | "DONATION". null → "SALE"
+        private String doneeName;       // DONATION일 때 기부처명
         @Valid
         @NotEmpty
         private List<CreateLineReq> items;
@@ -63,6 +64,8 @@ public class CircularSaleDto {
         private Integer totalSoldQuantity;
         private Long totalAmount;
         private String memo;
+        private String saleType;
+        private String doneeName;
         private List<LineRes> items;
 
         public static CreateRes from(CircularSaleHeader header, String buyerCode, String buyerName,
@@ -84,6 +87,8 @@ public class CircularSaleDto {
                     .totalSoldQuantity(header.getTotalSoldQuantity())
                     .totalAmount(header.getTotalAmount())
                     .memo(header.getMemo())
+                    .saleType(header.getSaleType())
+                    .doneeName(header.getDoneeName())
                     .items(items)
                     .build();
         }
@@ -248,6 +253,8 @@ public class CircularSaleDto {
         private Integer totalSoldQuantity;
         private Long totalAmount;
         private String headline;
+        private String saleType;
+        private String doneeName;
     }
 
     // 순환재고 판매 상세 Detail 응답 DTO
@@ -279,6 +286,8 @@ public class CircularSaleDto {
         private Integer totalSoldQuantity;
         private Long totalAmount;
         private String memo;
+        private String saleType;
+        private String doneeName;
         private List<LineRes> items;
         private List<StatusHistoryRes> statusHistory;
     }
@@ -309,4 +318,3 @@ public class CircularSaleDto {
         }
     }
 }
-
