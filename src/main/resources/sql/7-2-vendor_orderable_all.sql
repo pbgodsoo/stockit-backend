@@ -1,5 +1,5 @@
 -- ============================================================
--- 10-2-vendor_orderable_all.sql
+-- 7-2-vendor_orderable_all.sql
 -- 새 발주 카탈로그가 모든 ACTIVE product 를 노출하도록 vendor + vendor_product 일괄 시드.
 --
 -- 카탈로그 SQL (PurchaseOrderCatalogRepository.findCatalogPage) 가
@@ -8,7 +8,7 @@
 --   JOIN vendor_product vp
 --   JOIN vendor v
 -- 내부 JOIN 이라 vendor / vendor_product 가 비면 무조건 0행이 떨어진다.
--- 10-purchase_order_dummy_data.sql + 10-1-vendor_product_full_seed.sql 의
+-- 10-purchase_order_dummy_data.sql + 7-1-vendor_product_full_seed.sql 의
 -- vendor / vendor_product 만 통합한 단독 시드 (PO 더미 헤더/라인은 제외 — 발주 가능 상태만 만든다).
 --
 -- 의존:
