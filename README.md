@@ -102,7 +102,7 @@
 > **프로젝트의 상세한 내용은 아래 문서에서 확인하실 수 있습니다.**
 
 * 🎯 [**프로젝트 개요**](https://github.com/beyond-sw-camp/be24-fin-Stockers-Stockit-BE/wiki/1.-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%EA%B0%9C%EC%9A%94)
-* ✨ [**코딩 컨벤션**]([docs/codex/common/도메인_공통_코딩규칙_컨벤션.md](https://github.com/beyond-sw-camp/be24-fin-Stockers-Stockit-BE/wiki/4.-%EC%BD%94%EB%94%A9-%EC%BB%A8%EB%B2%A4%EC%85%98))
+* ✨ [**코딩 컨벤션**](https://github.com/beyond-sw-camp/be24-fin-Stockers-Stockit-BE/wiki/4.-%EC%BD%94%EB%94%A9-%EC%BB%A8%EB%B2%A4%EC%85%98))
 * 🧾 [**기능 테스트**](https://github.com/beyond-sw-camp/be24-fin-Stockers-Stockit-BE/wiki/5.-%EA%B8%B0%EB%8A%A5-%ED%85%8C%EC%8A%A4%ED%8A%B8)
 * 📦 [**무중단 배포**](https://github.com/beyond-sw-camp/be24-fin-Stockers-Stockit-BE/wiki/6.-%EB%AC%B4%EC%A4%91%EB%8B%A8-%EB%B0%B0%ED%8F%AC)
 * 💰 [**Elasticsearch 도입**](https://github.com/beyond-sw-camp/be24-fin-Stockers-Stockit-BE/wiki/7.-Elasticsearch-%EB%8F%84%EC%9E%85)
