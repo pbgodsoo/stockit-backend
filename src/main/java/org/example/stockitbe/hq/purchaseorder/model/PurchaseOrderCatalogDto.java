@@ -31,6 +31,7 @@ public class PurchaseOrderCatalogDto {
         private Long unitPrice;
         private Long contractUnitPrice;
         private Long availableQty;
+        private Long warehouseSafetyStock;
 
         public static SkuRowRes from(SkuRowProjection p) {
             return SkuRowRes.builder()
@@ -46,6 +47,7 @@ public class PurchaseOrderCatalogDto {
                     .unitPrice(p.getUnitPrice())
                     .contractUnitPrice(p.getContractUnitPrice())
                     .availableQty(p.getAvailableQty() == null ? 0L : p.getAvailableQty())
+                    .warehouseSafetyStock(p.getWarehouseSafetyStock())
                     .build();
         }
     }

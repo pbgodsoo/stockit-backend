@@ -43,7 +43,8 @@ public interface PurchaseOrderCatalogRepository extends JpaRepository<ProductSku
                       AND i.inventory_status IN ('NORMAL', 'CIRCULAR_CANDIDATE')
                       AND inf.location_type = 'WAREHOUSE'
                       AND (:warehouseId IS NULL OR i.location_id = :warehouseId)
-                ), 0) AS availableQty
+                ), 0) AS availableQty,
+                pm.warehouse_safety_stock AS warehouseSafetyStock
             FROM product_sku ps
             JOIN product_master pm ON pm.code = ps.product_code AND pm.status = 'ACTIVE'
             JOIN vendor_product vp ON vp.product_code = ps.product_code AND vp.status = 'ACTIVE'
