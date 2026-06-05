@@ -52,6 +52,17 @@ public class AdminBootstrapRunner implements CommandLineRunner {
         createIfMissing("wh0001", "warehouse-admin@stockit.com", "김창고",
                 "01000000003", "WH-SL-0001", "서울 도심 풀필먼트 허브",
                 UserRole.WAREHOUSE, encoded, now);
+
+        // 면접 시연용 2번째 계정 세트 — 매장/창고는 다른 거점(다른 데이터)으로 지정.
+        createIfMissing("hq0002", "hq-admin2@stockit.com", "이본사",
+                "01000000004", "HQ-CENTER", "본사 본부",
+                UserRole.HQ, encoded, now);
+        createIfMissing("st0002", "store-admin2@stockit.com", "이매장",
+                "01000000005", "ST-SL-0002", "홍대 라이프스타일점",
+                UserRole.STORE, encoded, now);
+        createIfMissing("wh0002", "warehouse-admin2@stockit.com", "이창고",
+                "01000000006", "WH-SL-0002", "서울 동북권 스마트 물류센터",
+                UserRole.WAREHOUSE, encoded, now);
     }
 
     private void createIfMissing(String employeeCode, String email, String name,

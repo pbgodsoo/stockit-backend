@@ -1,5 +1,5 @@
 -- ============================================================
--- 10-1-vendor_product_full_seed.sql
+-- 7-1-vendor_product_full_seed.sql
 -- 04-product_master_dummy_data.sql 의 30건 product 와
 -- 10-purchase_order_dummy_data.sql 의 8개 vendor 를 자동 매핑.
 --

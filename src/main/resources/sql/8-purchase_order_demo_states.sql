@@ -1,4 +1,4 @@
--- 12-purchase_order_demo_states.sql
+-- 8-purchase_order_demo_states.sql
 -- 발표 시연용 — (A) 진행 중 상태 발주 8건 추가 + (B) 시연 발주 진행 이력 생성
 --
 -- 목적:
@@ -20,8 +20,8 @@
 --   - 01-infrastructure_dummy_data.sql       (창고 — purchase_order.warehouse_id)
 --   - 03-category_two_level_seed.sql
 --   - 04-product_master_dummy_data.sql       (product_master / product_sku)
---   - 10-1-vendor_product_full_seed.sql      (vendor_product 보강)
---   - 10-2-vendor_orderable_all.sql          (vendor 8건 VND-001~008 + vendor_product)
+--   - 7-1-vendor_product_full_seed.sql      (vendor_product 보강)
+--   - 7-2-vendor_orderable_all.sql          (vendor 8건 VND-001~008 + vendor_product)
 --   → 적용 순서: 01 → 03 → 04 → 10-1 → 10-2 → 12  (10-purchase_order_dummy_data 는 생략 가능)
 --
 -- 신규 발주 상태 분포 (8건): REQUESTED 2 / APPROVED 2 / READY_TO_SHIP 2 / IN_TRANSIT 2
