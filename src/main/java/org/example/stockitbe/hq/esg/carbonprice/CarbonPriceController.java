@@ -29,4 +29,12 @@ public class CarbonPriceController {
     ) {
         return ResponseEntity.ok(BaseResponse.success(carbonPriceService.getTrend(period)));
     }
+
+    /** 월별 집계 시계열 — 최근 N개월의 월말 종가 반환. KOC 류 장기 트렌드 표현용. */
+    @GetMapping("/carbon-price/trend/monthly")
+    public ResponseEntity<BaseResponse<List<CarbonPriceDto.Snapshot>>> getMonthlyTrend(
+            @RequestParam(defaultValue = "12") int months
+    ) {
+        return ResponseEntity.ok(BaseResponse.success(carbonPriceService.getMonthlyTrend(months)));
+    }
 }

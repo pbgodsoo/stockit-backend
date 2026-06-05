@@ -82,7 +82,7 @@ public class CarbonPriceApiClient {
 
 
     /**
-     * KAU25 시세 최근 2주 일별 데이터 조회.
+     * 배출권 시세 최근 2주 일별 데이터 조회 (target-symbol = KOC25-30).
      *
      * 정책 — Graceful Degradation:
      *  - 네트워크 / 파싱 / 외부 API 비정상응답 모두 빈 리스트로 반환
