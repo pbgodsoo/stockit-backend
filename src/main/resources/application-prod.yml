@@ -66,8 +66,8 @@ esg:
   carbon-api:
     base-url: https://apis.data.go.kr/1160100/service/GetGeneralProductInfoService
     service-key: ${PUBLIC_DATA_API_KEY}
-    target-symbol: KAU25       # 현재 거래 활성 종목
-    fallback-price: 9200
+    target-symbol: KOC25-30    # 외부사업 인증실적 (Korean Offset Credit, 2025년물·2030 만기) — KAU25 와 동시기물
+    fallback-price: 13000      # KOC25-30 최근 종가 기준
 
 management:
   endpoint:
