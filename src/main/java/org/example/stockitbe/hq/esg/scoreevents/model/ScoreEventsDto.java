@@ -3,7 +3,6 @@ package org.example.stockitbe.hq.esg.scoreevents.model;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -27,7 +26,7 @@ public class ScoreEventsDto {
         private final CategoryBreakdown categoryBreakdown;      // 도넛 차트 4종 합계
 
         // ── Phase 3 (B) — ESG 대시보드 카본 절감량 분포 묶음 ──
-        //   필터/페이지와 무관하게 "연도 전체" 기준. 단위: kg CO₂. 점수의 carbon (×0.1) 과 다른 산식.
+        //   필터/페이지와 무관하게 "연도 전체" 기준. 단위: kg CO₂. 점수 carbon 과 동일 산식.
         private final CarbonReduction carbonReduction;
 
         // ── 서버 페이징 메타 ──
@@ -39,8 +38,8 @@ public class ScoreEventsDto {
 
     /**
      * 카본 절감량 분포 (kg CO₂) — ESG 대시보드 KPI/차트 SSOT.
-     *  - 산식: 거래별 weight × effectiveFactor (혼방은 mainFactor × ratio 가중)
-     *  - 점수의 carbon (×CARBON_SCALE 0.1) 과 다른 값 — 실제 감축 환산 단위
+     *  - 산식: 거래별 weight × effectiveFactor (BLEND 포함 자기 factor 사용)
+     *  - 점수 carbon 과 동일 값 — 실제 감축 환산 단위
      *  - 카테고리 필터/페이지와 무관하게 연도 전체 이벤트 합산
      *  - byGroup 키 어휘: FE 와 통일 ("NATURAL_SINGLE" / "SYNTHETIC" / "BLEND")
      *    BE 어휘 'NATURAL' 은 응답 직전 'NATURAL_SINGLE' 로 정규화
@@ -66,6 +65,7 @@ public class ScoreEventsDto {
         private final long carbonSum;
         private final long newBuyerSum;
         private final long localPartnerSum;
+        private final long donationExecutionSum;
 
         private final long totalEventCount;     // 필터 적용 후 이벤트 수
         private final long validEventCount;     // scoreValid=true 인 이벤트 수
@@ -89,11 +89,11 @@ public class ScoreEventsDto {
         private final long carbon;
         private final long newBuyer;
         private final long localPartner;
+        private final long donationExecution;
     }
 
     /**
      * 거래 이벤트 1건 (FE EsgTreeScoreView 의 event 객체 형태와 1:1 매칭).
-     *  - donationType / method 는 sale 만 다루므로 미포함
      *  - Phase 2: isLocalPartner 가 circular_buyer.partner_type 기반으로 매핑 (이전: 항상 false)
      *  - Phase 2: 거래별 점수 4종을 BE 가 직접 계산해서 응답 (FE 의 esgScore.js 산식 함수 폐기 준비)
      */
@@ -102,23 +102,21 @@ public class ScoreEventsDto {
     public static class EventDto {
         private final Long id;
         private final String date;          // "yyyy-MM-dd"
-        private final String type;          // "sale" 고정 (donation 미지원)
+        private final String type;          // "sale" | "donation" (saleType 과 동일 값 소문자)
         private final String buyer;         // circular_buyer.company_name
         private final String material;      // material_code (e.g. "POLYESTER", "BLEND")
         private final Integer weightKg;
         private final boolean isNewBuyer;   // 본 거래가 해당 buyer 의 최초 거래인지
         private final boolean isLocalPartner;  // Phase 2: partner_type=local_small/social_enterprise → true
+        private final String saleType;         // "SALE" | "DONATION"
 
-        // Phase 2 — 혼방 거래 메타 (FE 디버그/상세 표시용. 단일 거래는 null)
-        private final String mainMaterialCode;       // 혼방 70% 주 소재 코드 (예: "COTTON")
-        private final BigDecimal mainMaterialRatio;  // 주 소재 비율 (예: 0.70)
-
-        // Phase 2 — BE 가 계산한 거래별 점수 4종
-        private final int saleExecution;   // 100 (scoreValid 시), 0 (미달 시)
-        private final int carbon;          // weight × effectiveFactor × CARBON_SCALE(0.1)
-        private final int newBuyer;        // 150 (신규 거래처 & scoreValid)
-        private final int localPartner;    // 150 (지역 파트너 & scoreValid)
-        private final int total;           // 위 4종 합계
-        private final boolean scoreValid;  // weight >= MIN_WEIGHT_KG(10kg)
+        // Phase 2 — BE 가 계산한 거래별 점수 5종
+        private final int saleExecution;       // 100 (scoreValid 시), 0 (미달 시)
+        private final int carbon;              // weight × effectiveFactor
+        private final int newBuyer;            // 150 (신규 거래처 & scoreValid)
+        private final int localPartner;        // 150 (지역 파트너 & scoreValid)
+        private final int donationExecution;   // 기부 실행 점수 (판매면 0)
+        private final int total;               // 위 점수 합계
+        private final boolean scoreValid;      // weight >= MIN_WEIGHT_KG(10kg)
     }
 }

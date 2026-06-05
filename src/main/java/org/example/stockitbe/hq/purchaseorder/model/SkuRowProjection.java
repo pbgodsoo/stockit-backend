@@ -13,4 +13,5 @@ public interface SkuRowProjection {
     Long getUnitPrice();
     Long getContractUnitPrice();
     Long getAvailableQty();
+    Long getWarehouseSafetyStock();
 }

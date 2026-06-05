@@ -32,7 +32,7 @@ public class CircularSaleHeader extends BaseEntity {
     @Column(name = "sale_no", nullable = false, length = 40)
     private String saleNo;
 
-    @Column(name = "buyer_id", nullable = false)
+    @Column(name = "buyer_id", nullable = true)
     private Long buyerId;
 
     @Column(name = "warehouse_id", nullable = false)
@@ -78,11 +78,18 @@ public class CircularSaleHeader extends BaseEntity {
     @Column(name = "completed_at")
     private Date completedAt;
 
+    @Column(name = "sale_type", nullable = false, length = 20)
+    private String saleType;   // "SALE" | "DONATION"
+
+    @Column(name = "donee_name", length = 200)
+    private String doneeName;  // 기부처명 (DONATION일 때만 사용)
+
     @Builder
     private CircularSaleHeader(String saleNo, Long buyerId, Long warehouseId, CircularSaleStatus status, Date soldAt,
                                String soldByMemberId, String soldByName, Long outboundHeaderId, String materialType,
                                Integer totalSkuCount, BigDecimal totalRequestedWeightKg, BigDecimal totalActualWeightKg,
-                               Integer totalSoldQuantity, Long totalAmount, String memo, Date completedAt) {
+                               Integer totalSoldQuantity, Long totalAmount, String memo, Date completedAt,
+                               String saleType, String doneeName) {
         this.saleNo = saleNo;
         this.buyerId = buyerId;
         this.warehouseId = warehouseId;
@@ -99,6 +106,8 @@ public class CircularSaleHeader extends BaseEntity {
         this.totalAmount = totalAmount == null ? 0L : totalAmount;
         this.memo = memo;
         this.completedAt = completedAt;
+        this.saleType = saleType == null ? "SALE" : saleType;
+        this.doneeName = doneeName;
     }
 
     public void assignSaleNo(String saleNo) {
@@ -118,4 +127,3 @@ public class CircularSaleHeader extends BaseEntity {
         this.completedAt = now == null ? new Date() : now;
     }
 }
-

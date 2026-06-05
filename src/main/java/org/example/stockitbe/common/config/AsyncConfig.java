@@ -12,6 +12,7 @@ import java.util.concurrent.ThreadPoolExecutor;
  * 현재 등록 풀:
  *   - notificationExecutor  : SSE push fan-out 전용 (1500+ HQ admin 대응)
  *   - dashboardExecutor     : /api/hq/analytics/dashboard 4개 서브쿼리 병렬 실행 전용
+ *   - aiRecommendationExecutor : 순환재고 AI 추천 사유 생성 전용
  *
  * 정책:
  *   - CallerRunsPolicy — 큐 가득 차면 호출자(도메인 스레드)가 실행.
@@ -53,6 +54,23 @@ public class AsyncConfig {
         executor.setQueueCapacity(8);
         executor.setKeepAliveSeconds(60);
         executor.setThreadNamePrefix("dashboard-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(10);
+        executor.initialize();
+        return executor;
+    }
+
+    // 순환재고 AI 추천 사유 생성 전용 풀.
+    // 추천 요청 1건 당 최대 5개 거래처 사유 생성을 동시에 실행.
+    @Bean(name = "aiRecommendationExecutor")
+    public ThreadPoolTaskExecutor aiRecommendationExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(5);
+        executor.setMaxPoolSize(10);
+        executor.setQueueCapacity(20);
+        executor.setKeepAliveSeconds(60);
+        executor.setThreadNamePrefix("ai-recommend-");
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(10);
