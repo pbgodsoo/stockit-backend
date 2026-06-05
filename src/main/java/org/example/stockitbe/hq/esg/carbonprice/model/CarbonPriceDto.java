@@ -47,7 +47,7 @@ public class CarbonPriceDto {
         private String basDt;     // 기준일자 YYYYMMDD
         private String srtnCd;    // 단축코드
         private String isinCd;    // ISIN 코드
-        private String itmsNm;    // 종목명 (KAU25 등)
+        private String itmsNm;    // 종목명 (KOC25-30, KAU25 등)
         private String clpr;      // 종가 (원/톤)
         private String vs;        // 전일대비
         private String fltRt;     // 등락률
@@ -63,7 +63,7 @@ public class CarbonPriceDto {
     @Getter @AllArgsConstructor @NoArgsConstructor
     public static class Snapshot {
         private int pricePerTon;    // 원/톤
-        private String symbol;      // KAU25
+        private String symbol;      // KOC25-30 (현행) / KAU25
         private String basDt;       // YYYYMMDD
         private String fltRt;       // 등락률
         private boolean fallback;   // 폴백값 여부

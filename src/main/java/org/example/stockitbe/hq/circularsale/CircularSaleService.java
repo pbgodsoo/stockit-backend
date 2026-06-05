@@ -739,7 +739,7 @@ public class CircularSaleService {
      * Phase 3: 실제 판매 완료 시 ESG 점수 가산을 위해 circular_buyer_transaction 에도 거래 row 를 INSERT.
      *  - sale_item 별로 transaction 1건씩 생성 (product 별 정밀 ESG 점수)
      *  - DONATION은 buyer=null (entity optional=true), doneeName 기록
-     *  - 거래 시점 단가/금액은 sale_item 의 값을 그대로 스냅샷 (KAU 시세와 무관, 실제 거래가 기준)
+     *  - 거래 시점 단가/금액은 sale_item 의 값을 그대로 스냅샷 (배출권 시세와 무관, 실제 거래가 기준)
      */
     private void createTransactionsFromSale(CircularSaleHeader header,
                                              CircularBuyer buyer,
