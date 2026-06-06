@@ -367,10 +367,21 @@ public class CircularSaleService {
         if (request.getMaterialType() == null || request.getMaterialType().isBlank()) {
             throw BaseException.from(BaseResponseStatus.CIRCULAR_SALE_INVALID_REQUEST);
         }
-        // DONATION은 doneeName 으로 기부처 식별 — buyerCode 검증 건너뜀
+        // saleType 허용값 검증 — "SALE" | "DONATION" 만 허용 (null 은 "SALE" 기본)
         String saleType = request.getSaleType() == null ? "SALE" : request.getSaleType().toUpperCase(Locale.ROOT);
-        if (!"DONATION".equals(saleType) && (request.getBuyerCode() == null || request.getBuyerCode().isBlank())) {
-            throw BaseException.from(BaseResponseStatus.CIRCULAR_SALE_BUYER_NOT_FOUND);
+        if (!"SALE".equals(saleType) && !"DONATION".equals(saleType)) {
+            throw BaseException.from(BaseResponseStatus.CIRCULAR_SALE_INVALID_REQUEST);
+        }
+        if ("DONATION".equals(saleType)) {
+            // DONATION: 기부처명 필수, buyerCode 검증 건너뜀
+            if (request.getDoneeName() == null || request.getDoneeName().isBlank()) {
+                throw BaseException.from(BaseResponseStatus.CIRCULAR_SALE_INVALID_REQUEST);
+            }
+        } else {
+            // SALE: 거래처 코드 필수
+            if (request.getBuyerCode() == null || request.getBuyerCode().isBlank()) {
+                throw BaseException.from(BaseResponseStatus.CIRCULAR_SALE_BUYER_NOT_FOUND);
+            }
         }
     }
 
@@ -682,8 +693,8 @@ public class CircularSaleService {
                 .reason("CIRCULAR_SALE_CREATE")
                 .build());
 
-        // 6) Phase 3 — 실제 판매를 ESG 점수에 즉시 반영 (circular_buyer_transaction 자동 INSERT)
-        //    sale_item 별로 transaction 1건씩 생성 + 혼방 주 소재 참조용 저장 (탄소 계산 미사용)
+        // 6) Phase 3 — 실제 판매/기부를 ESG 점수에 즉시 반영 (circular_buyer_transaction 자동 INSERT)
+        //    sale_item 별로 transaction 1건씩 생성. SALE/DONATION 모두 carbon = weight × factor 동일 산식.
         createTransactionsFromSale(header, buyer, savedItems, contexts, saleType, request.getDoneeName());
 
         // 7) 생성 결과 반환
