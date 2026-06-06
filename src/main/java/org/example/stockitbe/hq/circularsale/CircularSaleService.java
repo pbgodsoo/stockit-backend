@@ -11,6 +11,7 @@ import org.example.stockitbe.hq.circularbuyer.model.CircularBuyerTransaction;
 import org.example.stockitbe.hq.circularbuyer.repository.CircularBuyerRepository;
 import org.example.stockitbe.hq.circularbuyer.repository.CircularBuyerTransactionRepository;
 import org.example.stockitbe.hq.circularsale.model.CircularSaleStatus;
+import org.example.stockitbe.hq.esg.scoreevents.ScoreEventsService;
 import org.example.stockitbe.hq.circularsale.model.dto.CircularSaleDto;
 import org.example.stockitbe.hq.circularsale.model.entity.CircularSaleHeader;
 import org.example.stockitbe.hq.circularsale.model.entity.CircularSaleItem;
@@ -93,6 +94,7 @@ public class CircularSaleService {
     private final WhOutboundHeaderRepository outboundHeaderRepository;
     private final WhOutboundItemRepository outboundItemRepository;
     private final WhOutboundStatusHistoryRepository outboundStatusHistoryRepository;
+    private final ScoreEventsService scoreEventsService;
 
     // 순환재고 판매 생성
     @Transactional
@@ -278,7 +280,10 @@ public class CircularSaleService {
                 .map(CircularSaleDto.StatusHistoryRes::from)
                 .toList();
 
-        // 4) 상세 응답 조립
+        // 4) ESG 점수 계산 — 집계 API(getEvents)와 동일 산식 보장
+        ScoreEventsService.ScoreResult score = scoreEventsService.computeScoreForSaleHeader(header);
+
+        // 5) 상세 응답 조립
         return CircularSaleDto.DetailRes.builder()
                 .saleId(header.getId())
                 .saleNo(header.getSaleNo())
@@ -306,6 +311,12 @@ public class CircularSaleService {
                 .doneeName(header.getDoneeName())
                 .items(lines)
                 .statusHistory(histories)
+                .saleExecution(score.saleExecution())
+                .donationExecution(score.donationExecution())
+                .carbonScore(score.carbonScore())
+                .newBuyerScore(score.newBuyerScore())
+                .localPartnerScore(score.localPartnerScore())
+                .esgTotalScore(score.esgTotalScore())
                 .build();
     }
 
