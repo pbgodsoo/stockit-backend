@@ -300,7 +300,7 @@ public class ScoreEventsService {
         }
 
         boolean scoreValid = totalWeight >= MIN_WEIGHT_KG;
-        int carbon = scoreValid ? totalCarbonAmount.intValue() : 0;
+        int carbon = totalWeight > 0 ? totalCarbonAmount.intValue() : 0;
 
         int saleExecution, donationExecution, newBuyerScore, localPartnerScore;
         if ("DONATION".equals(saleType)) {
@@ -360,7 +360,7 @@ public class ScoreEventsService {
         BigDecimal factor = resolveFactor(material, factorMap);
 
         boolean scoreValid = weightKg != null && weightKg >= MIN_WEIGHT_KG;
-        int carbon = scoreValid
+        int carbon = (weightKg != null && weightKg > 0)
                 ? BigDecimal.valueOf(weightKg).multiply(factor).intValue()
                 : 0;
 
