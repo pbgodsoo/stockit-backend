@@ -88,7 +88,7 @@ public class WhOutboundService {
                         h,
                         myWarehouse.getCode(),
                         myWarehouse.getName(),
-                        destinationNameById.get(h.getDestinationId())
+                        resolveListDestinationName(h, destinationNameById)
                 ))
                 .toList();
     }
@@ -378,6 +378,13 @@ public class WhOutboundService {
             }
         }
         return nameById;
+    }
+
+    // [목록용 목적지명 해석] ID 맵에 없으면 엔티티의 destination_name 필드를 fallback으로 사용한다. (DONATION 기부처명 처리)
+    private String resolveListDestinationName(WhOutboundHeader h, Map<Long, String> nameById) {
+        String mapped = nameById.get(h.getDestinationId());
+        if (mapped != null) return mapped;
+        return h.getDestinationName();
     }
 
     // [목적지명 단건 조회] destinationType에 따라 인프라/거래처에서 이름을 조회한다.
