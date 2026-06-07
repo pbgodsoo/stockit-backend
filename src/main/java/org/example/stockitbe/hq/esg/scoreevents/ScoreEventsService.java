@@ -2,6 +2,7 @@ package org.example.stockitbe.hq.esg.scoreevents;
 
 import lombok.RequiredArgsConstructor;
 import org.example.stockitbe.hq.circularbuyer.repository.CircularBuyerTransactionRepository;
+import org.example.stockitbe.hq.circularsale.model.entity.CircularSaleHeader;
 import org.example.stockitbe.hq.esg.scoreevents.model.ScoreEventsDto;
 import org.example.stockitbe.hq.product.MaterialRepository;
 import org.example.stockitbe.hq.product.model.Material;
@@ -178,6 +179,52 @@ public class ScoreEventsService {
                 .build();
     }
 
+    /** 판매/기부 상세 화면용 단건 ESG 점수 계산 결과 */
+    public record ScoreResult(
+            int saleExecution,
+            int donationExecution,
+            int carbonScore,
+            int newBuyerScore,
+            int localPartnerScore,
+            int esgTotalScore
+    ) {}
+
+    /**
+     * 판매/기부 헤더 1건에 해당하는 ESG 점수를 계산한다.
+     * CircularSaleService.detail() 에서 호출 — getEvents() 집계 API 와 동일 산식(buildGroupEventDto) 보장.
+     */
+    public ScoreResult computeScoreForSaleHeader(CircularSaleHeader header) {
+        LocalDateTime soldAt = header.getSoldAt().toInstant()
+                .atZone(ZoneId.of("Asia/Seoul")).toLocalDateTime();
+
+        List<Object[]> rows = txRepo.findEventsForSaleHeader(
+                soldAt,
+                header.getBuyerId(),
+                header.getDoneeName()
+        );
+
+        if (rows.isEmpty()) {
+            return new ScoreResult(0, 0, 0, 0, 0, 0);
+        }
+
+        List<Material> materials = materialRepository.findAllByActiveTrueOrderByCodeAsc();
+        Map<String, BigDecimal> factorMap = materials.stream()
+                .collect(Collectors.toMap(Material::getCode, Material::getCarbonFactor));
+        Map<String, String> nameMap = materials.stream()
+                .collect(Collectors.toMap(Material::getCode, Material::getNameKo));
+
+        ScoreEventsDto.EventDto event = buildGroupEventDto(rows, factorMap, nameMap);
+
+        return new ScoreResult(
+                event.getSaleExecution(),
+                event.getDonationExecution(),
+                event.getCarbon(),
+                event.getNewBuyer(),
+                event.getLocalPartner(),
+                event.getTotal()
+        );
+    }
+
     // ─────────────────────────────── 내부 헬퍼 ───────────────────────────────
 
     /**
@@ -253,7 +300,7 @@ public class ScoreEventsService {
         }
 
         boolean scoreValid = totalWeight >= MIN_WEIGHT_KG;
-        int carbon = scoreValid ? totalCarbonAmount.intValue() : 0;
+        int carbon = totalWeight > 0 ? totalCarbonAmount.intValue() : 0;
 
         int saleExecution, donationExecution, newBuyerScore, localPartnerScore;
         if ("DONATION".equals(saleType)) {
@@ -313,7 +360,7 @@ public class ScoreEventsService {
         BigDecimal factor = resolveFactor(material, factorMap);
 
         boolean scoreValid = weightKg != null && weightKg >= MIN_WEIGHT_KG;
-        int carbon = scoreValid
+        int carbon = (weightKg != null && weightKg > 0)
                 ? BigDecimal.valueOf(weightKg).multiply(factor).intValue()
                 : 0;
 

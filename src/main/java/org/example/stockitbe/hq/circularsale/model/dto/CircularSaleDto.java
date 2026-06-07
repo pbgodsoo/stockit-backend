@@ -290,6 +290,13 @@ public class CircularSaleDto {
         private String doneeName;
         private List<LineRes> items;
         private List<StatusHistoryRes> statusHistory;
+        // ESG 점수 — ScoreEventsService.computeScoreForSaleHeader() 와 동일 산식
+        private int saleExecution;
+        private int donationExecution;
+        private int carbonScore;
+        private int newBuyerScore;
+        private int localPartnerScore;
+        private int esgTotalScore;
     }
 
     // 순환재고 판매 상태이력 응답 DTO

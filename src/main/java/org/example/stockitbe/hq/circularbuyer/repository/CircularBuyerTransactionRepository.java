@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.List;
 
@@ -167,4 +168,39 @@ public interface CircularBuyerTransactionRepository extends JpaRepository<Circul
         ORDER BY t.id DESC
         """, nativeQuery = true)
     List<Object[]> findEventsForYear(@Param("from") Date from, @Param("to") Date to);
+
+    /**
+     * 판매 헤더 1건의 ESG 점수 계산용 — transacted_at 정확 매칭 + 거래처(SALE) 또는 기부처(DONATION).
+     * findEventsForYear 와 동일한 컬럼 구조 반환 (ScoreEventsService.buildGroupEventDto 재사용).
+     * SALE:     buyer_id = :buyerId
+     * DONATION: buyer_id IS NULL AND donee_name = :doneeName
+     * NULL 비교는 SQL 표준 동작(NULL = x → false)으로 자연 분기됨.
+     */
+    @Query(value = """
+        SELECT t.id,
+               t.transacted_at,
+               COALESCE(b.company_name, t.donee_name) AS display_name,
+               t.material_code,
+               t.weight_kg,
+               CASE WHEN t.buyer_id IS NOT NULL
+                    THEN (SELECT MIN(t2.transacted_at)
+                            FROM circular_buyer_transaction t2
+                           WHERE t2.buyer_id = t.buyer_id)
+                    ELSE t.transacted_at
+               END AS first_tx_at,
+               COALESCE(b.partner_type, 'general') AS partner_type,
+               t.sale_type
+        FROM circular_buyer_transaction t
+        LEFT JOIN circular_buyer b ON b.id = t.buyer_id
+        WHERE t.transacted_at = :transactedAt
+          AND (
+                (t.sale_type = 'SALE'     AND t.buyer_id  = :buyerId)
+             OR (t.sale_type = 'DONATION' AND t.buyer_id IS NULL AND t.donee_name = :doneeName)
+          )
+        ORDER BY t.id DESC
+        """, nativeQuery = true)
+    List<Object[]> findEventsForSaleHeader(
+            @Param("transactedAt") LocalDateTime transactedAt,
+            @Param("buyerId") Long buyerId,
+            @Param("doneeName") String doneeName);
 }
