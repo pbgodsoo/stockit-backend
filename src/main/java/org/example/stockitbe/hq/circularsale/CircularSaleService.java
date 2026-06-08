@@ -175,12 +175,20 @@ public class CircularSaleService {
                         .filter(Objects::nonNull)
                         .collect(Collectors.toSet())
         ).stream().collect(Collectors.toMap(WhOutboundHeader::getId, Function.identity()));
-        Map<Long, Infrastructure> warehouseById = infrastructureRepository.findAllById(
-                outboundById.values().stream()
-                        .map(WhOutboundHeader::getWarehouseId)
-                        .filter(Objects::nonNull)
-                        .collect(Collectors.toSet())
-        ).stream().collect(Collectors.toMap(Infrastructure::getId, Function.identity()));
+        // 창고 ID 수집: 출고 헤더의 warehouseId + outboundHeaderId 가 null 인 헤더의 warehouseId (fallback)
+        // → outbound 없이 직접 등록된 순환판매(더미 데이터 등)도 출고 창고 표시 가능
+        Set<Long> warehouseIds = new java.util.HashSet<>();
+        outboundById.values().stream()
+                .map(WhOutboundHeader::getWarehouseId)
+                .filter(Objects::nonNull)
+                .forEach(warehouseIds::add);
+        headers.getContent().stream()
+                .filter(h -> h.getOutboundHeaderId() == null)
+                .map(CircularSaleHeader::getWarehouseId)
+                .filter(Objects::nonNull)
+                .forEach(warehouseIds::add);
+        Map<Long, Infrastructure> warehouseById = infrastructureRepository.findAllById(warehouseIds)
+                .stream().collect(Collectors.toMap(Infrastructure::getId, Function.identity()));
 
         Map<Long, List<CircularSaleItem>> itemsByHeader = saleItemRepository.findAllBySaleHeaderIdIn(
                 headers.getContent().stream().map(CircularSaleHeader::getId).toList()
@@ -191,7 +199,11 @@ public class CircularSaleService {
         for (CircularSaleHeader header : headers.getContent()) {
             CircularBuyer buyer = buyerById.get(header.getBuyerId());
             WhOutboundHeader outbound = outboundById.get(header.getOutboundHeaderId());
-            Infrastructure outboundWarehouse = outbound == null ? null : warehouseById.get(outbound.getWarehouseId());
+            // 출고 창고: outbound 가 있으면 outbound.warehouseId, 없으면 header.warehouseId fallback
+            // (outboundHeaderId=null 인 더미/레거시 데이터에서도 창고명 표시)
+            Infrastructure outboundWarehouse = outbound != null
+                    ? warehouseById.get(outbound.getWarehouseId())
+                    : warehouseById.get(header.getWarehouseId());
             List<CircularSaleItem> items = itemsByHeader.getOrDefault(header.getId(), List.of());
             rows.add(CircularSaleDto.ListRowRes.builder()
                     .saleId(header.getId())
