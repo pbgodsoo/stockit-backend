@@ -42,6 +42,11 @@ services:
       JWT_REFRESH_EXPIRATION_MS: "604800000"
       # 미설정 시 AI 거래처 추천 호출만 401 (BE 부팅은 OK)
       OPENAI_API_KEY: ""
+      # 저비용 배포에서는 ES 없이도 전사 재고 조회가 MariaDB fallback 으로 동작한다.
+      ES_SYNC_ENABLED: "false"
+      ES_INVENTORY_BOOTSTRAP_ENABLED: "false"
+      ES_CONNECT_TIMEOUT_MS: "1000"
+      ES_SOCKET_TIMEOUT_MS: "5000"
     ports:
       - "8080:8080"
 

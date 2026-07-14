@@ -34,6 +34,12 @@ public class ElasticsearchConfig {
     @Value("${stockit.elasticsearch.password}")
     private String password;
 
+    @Value("${stockit.elasticsearch.connect-timeout-ms:1000}")
+    private int connectTimeoutMs;
+
+    @Value("${stockit.elasticsearch.socket-timeout-ms:5000}")
+    private int socketTimeoutMs;
+
     @Bean
     public ElasticsearchClient elasticsearchClient() throws Exception {
         SSLContext sslContext = SSLContexts.custom()
@@ -52,8 +58,8 @@ public class ElasticsearchConfig {
                         .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
                         .setDefaultCredentialsProvider(credentialsProvider))
                 .setRequestConfigCallback(rc -> rc
-                        .setConnectTimeout(5000)
-                        .setSocketTimeout(60000))
+                        .setConnectTimeout(connectTimeoutMs)
+                        .setSocketTimeout(socketTimeoutMs))
                 .build();
 
         RestClientTransport transport = new RestClientTransport(restClient, new JacksonJsonpMapper());
