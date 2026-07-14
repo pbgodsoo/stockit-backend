@@ -12,6 +12,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.stockitbe.hq.infrastructure.InfrastructureRepository;
 import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
+import org.example.stockitbe.hq.inventory.model.CompanyWideInventoryRow;
+import org.example.stockitbe.hq.inventory.model.CompanyWideSkuInventoryRow;
 import org.example.stockitbe.hq.inventory.model.InventoryDto;
 import org.example.stockitbe.hq.inventory.model.InventoryStatus;
 import org.example.stockitbe.hq.inventory.model.ProductInventoryDoc;
@@ -41,6 +43,7 @@ public class InventoryQueryService {
 
     private final ElasticsearchClient esClient;
     private final InfrastructureRepository infrastructureRepository;
+    private final InventoryRepository inventoryRepository;
 
     // 전사 재고(품목 단위) 페이지 조회 — inventory-master 인덱스 + match + from/size + nested filter.
     public InventoryDto.CompanyWidePageRes findCompanyWide(LocationType locationType,
@@ -109,8 +112,8 @@ public class InventoryQueryService {
             Page<InventoryDto.CompanyWideRes> page = new PageImpl<>(items, safePageable, total);
             return InventoryDto.CompanyWidePageRes.from(page, buildLocationOptions(locationType));
         } catch (Exception e) {
-            log.error("findCompanyWide ES query failed", e);
-            throw new RuntimeException(e);
+            log.warn("findCompanyWide ES query failed — MariaDB fallback. reason={}", e.getMessage());
+            return findCompanyWideFromMariaDb(locationType, locationIds, safeParent, safeChild, safeCategory, safeKeyword, safePageable);
         }
     }
 
@@ -188,8 +191,10 @@ public class InventoryQueryService {
 
             return InventoryDto.CompanyWideSkuPageRes.from(page, buildLocationOptions(locationType));
         } catch (Exception e) {
-            log.error("findCompanyWideSkus ES query failed", e);
-            throw new RuntimeException(e);
+            log.warn("findCompanyWideSkus ES query failed — MariaDB fallback. reason={}", e.getMessage());
+            return findCompanyWideSkusFromMariaDb(
+                    locationType, locationIds, safeParent, safeChild, safeStatus, safeColor, safeSkuSize, safeKeyword, safePageable
+            );
         }
     }
 
@@ -245,8 +250,11 @@ public class InventoryQueryService {
                     .map(d -> toSkuDetailResFromDoc(d, lt, safeLocationIds))
                     .toList();
         } catch (Exception e) {
-            log.error("findCompanyWideSkuDetails ES query failed", e);
-            throw new RuntimeException(e);
+            log.warn("findCompanyWideSkuDetails ES query failed — MariaDB fallback. itemCode={} reason={}",
+                    safeItemCode, e.getMessage());
+            return findCompanyWideSkuDetailsFromMariaDb(
+                    safeItemCode, locationType, locationIds, safeParent, safeChild, safeKeyword
+            );
         }
     }
 
@@ -299,12 +307,155 @@ public class InventoryQueryService {
                     .sizes(sizes)
                     .build();
         } catch (Exception e) {
-            log.error("findCompanyWideSkuFacets ES query failed", e);
-            throw new RuntimeException(e);
+            log.warn("findCompanyWideSkuFacets ES query failed — MariaDB fallback. reason={}", e.getMessage());
+            return findCompanyWideSkuFacetsFromMariaDb(locationType, locationIds, safeParent, safeChild, safeKeyword);
         }
     }
 
+    private InventoryDto.CompanyWidePageRes findCompanyWideFromMariaDb(LocationType locationType,
+                                                                       List<Long> locationIds,
+                                                                       String parentCategory,
+                                                                       String childCategory,
+                                                                       String category,
+                                                                       String keyword,
+                                                                       Pageable pageable) {
+        List<Long> safeLocationIds = safeLocationIds(locationIds);
+        Page<CompanyWideInventoryRow> rows = inventoryRepository.findCompanyWideFallback(
+                locationTypeName(locationType),
+                hasLocationIds(locationIds),
+                safeLocationIds,
+                parentCategory,
+                childCategory,
+                category,
+                keyword,
+                pageable
+        );
+        Page<InventoryDto.CompanyWideRes> mapped = rows.map(this::toCompanyWideResFromRow);
+        return InventoryDto.CompanyWidePageRes.from(mapped, buildLocationOptions(locationType));
+    }
+
+    private InventoryDto.CompanyWideSkuPageRes findCompanyWideSkusFromMariaDb(LocationType locationType,
+                                                                              List<Long> locationIds,
+                                                                              String parentCategory,
+                                                                              String childCategory,
+                                                                              String status,
+                                                                              String color,
+                                                                              String skuSize,
+                                                                              String keyword,
+                                                                              Pageable pageable) {
+        List<Long> safeLocationIds = safeLocationIds(locationIds);
+        Page<CompanyWideSkuInventoryRow> rows = inventoryRepository.findCompanyWideSkusFallback(
+                locationTypeName(locationType),
+                hasLocationIds(locationIds),
+                safeLocationIds,
+                parentCategory,
+                childCategory,
+                null,
+                status,
+                color,
+                skuSize,
+                keyword,
+                pageable
+        );
+        Page<InventoryDto.CompanyWideSkuRowRes> mapped = rows.map(this::toCompanyWideSkuRowResFromRow);
+        return InventoryDto.CompanyWideSkuPageRes.from(mapped, buildLocationOptions(locationType));
+    }
+
+    private List<InventoryDto.CompanyWideSkuDetailRes> findCompanyWideSkuDetailsFromMariaDb(String itemCode,
+                                                                                            LocationType locationType,
+                                                                                            List<Long> locationIds,
+                                                                                            String parentCategory,
+                                                                                            String childCategory,
+                                                                                            String keyword) {
+        return inventoryRepository.findCompanyWideSkuDetailsFallback(
+                        itemCode,
+                        locationTypeName(locationType),
+                        hasLocationIds(locationIds),
+                        safeLocationIds(locationIds),
+                        parentCategory,
+                        childCategory,
+                        keyword
+                )
+                .stream()
+                .map(this::toCompanyWideSkuDetailResFromRow)
+                .toList();
+    }
+
+    private InventoryDto.CompanyWideSkuFacetsRes findCompanyWideSkuFacetsFromMariaDb(LocationType locationType,
+                                                                                     List<Long> locationIds,
+                                                                                     String parentCategory,
+                                                                                     String childCategory,
+                                                                                     String keyword) {
+        List<Long> safeLocationIds = safeLocationIds(locationIds);
+        boolean hasLocationIds = hasLocationIds(locationIds);
+        String locationTypeName = locationTypeName(locationType);
+        return InventoryDto.CompanyWideSkuFacetsRes.builder()
+                .colors(inventoryRepository.findCompanyWideSkuColorsFallback(
+                        locationTypeName, hasLocationIds, safeLocationIds, parentCategory, childCategory, keyword
+                ))
+                .sizes(inventoryRepository.findCompanyWideSkuSizesFallback(
+                        locationTypeName, hasLocationIds, safeLocationIds, parentCategory, childCategory, keyword
+                ))
+                .build();
+    }
+
     // ---------- Helpers ----------
+
+    private InventoryDto.CompanyWideRes toCompanyWideResFromRow(CompanyWideInventoryRow row) {
+        return InventoryDto.CompanyWideRes.builder()
+                .itemCode(nullToEmpty(row.getItemCode()))
+                .parentCategory(nullToEmpty(row.getParentCategory()))
+                .childCategory(nullToEmpty(row.getChildCategory()))
+                .itemName(nullToEmpty(row.getItemName()))
+                .actualStock(nz(row.getActualStock()))
+                .availableStock(nz(row.getAvailableStock()))
+                .safetyStock(nz(row.getSafetyStock()))
+                .status(nullToEmpty(row.getStatus()))
+                .updatedAt(row.getUpdatedAt())
+                .build();
+    }
+
+    private InventoryDto.CompanyWideSkuRowRes toCompanyWideSkuRowResFromRow(CompanyWideSkuInventoryRow row) {
+        return InventoryDto.CompanyWideSkuRowRes.builder()
+                .skuCode(nullToEmpty(row.getSkuCode()))
+                .itemCode(nullToEmpty(row.getItemCode()))
+                .itemName(nullToEmpty(row.getItemName()))
+                .parentCategory(nullToEmpty(row.getParentCategory()))
+                .childCategory(nullToEmpty(row.getChildCategory()))
+                .color(nullToEmpty(row.getColor()))
+                .size(nullToEmpty(row.getSize()))
+                .actualStock(nz(row.getActualStock()))
+                .availableStock(nz(row.getAvailableStock()))
+                .safetyStock(nz(row.getSafetyStock()))
+                .status(nullToEmpty(row.getStatus()))
+                .build();
+    }
+
+    private InventoryDto.CompanyWideSkuDetailRes toCompanyWideSkuDetailResFromRow(CompanyWideSkuInventoryRow row) {
+        return InventoryDto.CompanyWideSkuDetailRes.builder()
+                .skuCode(nullToEmpty(row.getSkuCode()))
+                .color(nullToEmpty(row.getColor()))
+                .size(nullToEmpty(row.getSize()))
+                .unitPrice(row.getUnitPrice())
+                .actualStock(nz(row.getActualStock()))
+                .availableStock(nz(row.getAvailableStock()))
+                .safetyStock(nz(row.getSafetyStock()))
+                .status(nullToEmpty(row.getStatus()))
+                .updatedAt(row.getUpdatedAt())
+                .build();
+    }
+
+    private String locationTypeName(LocationType locationType) {
+        return locationType == null ? null : locationType.name();
+    }
+
+    private boolean hasLocationIds(List<Long> locationIds) {
+        return locationIds != null && !locationIds.isEmpty();
+    }
+
+    private List<Long> safeLocationIds(List<Long> locationIds) {
+        return hasLocationIds(locationIds) ? locationIds : List.of(-1L);
+    }
 
     private Query buildNestedLocationFilter(LocationType locationType, List<Long> locationIds) {
         List<Query> inner = new ArrayList<>();
