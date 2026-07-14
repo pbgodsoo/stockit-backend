@@ -96,6 +96,9 @@ stockit:
     port: ${ES_PORT:9200}
     user: ${ES_USER:elastic}
     password: ${ES_PASSWORD:}
+    connect-timeout-ms: ${ES_CONNECT_TIMEOUT_MS:1000}
+    socket-timeout-ms: ${ES_SOCKET_TIMEOUT_MS:5000}
+    inventory-bootstrap-enabled: ${ES_INVENTORY_BOOTSTRAP_ENABLED:false}
     circular-buyer-index: ${ES_CIRCULAR_BUYER_INDEX:circular-buyer-search}
     sync:
       enabled: ${ES_SYNC_ENABLED:false}
