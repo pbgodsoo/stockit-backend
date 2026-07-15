@@ -15,7 +15,6 @@ import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.product.ProductMasterRepository;
 import org.example.stockitbe.hq.product.model.Material;
 import org.example.stockitbe.hq.product.model.ProductMaterialComposition;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,7 +43,7 @@ import java.util.stream.Collectors;
  * ADR-021 AI 거래처 추천 — 3층 RAG 파이프라인.
  *  1층: primary_material_fit 단일 룰 필터.
  *  2층: 쿼리 임베딩 + Elasticsearch dense_vector kNN → 거리 가중치 재정렬 → top 5.
- *  3층: 거래처별 ChatModel 호출을 병렬 실행해 사유 생성. 실패 시 fallback 텍스트.
+ *  3층: 거래처별 Gemini 호출을 병렬 실행해 사유 생성. 실패 시 fallback 텍스트.
  *
  * ES/임베딩 장애 시 기존 RDB cosine 또는 앞 N건 fallback 으로 등록 흐름을 보호한다.
  */
@@ -83,7 +82,7 @@ public class CircularBuyerRecommendService {
     private final InfrastructureRepository infrastructureRepository;
     private final ProductMasterRepository productMasterRepository;
     private final EmbeddingModel embeddingModel;
-    private final ChatModel chatModel;
+    private final GeminiRationaleClient geminiRationaleClient;
     @Qualifier("aiRecommendationExecutor")
     private final Executor aiRecommendationExecutor;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -348,7 +347,7 @@ public class CircularBuyerRecommendService {
     // ─── 3층 ─────────────────────────────────────────────────────────────────
 
     /**
-     * 거래처별 ChatModel 호출을 병렬 실행한다. 거래처 단위 실패는 해당 거래처만 fallback 텍스트를 사용한다.
+     * 거래처별 Gemini 호출을 병렬 실행한다. 거래처 단위 실패는 해당 거래처만 fallback 텍스트를 사용한다.
      * 응답 형식 강제 — JSON 배열 [{"code":..., "companyRationale":..., ...}] 만 허용.
      */
     private Map<String, RationaleSections> generateRationales(List<RecommendedCandidate> top, CircularBuyerDto.RecommendReq req) {
@@ -393,7 +392,7 @@ public class CircularBuyerRecommendService {
             long startedAt
     ) {
         String prompt = buildPrompt(List.of(candidate), req);
-        String response = chatModel.call(prompt);
+        String response = geminiRationaleClient.generate(prompt);
         log.info("CircularBuyer recommend rationaleChat completed code={} elapsedMs={} promptLength={} responseLength={}",
                 candidate.code(), elapsedMs(startedAt), prompt.length(), response == null ? 0 : response.length());
 

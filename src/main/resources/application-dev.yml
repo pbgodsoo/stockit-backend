@@ -34,16 +34,16 @@ spring:
       mode: always
       schema-locations: classpath:db/shedlock.sql   # 배치 관련 테이블 자동 생성
 
-  # ADR-021 AI 거래처 추천 — 임베딩(text-embedding-3-small) + 추천 사유(gpt-4o-mini)
+  # ADR-021 AI 거래처 추천 — 임베딩(text-embedding-3-small) + 추천 사유(Gemini)
   ai:
+    model:
+      chat: none
+      embedding: openai
     openai:
       api-key: ${OPENAI_API_KEY:}
       embedding:
         options:
           model: text-embedding-3-small
-      chat:
-        options:
-          model: gpt-4o-mini
 
 logging:
   level:
@@ -97,6 +97,10 @@ stockit:
     ai:
       embedding-timeout-ms: 15000
       rationale-timeout-ms: 60000
+      gemini:
+        api-key: ${GEMINI_API_KEY:}
+        model: ${GEMINI_MODEL:gemini-3.5-flash}
+        base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
   elasticsearch:
     host: ${ES_HOST}
     port: ${ES_PORT}

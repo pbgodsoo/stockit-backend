@@ -200,7 +200,7 @@
 Docker Desktop 만 있으면 풀스택(DB · ES · Kibana · Logstash · BE · FE) 을 한 번에 띄울 수 있습니다.
 
 ```bash
-cp .env.example .env     # OPENAI_API_KEY 채우기
+cp .env.example .env     # OPENAI_API_KEY, GEMINI_API_KEY 채우기
 docker compose up -d
 ```
 
@@ -219,7 +219,9 @@ docker compose up -d
 | `JWT_SECRET` | JWT 서명용 Secret |
 | `JWT_ACCESS_EXPIRATION_MS` | Access Token 만료 시간 |
 | `JWT_REFRESH_EXPIRATION_MS` | Refresh Token 만료 시간 |
-| `OPENAI_API_KEY` | AI 거래처 추천 기능용 OpenAI API Key |
+| `OPENAI_API_KEY` | AI 거래처 추천 임베딩용 OpenAI API Key |
+| `GEMINI_API_KEY` | AI 거래처 추천 사유 생성용 Gemini API Key |
+| `GEMINI_MODEL` | Gemini 사유 생성 모델명. 기본값 `gemini-3.5-flash` |
 | `PUBLIC_DATA_API_KEY` | 탄소 가격 조회용 공공데이터 API Key |
 | `ES_HOST` / `ES_PORT` | Elasticsearch 접속 정보 |
 | `ES_USER` / `ES_PASSWORD` | Elasticsearch 인증 정보 |

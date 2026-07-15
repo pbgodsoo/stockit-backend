@@ -9,7 +9,6 @@ import org.example.stockitbe.hq.infrastructure.model.Infrastructure;
 import org.example.stockitbe.hq.infrastructure.model.LocationType;
 import org.example.stockitbe.hq.product.ProductMasterRepository;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -35,7 +34,7 @@ class CircularBuyerRecommendServiceTest {
     private final InfrastructureRepository infrastructureRepository = mock(InfrastructureRepository.class);
     private final ProductMasterRepository productMasterRepository = mock(ProductMasterRepository.class);
     private final EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
-    private final ChatModel chatModel = mock(ChatModel.class);
+    private final GeminiRationaleClient geminiRationaleClient = mock(GeminiRationaleClient.class);
 
     @Test
     void recommend_usesEsKnnWithoutRdbCandidateScan() throws Exception {
@@ -43,8 +42,8 @@ class CircularBuyerRecommendServiceTest {
         when(embeddingModel.embed(anyString())).thenReturn(new float[]{1.0f, 0.0f});
         when(recommendSearchService.searchTopKByKnn(any(), anyString(), anyInt()))
                 .thenReturn(List.of(esBuyer("RCV-00001", 0.91, 37.5, 127.0)));
-        when(chatModel.call(anyString())).thenReturn("""
-                [{"code":"RCV-00001","rationale":"합성 섬유 재활용 역량이 요청 재고와 잘 맞습니다."}]
+        when(geminiRationaleClient.generate(anyString())).thenReturn("""
+                [{"code":"RCV-00001","companyRationale":"합성 섬유 재활용 역량이 있습니다.","materialRationale":"폴리에스터 자켓 소재와 잘 맞습니다.","distanceRationale":"창고 또는 거래처 좌표 정보가 부족해 거리 적합도는 판단할 수 없습니다."}]
                 """);
 
         CircularBuyerDto.RecommendRes result = service.recommend(req(null));
@@ -66,10 +65,10 @@ class CircularBuyerRecommendServiceTest {
                         esBuyer("RCV-FAR", 1.0, 0.0, 0.0),
                         esBuyer("RCV-NEAR", 0.8, 37.5, 127.0)
                 ));
-        when(chatModel.call(anyString())).thenReturn("""
+        when(geminiRationaleClient.generate(anyString())).thenReturn("""
                 [
-                  {"code":"RCV-NEAR","rationale":"가까운 처리 거점입니다."},
-                  {"code":"RCV-FAR","rationale":"벡터 유사도가 높습니다."}
+                  {"code":"RCV-NEAR","companyRationale":"가까운 처리 거점입니다.","materialRationale":"재생 원사 취급 역량이 있습니다.","distanceRationale":"창고와 가까워 운송 부담이 낮습니다."},
+                  {"code":"RCV-FAR","companyRationale":"벡터 유사도가 높습니다.","materialRationale":"합성 섬유 처리에 적합합니다.","distanceRationale":"거리상 추가 운송 검토가 필요합니다."}
                 ]
                 """);
 
@@ -110,8 +109,8 @@ class CircularBuyerRecommendServiceTest {
         assertThat(result.getRecommendations()).extracting(CircularBuyerDto.RecommendItem::getCode)
                 .containsExactly("RCV-00001", "RCV-00002", "RCV-00003", "RCV-00004", "RCV-00005");
         assertThat(result.getRecommendations()).allSatisfy(item ->
-                assertThat(item.getRationale()).isEqualTo("AI 사유 생성을 일시적으로 사용할 수 없습니다."));
-        verify(chatModel, never()).call(anyString());
+                assertThat(item.getCompanyRationale()).isEqualTo("AI 거래처 설명 생성을 일시적으로 사용할 수 없습니다."));
+        verify(geminiRationaleClient, never()).generate(anyString());
     }
 
     private CircularBuyerRecommendService newService() {
@@ -121,7 +120,8 @@ class CircularBuyerRecommendServiceTest {
                 infrastructureRepository,
                 productMasterRepository,
                 embeddingModel,
-                chatModel
+                geminiRationaleClient,
+                Runnable::run
         );
         ReflectionTestUtils.setField(service, "embeddingTimeoutMs", 5000L);
         ReflectionTestUtils.setField(service, "rationaleTimeoutMs", 5000L);
